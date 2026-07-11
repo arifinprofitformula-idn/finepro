@@ -1,0 +1,156 @@
+import pool from '../db.js';
+
+const DEFAULTS = {
+  mailketing: {
+    enabled: false,
+    api_token: '',
+    from_email: '',
+    from_name: 'Admin Finepro',
+  },
+  midtrans: {
+    enabled: false,
+    is_production: false,
+    server_key: '',
+    client_key: '',
+  },
+  manual_payment: {
+    enabled: false,
+    bank_name: '',
+    account_number: '',
+    account_name: '',
+    instructions: '',
+  },
+  ai: {
+    enabled: false,
+    provider: 'anthropic',
+    anthropic_api_key: '',
+    model: 'claude-sonnet-4-5',
+    insights_daily_limit: 3,
+    receipt_scan_monthly_limit: 30,
+  },
+  web_push: {
+    enabled: true,
+    vapid_public_key: '',
+    vapid_private_key: '',
+    vapid_subject: 'mailto:admin@finepro.my.id',
+  },
+};
+
+const SECRET_FIELDS = {
+  mailketing: ['api_token'],
+  midtrans: ['server_key', 'client_key'],
+  ai: ['anthropic_api_key'],
+  web_push: ['vapid_private_key'],
+};
+
+const ALLOWED_FIELDS = {
+  mailketing: ['enabled', 'api_token', 'from_email', 'from_name'],
+  midtrans: ['enabled', 'is_production', 'server_key', 'client_key'],
+  manual_payment: ['enabled', 'bank_name', 'account_number', 'account_name', 'instructions'],
+  ai: ['enabled', 'provider', 'anthropic_api_key', 'model', 'insights_daily_limit', 'receipt_scan_monthly_limit'],
+  web_push: ['enabled', 'vapid_public_key', 'vapid_private_key', 'vapid_subject'],
+};
+
+function envFallback(key) {
+  if (key === 'mailketing') {
+    return {
+      enabled: Boolean(process.env.MAILKETING_API_TOKEN && process.env.MAILKETING_FROM_EMAIL),
+      api_token: process.env.MAILKETING_API_TOKEN || '',
+      from_email: process.env.MAILKETING_FROM_EMAIL || '',
+      from_name: process.env.MAILKETING_FROM_NAME || DEFAULTS.mailketing.from_name,
+    };
+  }
+  if (key === 'midtrans') {
+    return {
+      enabled: Boolean(process.env.MIDTRANS_SERVER_KEY && process.env.MIDTRANS_CLIENT_KEY),
+      is_production: process.env.MIDTRANS_IS_PRODUCTION === 'true',
+      server_key: process.env.MIDTRANS_SERVER_KEY || '',
+      client_key: process.env.MIDTRANS_CLIENT_KEY || '',
+    };
+  }
+  if (key === 'ai') {
+    return {
+      enabled: Boolean(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'isi-anthropic-api-key'),
+      provider: 'anthropic',
+      anthropic_api_key: process.env.ANTHROPIC_API_KEY || '',
+      model: process.env.ANTHROPIC_MODEL || DEFAULTS.ai.model,
+      insights_daily_limit: Number(process.env.AI_INSIGHTS_DAILY_LIMIT || DEFAULTS.ai.insights_daily_limit),
+      receipt_scan_monthly_limit: Number(process.env.RECEIPT_SCAN_MONTHLY_LIMIT || DEFAULTS.ai.receipt_scan_monthly_limit),
+    };
+  }
+  if (key === 'web_push') {
+    return {
+      enabled: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+      vapid_public_key: process.env.VAPID_PUBLIC_KEY || '',
+      vapid_private_key: process.env.VAPID_PRIVATE_KEY || '',
+      vapid_subject: process.env.VAPID_SUBJECT || DEFAULTS.web_push.vapid_subject,
+    };
+  }
+  return {};
+}
+
+function hasUsefulValue(key, value) {
+  if (!value || typeof value !== 'object') return false;
+  const secrets = SECRET_FIELDS[key] || [];
+  return Object.entries(value).some(([field, current]) => {
+    if (field === 'enabled') return current === true;
+    if (secrets.includes(field)) return Boolean(current);
+    return current !== '' && current !== null && current !== undefined;
+  });
+}
+
+export async function getSetting(key) {
+  const result = await pool.query('SELECT value, updated_by FROM app_settings WHERE key = $1', [key]);
+  const row = result.rows[0];
+  const stored = row?.value || {};
+  const shouldUseStored = Boolean(row?.updated_by) || hasUsefulValue(key, stored);
+  const merged = { ...(DEFAULTS[key] || {}), ...envFallback(key), ...(shouldUseStored ? stored : {}) };
+  return merged;
+}
+
+export async function getAllSettings() {
+  const keys = Object.keys(DEFAULTS);
+  const entries = await Promise.all(keys.map(async (key) => [key, await getSetting(key)]));
+  return Object.fromEntries(entries);
+}
+
+export function publicSetting(key, value) {
+  const secretFields = SECRET_FIELDS[key] || [];
+  const publicValue = { ...value };
+  for (const field of secretFields) {
+    publicValue[`${field}_configured`] = Boolean(value?.[field]);
+    publicValue[`${field}_masked`] = value?.[field] ? '••••••••' : '';
+    delete publicValue[field];
+  }
+  return publicValue;
+}
+
+export async function updateSetting(key, patch, userId) {
+  const current = await getSetting(key);
+  const secretFields = SECRET_FIELDS[key] || [];
+  const allowedFields = new Set(ALLOWED_FIELDS[key] || []);
+  const next = { ...current };
+
+  for (const [field, value] of Object.entries(patch || {})) {
+    if (!allowedFields.has(field)) continue;
+    if (secretFields.includes(field) && value === '') continue;
+    next[field] = value;
+  }
+
+  await pool.query(
+    `INSERT INTO app_settings (key, value, is_secret, updated_by, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, is_secret = EXCLUDED.is_secret, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+    [key, JSON.stringify(next), secretFields.length > 0, userId]
+  );
+
+  return next;
+}
+
+export async function auditAdminAction(adminUserId, action, targetType, targetId, metadata = {}) {
+  await pool.query(
+    `INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, metadata)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [adminUserId, action, targetType || null, targetId || null, JSON.stringify(metadata)]
+  );
+}

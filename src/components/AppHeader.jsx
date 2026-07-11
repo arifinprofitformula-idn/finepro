@@ -4,12 +4,13 @@
 // yang sudah ada di versi Alpine dan dipertahankan di sini supaya tidak
 // hilang diam-diam saat migrasi.
 
-import { Bell, Sun } from "lucide-react";
+import { Bell, ShieldCheck, Sun } from "lucide-react";
 
-export default function AppHeader({ user, planLabel, pendingInviteCount, onNavigateAccount }) {
+export default function AppHeader({ user, planLabel, pendingInviteCount, onNavigateAccount, onNavigateAdmin }) {
   const name = user?.name || user?.email?.split("@")[0] || "";
   const firstName = name.split(" ")[0];
   const initial = (user?.name || user?.email || "?").charAt(0).toUpperCase();
+  const isAdmin = ["admin", "super_admin"].includes(user?.role);
 
   return (
     <div className="sticky top-0 z-10 max-w-lg mx-auto px-4 pt-3 pb-3 backdrop-blur-sm">
@@ -30,6 +31,16 @@ export default function AppHeader({ user, planLabel, pendingInviteCount, onNavig
           </div>
         </button>
         <div className="flex flex-shrink-0 items-center gap-1.5">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onNavigateAdmin}
+              className="gloss-button flex h-9 w-9 items-center justify-center rounded-full text-violet"
+              title="Admin Console"
+            >
+              <ShieldCheck size={17} strokeWidth={2.3} />
+            </button>
+          )}
           <button
             type="button"
             className="gloss-button flex h-9 w-9 items-center justify-center rounded-full text-gold"

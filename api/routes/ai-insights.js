@@ -3,13 +3,10 @@ import Anthropic from '@anthropic-ai/sdk';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { computeFinancialStats } from '../services/financialStats.js';
+import { getSetting } from '../services/appSettings.js';
 
 const router = Router();
 router.use(authMiddleware);
-
-// Maks 3x/hari per household — dikonfirmasi pengguna, cukup untuk cek insight
-// setelah beberapa transaksi baru tanpa membuka celah biaya API membengkak.
-const DAILY_LIMIT = 3;
 
 async function getUserHouseholdId(userId) {
   const result = await pool.query(
@@ -34,6 +31,8 @@ router.post('/insights', async (req, res) => {
   try {
     const householdId = await getUserHouseholdId(req.user.userId);
     if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
+    const aiConfig = await getSetting('ai');
+    const dailyLimit = Number(aiConfig.insights_daily_limit || 3);
 
     const countResult = await pool.query(
       `SELECT COUNT(*) as count FROM ai_insights WHERE household_id = $1 AND generated_at >= CURRENT_DATE`,
@@ -41,7 +40,7 @@ router.post('/insights', async (req, res) => {
     );
     const usedToday = Number(countResult.rows[0].count);
 
-    if (usedToday >= DAILY_LIMIT) {
+    if (usedToday >= dailyLimit) {
       const cached = await pool.query(
         `SELECT narrative_text, generated_at FROM ai_insights
          WHERE household_id = $1 ORDER BY generated_at DESC LIMIT 1`,
@@ -52,7 +51,7 @@ router.post('/insights', async (req, res) => {
         generated_at: cached.rows[0]?.generated_at || null,
         rateLimited: true,
         remaining: 0,
-        message: `Sudah generate analisa ${DAILY_LIMIT}x hari ini. Coba lagi besok — ini hasil analisa terakhir Anda.`
+        message: `Sudah generate analisa ${dailyLimit}x hari ini. Coba lagi besok — ini hasil analisa terakhir Anda.`
       });
     }
 
@@ -60,17 +59,17 @@ router.post('/insights', async (req, res) => {
 
     if (stats.insufficientData) {
       const narrative = `Data transaksi Anda baru tercatat ${stats.monthsWithData} bulan. Catat transaksi rutin minimal 2 bulan berturut-turut supaya Analisa Keuangan bisa membaca pola pemasukan dan pengeluaran dengan lebih akurat.`;
-      return res.json({ narrative, stats, rateLimited: false, remaining: DAILY_LIMIT - usedToday });
+      return res.json({ narrative, stats, rateLimited: false, remaining: dailyLimit - usedToday });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey || apiKey === 'isi-anthropic-api-key') {
+    const apiKey = aiConfig.anthropic_api_key;
+    if (!aiConfig.enabled || !apiKey || apiKey === 'isi-anthropic-api-key') {
       return res.status(503).json({ error: 'Fitur Analisa Keuangan belum dikonfigurasi (ANTHROPIC_API_KEY belum diisi)' });
     }
 
     const anthropic = new Anthropic({ apiKey });
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: aiConfig.model || 'claude-sonnet-4-5',
       max_tokens: 500,
       system: SYSTEM_PROMPT,
       messages: [{
@@ -93,7 +92,7 @@ router.post('/insights', async (req, res) => {
       stats,
       generated_at: inserted.rows[0].generated_at,
       rateLimited: false,
-      remaining: DAILY_LIMIT - usedToday - 1
+      remaining: dailyLimit - usedToday - 1
     });
   } catch (err) {
     console.error('AI insight error:', err);

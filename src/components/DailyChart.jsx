@@ -4,6 +4,8 @@
 
 import {
   Chart as ChartJS,
+  BarController,
+  LineController,
   BarElement,
   LineElement,
   PointElement,
@@ -14,7 +16,12 @@ import {
 } from "chart.js";
 import { Chart } from "react-chartjs-2";
 
-ChartJS.register(BarElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend);
+// BarController & LineController wajib didaftarkan manual di sini —
+// beda dari MonthlyChart.jsx/CategoryChart.jsx yang pakai komponen typed
+// react-chartjs-2 (<Bar>/<Doughnut>, auto-registrasi controller-nya sendiri),
+// komponen <Chart> generik di bawah ini dipakai justru karena butuh mixed
+// dataset (bar + line dalam satu chart) sehingga tidak auto ter-registrasi.
+ChartJS.register(BarController, LineController, BarElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend);
 
 export default function DailyChart({ data }) {
   const { labels, masuk, keluar, saldo } = data;

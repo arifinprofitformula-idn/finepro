@@ -10,15 +10,10 @@ import multer from 'multer';
 import Anthropic from '@anthropic-ai/sdk';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { getSetting } from '../services/appSettings.js';
 
 const router = Router();
 router.use(authMiddleware);
-
-// 30 scan/household/bulan — dipilih supaya biaya Claude vision per household
-// aktif tetap wajar (~$0.30-0.60/bulan dengan Claude Sonnet vision di kisaran
-// $0.01-0.02/scan tergantung ukuran foto). Sesuaikan di sini kalau plafon
-// biaya berubah.
-const SCAN_LIMIT_PER_MONTH = 30;
 
 const receiptUpload = multer({
   storage: multer.memoryStorage(),
@@ -51,11 +46,13 @@ async function countScansThisMonth(householdId) {
 // GET /api/receipts/quota — sisa kuota scan bulan ini, dipakai badge di UI
 router.get('/quota', async (req, res) => {
   try {
+    const aiConfig = await getSetting('ai');
+    const scanLimit = Number(aiConfig.receipt_scan_monthly_limit || 30);
     const householdId = await getUserHouseholdId(req.user.userId);
-    if (!householdId) return res.json({ used: 0, limit: SCAN_LIMIT_PER_MONTH, remaining: SCAN_LIMIT_PER_MONTH });
+    if (!householdId) return res.json({ used: 0, limit: scanLimit, remaining: scanLimit });
 
     const used = await countScansThisMonth(householdId);
-    res.json({ used, limit: SCAN_LIMIT_PER_MONTH, remaining: Math.max(0, SCAN_LIMIT_PER_MONTH - used) });
+    res.json({ used, limit: scanLimit, remaining: Math.max(0, scanLimit - used) });
   } catch (err) {
     res.status(500).json({ error: 'Gagal mengambil sisa kuota' });
   }
@@ -71,8 +68,9 @@ router.post('/scan', (req, res) => {
       return res.status(400).json({ error: 'File foto wajib diisi' });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey || apiKey === 'isi-anthropic-api-key') {
+    const aiConfig = await getSetting('ai');
+    const apiKey = aiConfig.anthropic_api_key;
+    if (!aiConfig.enabled || !apiKey || apiKey === 'isi-anthropic-api-key') {
       return res.status(503).json({ error: 'Fitur scan struk belum dikonfigurasi (ANTHROPIC_API_KEY belum diisi)' });
     }
 
@@ -81,9 +79,10 @@ router.post('/scan', (req, res) => {
       if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
 
       const used = await countScansThisMonth(householdId);
-      if (used >= SCAN_LIMIT_PER_MONTH) {
+      const scanLimit = Number(aiConfig.receipt_scan_monthly_limit || 30);
+      if (used >= scanLimit) {
         return res.status(429).json({
-          error: `Kuota scan struk bulan ini sudah habis (${SCAN_LIMIT_PER_MONTH}/bulan). Silakan input transaksi manual, atau coba lagi bulan depan.`
+          error: `Kuota scan struk bulan ini sudah habis (${scanLimit}/bulan). Silakan input transaksi manual, atau coba lagi bulan depan.`
         });
       }
 
@@ -91,7 +90,7 @@ router.post('/scan', (req, res) => {
       const base64Image = req.file.buffer.toString('base64');
 
       const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5',
+        model: aiConfig.model || 'claude-sonnet-4-5',
         max_tokens: 300,
         messages: [{
           role: 'user',

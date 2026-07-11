@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   name TEXT,
+  role TEXT NOT NULL DEFAULT 'user'
+    CHECK (role IN ('user','admin','super_admin')),
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -155,3 +157,25 @@ CREATE TRIGGER on_household_created
 CREATE INDEX IF NOT EXISTS idx_transactions_household_date ON transactions(household_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(household_id, type);
 CREATE INDEX IF NOT EXISTS idx_household_members_user ON household_members(user_id);
+
+-- 7. Konfigurasi aplikasi global untuk admin panel
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_secret BOOLEAN NOT NULL DEFAULT false,
+  updated_by UUID REFERENCES users(id),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_user_id UUID REFERENCES users(id) NOT NULL,
+  action TEXT NOT NULL,
+  target_type TEXT,
+  target_id TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created_at ON admin_audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_admin_user ON admin_audit_logs(admin_user_id);

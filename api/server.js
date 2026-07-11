@@ -16,6 +16,7 @@ import walletsRoutes from './routes/wallets.js';
 import arisanRoutes from './routes/arisan.js';
 import pushRoutes from './routes/push.js';
 import aiInsightsRoutes from './routes/ai-insights.js';
+import adminRoutes from './routes/admin.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -46,6 +47,7 @@ app.use('/api/wallets', walletsRoutes);
 app.use('/api/arisan', arisanRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/ai', aiInsightsRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 404 handler
 app.use((req, res) => {

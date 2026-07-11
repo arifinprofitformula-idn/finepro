@@ -21,6 +21,7 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import HistoryPage from "./pages/HistoryPage.jsx";
 import AccountPage from "./pages/AccountPage.jsx";
 import PaymentStatusPage from "./pages/PaymentStatusPage.jsx";
+import AdminPage from "./pages/AdminPage.jsx";
 import AppHeader from "./components/AppHeader.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import TransactionModal from "./components/TransactionModal.jsx";
@@ -96,6 +97,7 @@ export default function App() {
         planLabel={planLabel(household)}
         pendingInviteCount={invites.length}
         onNavigateAccount={() => setPage("account")}
+        onNavigateAdmin={() => setPage("admin")}
       />
 
       {page === "dashboard" && (
@@ -137,6 +139,10 @@ export default function App() {
           onInvitesChanged={refreshInvites}
           onLogout={logout}
         />
+      )}
+
+      {page === "admin" && ["admin", "super_admin"].includes(user.role) && (
+        <AdminPage user={user} />
       )}
 
       <BottomNav page={page} onNavigate={setPage} onAdd={handleOpenModal} />

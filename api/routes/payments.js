@@ -3,16 +3,9 @@ import crypto from 'crypto';
 import midtransClient from 'midtrans-client';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { getSetting } from '../services/appSettings.js';
 
 const router = Router();
-
-const IS_PRODUCTION = process.env.MIDTRANS_IS_PRODUCTION === 'true';
-
-const snap = new midtransClient.Snap({
-  isProduction: IS_PRODUCTION,
-  serverKey: process.env.MIDTRANS_SERVER_KEY,
-  clientKey: process.env.MIDTRANS_CLIENT_KEY,
-});
 
 const PLANS = {
   monthly: { amount: 29000, months: 1, label: 'Bulanan' },
@@ -38,11 +31,24 @@ async function getUserHouseholdId(userId) {
 
 // Rumus signature Midtrans: SHA512(order_id + status_code + gross_amount + ServerKey)
 // https://docs.midtrans.com/docs/https-notification-webhooks
-function verifyMidtransSignature(body) {
+async function getMidtransSnap() {
+  const config = await getSetting('midtrans');
+  if (!config.enabled || !config.server_key || !config.client_key) {
+    throw new Error('Midtrans belum dikonfigurasi');
+  }
+  return new midtransClient.Snap({
+    isProduction: config.is_production === true,
+    serverKey: config.server_key,
+    clientKey: config.client_key,
+  });
+}
+
+async function verifyMidtransSignature(body) {
   const { order_id, status_code, gross_amount, signature_key } = body || {};
   if (!order_id || !status_code || !gross_amount || !signature_key) return false;
 
-  const raw = `${order_id}${status_code}${gross_amount}${process.env.MIDTRANS_SERVER_KEY}`;
+  const config = await getSetting('midtrans');
+  const raw = `${order_id}${status_code}${gross_amount}${config.server_key}`;
   const expected = crypto.createHash('sha512').update(raw).digest('hex');
 
   try {
@@ -65,6 +71,7 @@ router.post('/create', authMiddleware, async (req, res) => {
     if (!householdId) {
       return res.status(403).json({ error: 'Hanya pemilik household yang bisa mengubah langganan' });
     }
+    const snap = await getMidtransSnap();
 
     const userResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.user.userId]);
     const user = userResult.rows[0];
@@ -145,12 +152,36 @@ router.get('/history', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/payments/methods — metode pembayaran aktif untuk tampilan user
+router.get('/methods', authMiddleware, async (req, res) => {
+  try {
+    const [midtrans, manual] = await Promise.all([
+      getSetting('midtrans'),
+      getSetting('manual_payment'),
+    ]);
+    res.json({
+      methods: {
+        midtrans: { enabled: Boolean(midtrans.enabled && midtrans.server_key && midtrans.client_key) },
+        manual: {
+          enabled: Boolean(manual.enabled),
+          bank_name: manual.bank_name || '',
+          account_number: manual.account_number || '',
+          account_name: manual.account_name || '',
+          instructions: manual.instructions || '',
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal mengambil metode pembayaran' });
+  }
+});
+
 // POST /api/payments/webhook — dipanggil server-to-server oleh Midtrans, TANPA authMiddleware
 // (Midtrans tidak mengirim Bearer token kita). Signature WAJIB diverifikasi
 // sebelum payload dipercaya — jangan proses apa pun kalau gagal.
 router.post('/webhook', async (req, res) => {
   try {
-    if (!verifyMidtransSignature(req.body)) {
+    if (!(await verifyMidtransSignature(req.body))) {
       console.warn('[payments webhook] Signature tidak valid, payload ditolak.');
       return res.status(403).json({ error: 'Invalid signature' });
     }

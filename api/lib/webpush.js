@@ -6,21 +6,23 @@
 
 import webpush from 'web-push';
 import pool from '../db.js';
+import { getSetting } from '../services/appSettings.js';
 
-let configured = false;
+let configuredKey = '';
 
-function ensureConfigured() {
-  if (configured) return true;
-  const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT } = process.env;
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return false;
-  webpush.setVapidDetails(VAPID_SUBJECT || 'mailto:admin@example.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-  configured = true;
+async function ensureConfigured() {
+  const config = await getSetting('web_push');
+  if (!config.enabled || !config.vapid_public_key || !config.vapid_private_key) return false;
+  const nextKey = `${config.vapid_public_key}:${config.vapid_private_key}:${config.vapid_subject}`;
+  if (configuredKey === nextKey) return true;
+  webpush.setVapidDetails(config.vapid_subject || 'mailto:admin@example.com', config.vapid_public_key, config.vapid_private_key);
+  configuredKey = nextKey;
   return true;
 }
 
 // Kirim notifikasi ke semua anggota household yang sudah subscribe.
 export async function notifyHousehold(householdId, payload) {
-  if (!ensureConfigured()) return;
+  if (!(await ensureConfigured())) return;
 
   try {
     const result = await pool.query(

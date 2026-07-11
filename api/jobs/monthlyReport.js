@@ -14,6 +14,7 @@
 //   node jobs/monthlyReport.js
 
 import pool from '../db.js';
+import { getSetting } from '../services/appSettings.js';
 
 const MAILKETING_API_URL = 'https://api.mailketing.co.id/api/v1/send';
 
@@ -65,12 +66,13 @@ async function getPreviousMonthSummaries() {
 }
 
 async function sendReportEmail(summary) {
-  const apiToken = process.env.MAILKETING_API_TOKEN;
-  const fromEmail = process.env.MAILKETING_FROM_EMAIL;
-  const fromName = process.env.MAILKETING_FROM_NAME || 'Keuangan Keluarga';
+  const mailketing = await getSetting('mailketing');
+  const apiToken = mailketing.api_token;
+  const fromEmail = mailketing.from_email;
+  const fromName = mailketing.from_name || 'Keuangan Keluarga';
 
-  if (!apiToken || apiToken === 'isi-api-token-mailketing' || !fromEmail || fromEmail === 'isi-email-pengirim-terverifikasi') {
-    throw new Error('MAILKETING_API_TOKEN / MAILKETING_FROM_EMAIL belum diisi di .env');
+  if (!mailketing.enabled || !apiToken || apiToken === 'isi-api-token-mailketing' || !fromEmail || fromEmail === 'isi-email-pengirim-terverifikasi') {
+    throw new Error('Mailketing belum aktif atau belum lengkap di Admin Console');
   }
 
   const monthLabel = previousMonthLabel();

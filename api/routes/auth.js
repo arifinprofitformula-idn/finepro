@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import { mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import pool from '../db.js';
-import { generateToken, authMiddleware, JWT_SECRET } from '../middleware/auth.js';
+import { generateToken, authMiddleware, adminRoleForEmail } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -59,11 +59,11 @@ router.post('/register', authLimiter, async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await pool.query(
-      'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, avatar_url, created_at',
+      'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, avatar_url, role, created_at',
       [email, passwordHash, name || null]
     );
 
-    const user = result.rows[0];
+    const user = { ...result.rows[0], role: adminRoleForEmail(result.rows[0].email, result.rows[0].role) };
     const token = generateToken(user);
 
     res.status(201).json({ user, token });
@@ -83,7 +83,7 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     const result = await pool.query(
-      'SELECT id, email, password_hash, name, avatar_url, created_at FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, name, avatar_url, role, created_at FROM users WHERE email = $1',
       [email]
     );
 
@@ -98,7 +98,11 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     const token = generateToken(user);
-    const { password_hash, ...userWithoutPassword } = user;
+    const { password_hash, ...userWithoutPasswordRaw } = user;
+    const userWithoutPassword = {
+      ...userWithoutPasswordRaw,
+      role: adminRoleForEmail(user.email, user.role),
+    };
 
     res.json({ user: userWithoutPassword, token });
   } catch (err) {
@@ -111,13 +115,14 @@ router.post('/login', authLimiter, async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, email, name, avatar_url, created_at FROM users WHERE id = $1',
+      'SELECT id, email, name, avatar_url, role, created_at FROM users WHERE id = $1',
       [req.user.userId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User tidak ditemukan' });
     }
-    res.json({ user: result.rows[0] });
+    const user = result.rows[0];
+    res.json({ user: { ...user, role: adminRoleForEmail(user.email, user.role) } });
   } catch (err) {
     res.status(500).json({ error: 'Gagal mengambil data user' });
   }
@@ -136,10 +141,11 @@ router.post('/avatar', authMiddleware, (req, res) => {
     try {
       const avatarUrl = `/uploads/avatars/${req.file.filename}`;
       const result = await pool.query(
-        'UPDATE users SET avatar_url = $1 WHERE id = $2 RETURNING id, email, name, avatar_url, created_at',
+        'UPDATE users SET avatar_url = $1 WHERE id = $2 RETURNING id, email, name, avatar_url, role, created_at',
         [avatarUrl, req.user.userId]
       );
-      res.json({ user: result.rows[0] });
+      const user = result.rows[0];
+      res.json({ user: { ...user, role: adminRoleForEmail(user.email, user.role) } });
     } catch (err) {
       console.error('Update avatar error:', err);
       res.status(500).json({ error: 'Gagal menyimpan foto profil' });

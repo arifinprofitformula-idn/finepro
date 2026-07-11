@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { getSetting } from '../services/appSettings.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -40,8 +41,9 @@ router.delete('/subscribe', async (req, res) => {
 });
 
 // GET /api/push/vapid-public-key — client butuh ini untuk PushManager.subscribe()
-router.get('/vapid-public-key', (req, res) => {
-  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY || '' });
+router.get('/vapid-public-key', async (req, res) => {
+  const config = await getSetting('web_push');
+  res.json({ publicKey: config.enabled ? (config.vapid_public_key || '') : '' });
 });
 
 export default router;
