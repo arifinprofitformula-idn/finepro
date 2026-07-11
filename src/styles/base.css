@@ -1,0 +1,32 @@
+:root{
+  color-scheme: light;
+  --navy:#0f1f3d;
+  --navy-2:#1a3164;
+  --gold:#b8892b;
+  --bg:#f6f5f2;
+  --card:#ffffff;
+  --border:#e4e0d6;
+  --text:#1c2230;
+  --muted:#6b7280;
+  --green:#1f8a56;
+  --red:#c0392b;
+}
+*{box-sizing:border-box;}
+[x-cloak]{display:none !important;}
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  -webkit-tap-highlight-color:transparent;
+}
+input, select, button{ font-family:inherit; }
+
+.splash{
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+}
+.splash-logo{
+  width:56px;height:56px;border-radius:14px;background:var(--navy);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;
+}
+.splash-text{color:var(--muted);font-size:13px;}

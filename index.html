@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f1f3d">
+<title>Keuangan Keluarga - Coach Arifin</title>
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="/src/styles/base.css">
+<link rel="stylesheet" href="/src/styles/components.css">
+</head>
+<body>
+
+<div id="app" x-data="appState()" x-init="init()">
+
+  <!-- ============ LOADING ============ -->
+  <div class="splash" x-show="view === 'loading'" x-cloak>
+    <div class="splash-logo">KK</div>
+    <div class="splash-text">Memuat...</div>
+  </div>
+
+  <!-- ============ AUTH SCREEN ============ -->
+  <div id="authScreen" x-show="view === 'auth'" x-cloak>
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="auth-logo">KK</div>
+        <h1>Keuangan Keluarga</h1>
+        <div class="sub">Untuk keluarga, pasangan, maupun mahasiswa.</div>
+
+        <div class="auth-tabs">
+          <div class="auth-tab" :class="authMode === 'login' && 'active'" @click="authMode = 'login'">Masuk</div>
+          <div class="auth-tab" :class="authMode === 'signup' && 'active'" @click="authMode = 'signup'">Daftar</div>
+        </div>
+
+        <form @submit.prevent="submitAuth()">
+          <div class="field">
+            <label>Email</label>
+            <input type="email" x-model="authEmail" required placeholder="nama@email.com">
+          </div>
+          <div class="field">
+            <label>Kata Sandi</label>
+            <input type="password" x-model="authPassword" required minlength="6" placeholder="Minimal 6 karakter">
+          </div>
+          <button type="submit" class="btn-primary" :disabled="authLoading">
+            <span x-text="authMode === 'signup' ? 'Daftar' : 'Masuk'"></span>
+          </button>
+          <div class="auth-msg" :class="authMsgType" x-show="authMsg" x-text="authMsg"></div>
+        </form>
+        <div class="trial-note">Akun baru otomatis mendapat masa coba 14 hari gratis.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ONBOARDING: PILIH PERSONA ============ -->
+  <div id="onboardingScreen" x-show="view === 'onboarding'" x-cloak>
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="auth-logo">KK</div>
+        <h1>Selamat Datang!</h1>
+        <div class="sub">Anda mendaftar sebagai apa? Ini menentukan kategori keuangan yang paling relevan untuk Anda.</div>
+
+        <div class="persona-list">
+          <button class="persona-card" @click="createHousehold('family')" :disabled="onboardLoading">
+            <div class="persona-icon">👨‍👩‍👧</div>
+            <div>
+              <div class="persona-title">Keluarga / Suami-Istri</div>
+              <div class="persona-desc">Kelola keuangan rumah tangga bersama pasangan, kategori seperti cicilan & pendidikan anak.</div>
+            </div>
+          </button>
+          <button class="persona-card" @click="createHousehold('student')" :disabled="onboardLoading">
+            <div class="persona-icon">🎓</div>
+            <div>
+              <div class="persona-title">Mahasiswa</div>
+              <div class="persona-desc">Kategori seperti kos, uang kiriman ortu, kuota, dan uang jajan.</div>
+            </div>
+          </button>
+          <button class="persona-card" @click="createHousehold('individual')" :disabled="onboardLoading">
+            <div class="persona-icon">🧑</div>
+            <div>
+              <div class="persona-title">Individu</div>
+              <div class="persona-desc">Kategori umum untuk pencatatan keuangan pribadi.</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ APP SCREEN ============ -->
+  <div id="appScreen" x-show="view === 'app'" x-cloak>
+    <div class="app-header">
+      <div>
+        <div class="title">Keuangan Keluarga<span class="badge-plan" x-text="planLabel"></span></div>
+        <div class="sub" x-text="userEmail"></div>
+      </div>
+      <button class="icon-btn" @click="logout()" title="Keluar">⏻</button>
+    </div>
+
+    <div class="page" x-show="page === 'dashboard'">
+      <div class="kpi-scroll">
+        <div class="kpi-card income"><div class="label">Pemasukan</div><div class="value" x-text="fmtRp(kpi.income)"></div></div>
+        <div class="kpi-card expense"><div class="label">Pengeluaran</div><div class="value" x-text="fmtRp(kpi.expense)"></div></div>
+        <div class="kpi-card balance"><div class="label">Saldo</div><div class="value" x-text="fmtRp(kpi.income - kpi.expense)"></div></div>
+      </div>
+
+      <div class="card">
+        <h2>Pengeluaran per Kategori</h2>
+        <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h2>Transaksi Terbaru</h2>
+        <div id="txList">
+          <template x-for="t in transactions.slice(0, 20)" :key="t.id">
+            <div class="tx-item">
+              <div class="tx-left">
+                <div class="tx-cat" x-text="t.category"></div>
+                <div class="tx-meta" x-text="t.date + (t.note ? ' · ' + t.note : '')"></div>
+              </div>
+              <div class="tx-amount" :class="t.type" x-text="(t.type === 'income' ? '+' : '-') + fmtRp(t.amount)"></div>
+            </div>
+          </template>
+        </div>
+        <div class="empty-note" x-show="transactions.length === 0">Belum ada transaksi bulan ini. Tekan tombol + untuk menambah.</div>
+      </div>
+    </div>
+
+    <div class="page" x-show="page === 'account'">
+      <div class="card">
+        <h2>Akun & Langganan</h2>
+        <p class="sub" x-text="'Plan saat ini: ' + planLabel"></p>
+        <p class="sub" x-text="'Tipe: ' + householdTypeLabel"></p>
+        <p class="sub" style="margin-top:12px;">Undang anggota keluarga & upgrade paket akan tersedia di fase pengembangan berikutnya.</p>
+      </div>
+    </div>
+
+    <button class="fab" @click="openModal()">+</button>
+
+    <div class="bottom-nav">
+      <button class="nav-item" :class="page === 'dashboard' && 'active'" @click="page = 'dashboard'">
+        <span class="nav-icon">🏠</span>Beranda
+      </button>
+      <button class="nav-item" @click="openModal()">
+        <span class="nav-icon">➕</span>Tambah
+      </button>
+      <button class="nav-item" :class="page === 'account' && 'active'" @click="page = 'account'">
+        <span class="nav-icon">👤</span>Akun
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ MODAL TAMBAH TRANSAKSI ============ -->
+  <div class="modal-backdrop" x-show="modalOpen" x-cloak @click.self="modalOpen = false">
+    <div class="modal-sheet">
+      <h2>Tambah Transaksi</h2>
+      <form @submit.prevent="submitTransaction()">
+        <div class="type-toggle">
+          <button type="button" class="type-btn" :class="txType === 'expense' && 'active-expense'" @click="setTxType('expense')">Pengeluaran</button>
+          <button type="button" class="type-btn" :class="txType === 'income' && 'active-income'" @click="setTxType('income')">Pemasukan</button>
+        </div>
+        <div class="field">
+          <label>Tanggal</label>
+          <input type="date" x-model="txDate" required>
+        </div>
+        <div class="field">
+          <label>Kategori</label>
+          <select x-model="txCategory">
+            <template x-for="c in currentCategories" :key="c.id">
+              <option :value="c.name" x-text="c.name"></option>
+            </template>
+          </select>
+        </div>
+        <div class="field">
+          <label>Nominal (Rp)</label>
+          <input type="number" x-model="txAmount" min="0" step="1000" required placeholder="0">
+        </div>
+        <div class="field">
+          <label>Catatan</label>
+          <input type="text" x-model="txNote" placeholder="mis. struk Indomaret">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" @click="modalOpen = false">Batal</button>
+          <button type="submit" class="btn-primary">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
