@@ -5,6 +5,7 @@ import transactionsRoutes from './routes/transactions.js';
 import budgetsRoutes from './routes/budgets.js';
 import categoriesRoutes from './routes/categories.js';
 import householdsRoutes from './routes/households.js';
+import webhookRoutes from './routes/webhook.js';
 
 const app = express();
 const PORT = process.env.API_PORT || 3001;
@@ -23,6 +24,7 @@ app.use('/api/transactions', transactionsRoutes);
 app.use('/api/budgets', budgetsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/households', householdsRoutes);
+app.use('/api/webhook', webhookRoutes);
 
 // 404 handler
 app.use((req, res) => {
