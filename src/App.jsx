@@ -138,10 +138,10 @@ export default function App() {
       <button
         type="button"
         onClick={handleOpenModal}
-        className="fixed bottom-[96px] right-5 z-20 flex h-[72px] w-[72px] items-center justify-center rounded-full border border-white/70 bg-violet text-white shadow-float"
+        className="fixed bottom-[88px] right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full border border-white/70 bg-violet text-white shadow-float"
         aria-label="Tambah transaksi"
       >
-        <Plus size={40} strokeWidth={2.3} />
+        <Plus size={26} strokeWidth={2.3} />
       </button>
 
       <BottomNav page={page} onNavigate={setPage} onAdd={handleOpenModal} />

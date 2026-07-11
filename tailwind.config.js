@@ -48,6 +48,21 @@ export default {
         gloss: "0 20px 55px rgba(49, 77, 119, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.82)",
         soft: "0 12px 30px rgba(49, 77, 119, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.74)",
         float: "0 20px 42px rgba(111, 85, 242, 0.34)"
+      },
+      keyframes: {
+        "bell-ring": {
+          "0%, 100%": { transform: "rotate(0deg)" },
+          "10%": { transform: "rotate(14deg)" },
+          "20%": { transform: "rotate(-12deg)" },
+          "30%": { transform: "rotate(10deg)" },
+          "40%": { transform: "rotate(-8deg)" },
+          "50%": { transform: "rotate(6deg)" },
+          "60%": { transform: "rotate(-4deg)" },
+          "70%, 100%": { transform: "rotate(0deg)" }
+        }
+      },
+      animation: {
+        "bell-ring": "bell-ring 0.6s ease-in-out 3"
       }
     },
   },
