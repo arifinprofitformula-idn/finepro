@@ -65,7 +65,7 @@ router.post('/github', (req, res) => {
     log.push(run('npm install --production=false 2>&1').trim().split('\n').slice(-3).join('\n'));
     log.push(run('npm install --production=false 2>&1', PROJECT_DIR + '/api').trim().split('\n').slice(-3).join('\n'));
     log.push(run('npm run build 2>&1').trim().split('\n').slice(-3).join('\n'));
-    run(`cp -r ${PROJECT_DIR}/dist/* ${DEPLOY_DIR}/`);
+    run(`sudo cp -r ${PROJECT_DIR}/dist/* ${DEPLOY_DIR}/`);
 
     console.log('[webhook] Deploy OK');
     res.json({ status: 'deployed', log });
