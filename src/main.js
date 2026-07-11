@@ -17,17 +17,37 @@ import { planLabel } from "./lib/subscriptions.js";
 import { createPayment, getPaymentStatus, PLANS } from "./lib/payments.js";
 import { createInvite, getMyPendingInvites, acceptInvite } from "./lib/invites.js";
 import { loadDashboardData } from "./pages/dashboard.js";
+import { renderCategoryChart } from "./components/categoryChart.js";
 import { fmtRp, todayStr, monthKey, daysUntilMonthlyDay } from "./utils/format.js";
 import { getToken } from "./lib/apiClient.js";
 
 // Registrasi service worker otomatis (vite-plugin-pwa)
 registerSW({ immediate: true });
 
+const THEME_STORAGE_KEY = "finepro-theme";
+const DEFAULT_EXPENSE_CATEGORIES = [
+  "Rumah Tangga",
+  "Kesehatan",
+  "Hiburan",
+  "Tabungan & Investasi",
+  "Ibadah & Sedekah",
+  "Lainnya"
+];
+
+function applyTheme(theme) {
+  const selected = theme === "light" ? "light" : "dark";
+  document.documentElement.classList.toggle("theme-light", selected === "light");
+  document.documentElement.classList.toggle("theme-dark", selected === "dark");
+  document.documentElement.style.colorScheme = selected;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", selected === "light" ? "#F5F7FB" : "#0c1120");
+}
+
 function appState() {
   return {
     // ---- navigasi ----
     view: "loading", // loading | auth | onboarding | app
     page: "dashboard", // dashboard | account
+    theme: localStorage.getItem(THEME_STORAGE_KEY) || "light",
 
     // ---- auth ----
     authMode: "login",
@@ -92,20 +112,27 @@ function appState() {
     // ---- dashboard ----
     kpi: { income: 0, expense: 0 },
     transactions: [],
+    dashboardLoading: false,
+    dashboardError: "",
 
     // ---- budget vs realisasi ----
     budgets: {},
     byCategoryExpense: {},
     budgetInputs: {},
     budgetSavingCategory: null,
+    budgetStatusMsg: "",
     exportLoading: false,
 
     get budgetProgress() {
-      return this.categoriesExpense.map(c => {
-        const budget = this.budgets[c.name] || 0;
-        const spent = this.byCategoryExpense[c.name] || 0;
+      const names = Array.from(new Set([
+        ...DEFAULT_EXPENSE_CATEGORIES,
+        ...this.categoriesExpense.map(c => c.name)
+      ]));
+      return names.map(name => {
+        const budget = this.budgets[name] || 0;
+        const spent = this.byCategoryExpense[name] || 0;
         const pct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
-        return { category: c.name, budget, spent, pct };
+        return { category: name, budget, spent, pct };
       });
     },
 
@@ -125,10 +152,78 @@ function appState() {
 
     fmtRp,
 
+    calculateProgress(realization, budget) {
+      const real = Number(realization) || 0;
+      const target = Number(budget) || 0;
+      if (target <= 0) return 0;
+      return Math.min(100, Math.round((real / target) * 100));
+    },
+
+    getSummaryCards() {
+      return [
+        {
+          key: "income",
+          label: "Pemasukan",
+          value: this.kpi.income,
+          icon: "↗",
+          hint: "+0% dari bulan lalu",
+          className: "income-card"
+        },
+        {
+          key: "expense",
+          label: "Pengeluaran",
+          value: this.kpi.expense,
+          icon: "↘",
+          hint: "+0% dari bulan lalu",
+          className: "expense-card"
+        },
+        {
+          key: "balance",
+          label: "Saldo",
+          value: this.kpi.income - this.kpi.expense,
+          icon: "◔",
+          hint: "+0% dari bulan lalu",
+          className: "balance-card"
+        }
+      ];
+    },
+
+    getRecentTransactions() {
+      if (!Array.isArray(this.transactions)) return [];
+      return this.transactions.slice(0, 5).map(tx => ({
+        ...tx,
+        title: tx.note || tx.category || "Transaksi",
+        icon: tx.type === "income" ? "↗" : "↘",
+        dateLabel: tx.date || ""
+      }));
+    },
+
+    toggleTheme() {
+      this.theme = this.theme === "dark" ? "light" : "dark";
+      localStorage.setItem(THEME_STORAGE_KEY, this.theme);
+      applyTheme(this.theme);
+      if (this.page === "dashboard") {
+        requestAnimationFrame(() => renderCategoryChart("categoryChart", this.byCategoryExpense));
+      }
+    },
+
+    goToAddTransaction() {
+      this.openModal();
+    },
+
+    budgetTone(category) {
+      const normalized = category.toLowerCase();
+      if (normalized.includes("rumah") || normalized.includes("kesehatan")) return "green";
+      if (normalized.includes("hiburan") || normalized.includes("tabungan") || normalized.includes("investasi")) return "coral";
+      if (normalized.includes("ibadah") || normalized.includes("sedekah") || normalized.includes("lain")) return "purple";
+      return "green";
+    },
+
     // =========================================================
     // INIT — dipanggil sekali saat halaman dibuka
     // =========================================================
     async init() {
+      applyTheme(this.theme);
       const params = new URLSearchParams(window.location.search);
       const orderId = params.get("order_id");
       if (orderId) {
@@ -309,27 +404,44 @@ function appState() {
     // DASHBOARD
     // =========================================================
     async refreshDashboard() {
-      const { transactions, kpi, budgets, byCategory } = await loadDashboardData(this.household.id);
-      this.transactions = transactions;
-      this.kpi = kpi;
-      this.budgets = budgets;
-      this.byCategoryExpense = byCategory;
-      const inputs = {};
-      Object.keys(budgets).forEach(cat => { inputs[cat] = budgets[cat]; });
-      this.budgetInputs = inputs;
+      this.dashboardLoading = true;
+      this.dashboardError = "";
+      try {
+        const { transactions, kpi, budgets, byCategory } = await loadDashboardData(this.household.id);
+        this.transactions = transactions;
+        this.kpi = kpi;
+        this.budgets = budgets;
+        this.byCategoryExpense = byCategory;
+        const inputs = {};
+        this.budgetProgress.forEach(b => { inputs[b.category] = budgets[b.category] || ""; });
+        this.budgetInputs = inputs;
+      } catch {
+        this.dashboardError = "Data dashboard belum bisa dimuat. Periksa koneksi API lalu coba lagi.";
+      } finally {
+        this.dashboardLoading = false;
+      }
     },
 
     // =========================================================
     // BUDGET VS REALISASI
     // =========================================================
     async saveBudget(category) {
-      const amount = parseFloat(this.budgetInputs[category]) || 0;
+      const rawAmount = this.budgetInputs[category];
+      const amount = rawAmount === "" || rawAmount === null || rawAmount === undefined ? 0 : parseFloat(rawAmount);
+      if (!Number.isFinite(amount) || amount < 0) {
+        this.budgetStatusMsg = "Budget harus berupa angka positif.";
+        setTimeout(() => { this.budgetStatusMsg = ""; }, 2600);
+        return;
+      }
       this.budgetSavingCategory = category;
+      this.budgetStatusMsg = "";
       try {
         await setBudget(this.household.id, category, amount);
         this.budgets = { ...this.budgets, [category]: amount };
+        this.budgetStatusMsg = "Budget tersimpan.";
+        setTimeout(() => { this.budgetStatusMsg = ""; }, 2200);
       } catch (err) {
-        alert("Gagal menyimpan budget: " + err.message);
+        this.budgetStatusMsg = "Budget belum tersimpan. Coba lagi sebentar.";
       } finally {
         this.budgetSavingCategory = null;
       }

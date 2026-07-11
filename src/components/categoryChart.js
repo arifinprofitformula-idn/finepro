@@ -12,6 +12,9 @@ export function renderCategoryChart(canvasId, byCategoryMap) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
+  const styles = getComputedStyle(document.documentElement);
+  const textColor = styles.getPropertyValue("--text").trim() || "#eef1f6";
+  const borderColor = styles.getPropertyValue("--surface-solid").trim() || "#171e33";
 
   const labels = Object.keys(byCategoryMap);
   const data = Object.values(byCategoryMap);
@@ -28,11 +31,11 @@ export function renderCategoryChart(canvasId, byCategoryMap) {
 
   chartInstance = new Chart(ctx, {
     type: "doughnut",
-    data: { labels, datasets: [{ data, backgroundColor: PALETTE }] },
+    data: { labels, datasets: [{ data, backgroundColor: PALETTE, borderColor, borderWidth: 2 }] },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 10 } } } }
+      plugins: { legend: { position: "bottom", labels: { color: textColor, boxWidth: 10, font: { size: 10 } } } }
     }
   });
 }
