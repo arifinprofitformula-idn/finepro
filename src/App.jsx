@@ -45,7 +45,8 @@ export default function App() {
     refresh: refreshHousehold,
     setHousehold
   } = useHousehold(user);
-  const { categoriesExpense, categoriesIncome } = useCategories(household?.id);
+  const categories = useCategories(household?.id);
+  const { categoriesExpense, categoriesIncome } = categories;
   const { invites, refresh: refreshInvites } = useInvites(!!household);
   const dashboard = useDashboard(household?.id);
   const paymentStatus = usePaymentStatus();
@@ -122,6 +123,11 @@ export default function App() {
           user={user}
           household={household}
           invites={invites}
+          categoriesExpense={categoriesExpense}
+          categoriesIncome={categoriesIncome}
+          onCreateCategory={categories.createCategory}
+          onRenameCategory={categories.renameCategory}
+          onDeleteCategory={categories.deleteCategory}
           onUserUpdated={updateUser}
           onHouseholdUpdated={setHousehold}
           onInvitesChanged={refreshInvites}

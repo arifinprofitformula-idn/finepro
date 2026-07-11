@@ -1,5 +1,5 @@
-// src/lib/categories.js
-// Ambil kategori dari API lokal
+// src/api/categories.js
+// CRUD kategori via API lokal
 
 import { apiFetch } from "./apiClient.js";
 
@@ -13,7 +13,22 @@ export async function getAllCategories(householdId) {
   return data.categories || [];
 }
 
-export async function addCustomCategory(householdId, type, name) {
-  // Not yet implemented in API — placeholder
-  return { id: Date.now().toString(), type, name, sort_order: 99, is_default: false };
+export async function createCategory(type, name) {
+  const data = await apiFetch('/categories', {
+    method: 'POST',
+    body: JSON.stringify({ type, name }),
+  });
+  return data.category;
+}
+
+export async function renameCategory(id, name) {
+  const data = await apiFetch(`/categories/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  });
+  return data.category;
+}
+
+export async function deleteCategory(id) {
+  await apiFetch(`/categories/${id}`, { method: 'DELETE' });
 }

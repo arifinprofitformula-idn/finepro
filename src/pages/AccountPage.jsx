@@ -8,6 +8,7 @@ import { getBills, createBill, markBillPaid, deleteBill } from "../api/bills.js"
 import { getArisanGroups, createArisanGroup } from "../api/arisan.js";
 import ArisanGroupCard from "../components/ArisanGroupCard.jsx";
 import WalletCard from "../components/WalletCard.jsx";
+import CategoryRow from "../components/CategoryRow.jsx";
 import { useWallets } from "../hooks/useWallets.js";
 import { uploadAvatar } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
@@ -18,6 +19,11 @@ export default function AccountPage({
   user,
   household,
   invites,
+  categoriesExpense,
+  categoriesIncome,
+  onCreateCategory,
+  onRenameCategory,
+  onDeleteCategory,
   onUserUpdated,
   onHouseholdUpdated,
   onInvitesChanged,
@@ -64,6 +70,9 @@ export default function AccountPage({
   const [pushPermission, setPushPermission] = useState("default");
   const [pushSubscribing, setPushSubscribing] = useState(false);
   const [pushMsg, setPushMsg] = useState("");
+  const [newCategoryType, setNewCategoryType] = useState("expense");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
 
   const isOwner = household.role === "owner";
   const isStudent = household.household_type === "student";
@@ -161,6 +170,19 @@ export default function AccountPage({
       setTransferMsgType("error");
     } finally {
       setTransferSaving(false);
+    }
+  }
+
+  async function handleAddCategory(e) {
+    e.preventDefault();
+    setCategorySaving(true);
+    try {
+      await onCreateCategory(newCategoryType, newCategoryName);
+      setNewCategoryName("");
+    } catch (err) {
+      alert("Gagal menambah kategori: " + err.message);
+    } finally {
+      setCategorySaving(false);
     }
   }
 
@@ -733,10 +755,49 @@ export default function AccountPage({
         </form>
       </div>
 
-      {/* Kategori custom — backend-nya masih placeholder (lihat api/categories.js addCustomCategory) */}
-      <div className="bg-white border border-neutral-border rounded-xl p-3 opacity-60">
-        <h2 className="text-sm font-semibold text-neutral-900 mb-1">Kategori Custom</h2>
-        <p className="text-xs text-neutral-500">Segera hadir — endpoint backend untuk kategori custom belum tersedia.</p>
+      {/* Kategori — bisa tambah/ubah/hapus, termasuk kategori bawaan sistem */}
+      <div className="bg-white border border-neutral-border rounded-xl p-3">
+        <h2 className="text-sm font-semibold text-neutral-900 mb-2">Kategori</h2>
+
+        <div className="text-xs font-semibold text-neutral-500 mb-1">Pengeluaran</div>
+        {categoriesExpense.map((c) => (
+          <CategoryRow key={c.id} category={c} onRename={onRenameCategory} onDelete={onDeleteCategory} />
+        ))}
+
+        <div className="text-xs font-semibold text-neutral-500 mb-1 mt-3">Pemasukan</div>
+        {categoriesIncome.map((c) => (
+          <CategoryRow key={c.id} category={c} onRename={onRenameCategory} onDelete={onDeleteCategory} />
+        ))}
+
+        <form onSubmit={handleAddCategory} className="flex gap-2 mt-3">
+          <label htmlFor="new-category-type" className="sr-only">Tipe kategori baru</label>
+          <select
+            id="new-category-type"
+            value={newCategoryType}
+            onChange={(e) => setNewCategoryType(e.target.value)}
+            className="px-2 py-2 text-sm rounded-lg border border-neutral-border"
+          >
+            <option value="expense">Pengeluaran</option>
+            <option value="income">Pemasukan</option>
+          </select>
+          <label htmlFor="new-category-name" className="sr-only">Nama kategori baru</label>
+          <input
+            id="new-category-name"
+            type="text"
+            required
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            placeholder="Nama kategori baru"
+            className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+          />
+          <button
+            type="submit"
+            disabled={categorySaving}
+            className="min-h-[40px] px-4 rounded-lg bg-navy text-white text-xs font-bold disabled:opacity-60"
+          >
+            Tambah
+          </button>
+        </form>
       </div>
 
       {/* Undang Anggota (owner only) */}
