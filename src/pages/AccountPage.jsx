@@ -14,6 +14,57 @@ import { uploadAvatar } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
 import { fmtRp, monthKey, todayStr } from "../utils/format.js";
+import {
+  ArrowDownLeft,
+  ArrowRightLeft,
+  ArrowUpRight,
+  Bell,
+  CalendarClock,
+  Crown,
+  Download,
+  LogOut,
+  Mail,
+  Receipt,
+  Tag,
+  User,
+  UserPlus,
+  Users,
+  Wallet
+} from "lucide-react";
+
+const inputClass =
+  "h-11 w-full min-w-0 rounded-full border border-neutral-border bg-white/70 px-4 text-sm font-medium text-navy outline-none backdrop-blur";
+const primaryBtnClass =
+  "flex h-11 items-center justify-center gap-1.5 rounded-full bg-violet px-4 text-sm font-bold text-white disabled:opacity-60";
+const outlineBtnClass =
+  "flex h-11 items-center justify-center gap-1.5 rounded-full border border-navy px-4 text-sm font-bold text-navy disabled:opacity-60";
+
+const TONE_CLASS = {
+  violet: "bg-violet-light text-violet",
+  gold: "bg-gold-light text-gold",
+  mint: "bg-mint-light text-mint",
+  coral: "bg-coral-light text-coral"
+};
+
+function SectionHeader({ icon: Icon, tone, title }) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <div className={`flex h-8 w-8 items-center justify-center rounded-full ${TONE_CLASS[tone] || TONE_CLASS.violet}`}>
+        <Icon size={16} />
+      </div>
+      <h2 className="text-base font-semibold text-navy">{title}</h2>
+    </div>
+  );
+}
+
+function StatusMsg({ msg, type }) {
+  if (!msg) return null;
+  return (
+    <div className={`mt-2 rounded-xl px-3 py-2 text-xs font-medium ${type === "error" ? "bg-coral-light text-coral" : "bg-mint-light text-mint"}`}>
+      {msg}
+    </div>
+  );
+}
 
 export default function AccountPage({
   user,
@@ -70,6 +121,7 @@ export default function AccountPage({
   const [pushPermission, setPushPermission] = useState("default");
   const [pushSubscribing, setPushSubscribing] = useState(false);
   const [pushMsg, setPushMsg] = useState("");
+  const [categoryTab, setCategoryTab] = useState("expense");
   const [newCategoryType, setNewCategoryType] = useState("expense");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categorySaving, setCategorySaving] = useState(false);
@@ -343,12 +395,12 @@ export default function AccountPage({
   }
 
   return (
-    <div className="px-4 pt-1 pb-24 max-w-lg mx-auto flex flex-col gap-3">
+    <div className="max-w-lg mx-auto px-5 pb-28">
       {/* Profil */}
-      <div className="bg-white border border-neutral-border rounded-xl p-3 flex items-center gap-3">
-        <label className="w-14 h-14 rounded-full overflow-hidden bg-navy text-white flex items-center justify-center font-bold text-lg flex-shrink-0 cursor-pointer">
+      <div className="gloss-panel mb-4 flex items-center gap-3 rounded-2xl p-4">
+        <label className="h-14 w-14 flex-shrink-0 cursor-pointer overflow-hidden rounded-full border-2 border-white bg-violet text-white shadow-soft flex items-center justify-center text-lg font-semibold">
           {user.avatar_url ? (
-            <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+            <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
           ) : (
             (user.name || user.email).charAt(0).toUpperCase()
           )}
@@ -360,65 +412,54 @@ export default function AccountPage({
           />
         </label>
         <div className="min-w-0">
-          <div className="text-sm font-bold text-neutral-900 truncate">{user.name || user.email}</div>
-          <div className="text-xs text-neutral-500 truncate">{user.email}</div>
-          <div className="text-[11px] text-navy mt-0.5">
+          <div className="truncate text-sm font-semibold text-navy">{user.name || user.email}</div>
+          <div className="truncate text-xs text-neutral-500">{user.email}</div>
+          <div className="mt-0.5 text-xs font-medium text-violet">
             {avatarUploading ? "Mengunggah..." : "Ketuk foto untuk mengganti"}
           </div>
         </div>
       </div>
 
       {/* Akun & Langganan */}
-      <div className="bg-white border border-neutral-border rounded-xl p-3">
-        <h2 className="text-sm font-semibold text-neutral-900 mb-2">Akun & Langganan</h2>
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={User} tone="violet" title="Akun & Langganan" />
         <p className="text-xs text-neutral-500">Plan saat ini: {planLabel(household)}</p>
         <p className="text-xs text-neutral-500">
           Tipe: {HOUSEHOLD_TYPE_LABELS[household.household_type] || household.household_type}
         </p>
 
         {pushPermission !== "granted" && pushPermission !== "unsupported" && (
-          <button
-            type="button"
-            onClick={handleEnablePush}
-            disabled={pushSubscribing}
-            className="w-full min-h-[40px] mt-3 bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
-          >
+          <button type="button" onClick={handleEnablePush} disabled={pushSubscribing} className={`${primaryBtnClass} mt-3 w-full`}>
+            <Bell size={15} />
             {pushSubscribing ? "Mengaktifkan..." : "Aktifkan Notifikasi Budget"}
           </button>
         )}
-        {pushPermission === "granted" && (
-          <p className="text-xs text-success mt-3">✓ Notifikasi budget aktif</p>
-        )}
-        {pushMsg && <p className="text-xs text-neutral-500 mt-1">{pushMsg}</p>}
+        {pushPermission === "granted" && <p className="mt-3 text-xs font-medium text-mint">✓ Notifikasi budget aktif</p>}
+        {pushMsg && <p className="mt-1 text-xs text-neutral-500">{pushMsg}</p>}
 
-        <button
-          type="button"
-          onClick={onLogout}
-          className="w-full min-h-[40px] mt-3 border border-neutral-border rounded-lg text-sm font-semibold text-neutral-900"
-        >
+        <button type="button" onClick={onLogout} className={`${outlineBtnClass} mt-3 w-full`}>
+          <LogOut size={15} />
           Keluar
         </button>
       </div>
 
       {/* Upgrade Paket (owner only) */}
       {isOwner && (
-        <div className="bg-white border border-neutral-border rounded-xl p-3">
-          <h2 className="text-sm font-semibold text-neutral-900 mb-1">Upgrade Paket</h2>
-          <p className="text-xs text-neutral-500 mb-2">
-            Pembayaran diproses via Midtrans, otomatis aktif setelah bayar.
-          </p>
+        <div className="gloss-panel mb-4 rounded-2xl p-4">
+          <SectionHeader icon={Crown} tone="gold" title="Upgrade Paket" />
+          <p className="mb-2 text-xs text-neutral-500">Pembayaran diproses via Midtrans, otomatis aktif setelah bayar.</p>
           <div className="flex flex-col gap-2">
             {PLANS.map((p) => (
-              <div key={p.id} className="flex items-center justify-between border border-neutral-border rounded-lg p-2.5">
+              <div key={p.id} className="flex items-center justify-between rounded-2xl bg-white/70 p-3">
                 <div>
-                  <div className="text-sm font-bold text-neutral-900">{p.label}</div>
+                  <div className="text-sm font-semibold text-navy">{p.label}</div>
                   <div className="text-xs text-neutral-500">{p.priceLabel}</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleUpgrade(p.id)}
                   disabled={payingPlan === p.id}
-                  className="min-h-[40px] px-4 rounded-lg bg-navy text-white text-xs font-bold disabled:opacity-60"
+                  className="flex h-10 items-center justify-center rounded-full bg-gold px-4 text-xs font-bold text-white disabled:opacity-60"
                 >
                   Pilih
                 </button>
@@ -430,26 +471,19 @@ export default function AccountPage({
 
       {/* Riwayat Pembayaran */}
       {paymentHistory.length > 0 && (
-        <div className="bg-white border border-neutral-border rounded-xl p-3">
-          <h2 className="text-sm font-semibold text-neutral-900 mb-1">Riwayat Pembayaran</h2>
+        <div className="gloss-panel mb-4 rounded-2xl p-4">
+          <SectionHeader icon={Receipt} tone="violet" title="Riwayat Pembayaran" />
           {paymentHistory.map((p) => (
-            <div
-              key={p.order_id}
-              className="flex items-center justify-between gap-2 py-2 border-b border-neutral-border last:border-0"
-            >
+            <div key={p.order_id} className="flex items-center justify-between gap-2 border-b border-neutral-border/60 py-2 last:border-0">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-neutral-900 truncate">
+                <div className="truncate text-sm font-semibold text-navy">
                   {PLANS.find((pl) => pl.id === p.plan)?.label || p.plan}
                 </div>
                 <div className="text-xs text-neutral-500">{new Date(p.created_at).toLocaleDateString("id-ID")}</div>
               </div>
-              <div className="text-right flex-shrink-0">
-                <div className="text-sm font-bold text-neutral-900">{fmtRp(p.amount)}</div>
-                <div
-                  className={`text-xs ${
-                    p.status === "paid" ? "text-success" : p.status === "failed" ? "text-danger" : "text-gold"
-                  }`}
-                >
+              <div className="flex-shrink-0 text-right">
+                <div className="text-sm font-semibold text-navy">{fmtRp(p.amount)}</div>
+                <div className={`text-xs font-medium ${p.status === "paid" ? "text-mint" : p.status === "failed" ? "text-coral" : "text-gold"}`}>
                   {PAYMENT_STATUS_LABELS[p.status] || p.status}
                 </div>
               </div>
@@ -459,37 +493,27 @@ export default function AccountPage({
       )}
 
       {/* Export */}
-      <div className="bg-white border border-neutral-border rounded-xl p-3">
-        <h2 className="text-sm font-semibold text-neutral-900 mb-1">Export Data</h2>
-        <p className="text-xs text-neutral-500 mb-2">Unduh transaksi bulan berjalan.</p>
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={Download} tone="mint" title="Export Data" />
+        <p className="mb-2 text-xs text-neutral-500">Unduh transaksi bulan berjalan.</p>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            disabled={exportLoading}
-            className="flex-1 min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
-          >
+          <button type="button" onClick={handleExportCSV} disabled={exportLoading} className={`${primaryBtnClass} flex-1`}>
             {exportLoading ? "..." : "CSV"}
           </button>
-          <button
-            type="button"
-            onClick={handleExportPDF}
-            disabled={pdfLoading}
-            className="flex-1 min-h-[40px] border border-navy text-navy rounded-lg text-sm font-bold disabled:opacity-60"
-          >
+          <button type="button" onClick={handleExportPDF} disabled={pdfLoading} className={`${outlineBtnClass} flex-1`}>
             {pdfLoading ? "Menyiapkan..." : "PDF"}
           </button>
         </div>
       </div>
 
       {/* Dompet & Transfer */}
-      <div className="bg-white border border-neutral-border rounded-xl p-3">
-        <h2 className="text-sm font-semibold text-neutral-900 mb-2">Dompet</h2>
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={Wallet} tone="violet" title="Dompet" />
         {wallets.map((w) => (
           <WalletCard key={w.id} wallet={w} />
         ))}
 
-        <form onSubmit={handleAddWallet} className="flex gap-2 mt-3">
+        <form onSubmit={handleAddWallet} className="mt-3 flex gap-2">
           <label htmlFor="new-wallet" className="sr-only">Nama dompet baru</label>
           <input
             id="new-wallet"
@@ -498,35 +522,26 @@ export default function AccountPage({
             value={newWalletName}
             onChange={(e) => setNewWalletName(e.target.value)}
             placeholder="Nama dompet baru, mis. BCA"
-            className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+            className={`${inputClass} flex-1`}
           />
-          <button
-            type="submit"
-            disabled={walletSaving}
-            className="min-h-[40px] px-4 rounded-lg bg-navy text-white text-xs font-bold disabled:opacity-60"
-          >
+          <button type="submit" disabled={walletSaving} className={primaryBtnClass}>
             Tambah
           </button>
         </form>
 
         {wallets.length >= 2 && (
-          <form onSubmit={handleTransfer} className="flex flex-col gap-2 mt-4 pt-3 border-t border-neutral-border">
-            <div className="text-xs font-semibold text-neutral-500">Transfer Antar Dompet</div>
+          <form onSubmit={handleTransfer} className="mt-4 flex flex-col gap-2 border-t border-neutral-border/60 pt-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500">
+              <ArrowRightLeft size={13} />
+              Transfer Antar Dompet
+            </div>
             <div className="flex gap-2">
-              <select
-                value={transferFrom}
-                onChange={(e) => setTransferFrom(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
-              >
+              <select value={transferFrom} onChange={(e) => setTransferFrom(e.target.value)} className={inputClass}>
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>{w.name}</option>
                 ))}
               </select>
-              <select
-                value={transferTo}
-                onChange={(e) => setTransferTo(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
-              >
+              <select value={transferTo} onChange={(e) => setTransferTo(e.target.value)} className={inputClass}>
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>{w.name}</option>
                 ))}
@@ -540,58 +555,50 @@ export default function AccountPage({
               value={transferAmount}
               onChange={(e) => setTransferAmount(e.target.value)}
               placeholder="Nominal transfer"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+              className={inputClass}
             />
             <input
               type="text"
               value={transferNote}
               onChange={(e) => setTransferNote(e.target.value)}
               placeholder="Catatan (opsional)"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+              className={inputClass}
             />
-            <button
-              type="submit"
-              disabled={transferSaving}
-              className="min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
-            >
+            <button type="submit" disabled={transferSaving} className={primaryBtnClass}>
               Transfer
             </button>
-            {transferMsg && (
-              <div className={`text-xs rounded-md px-3 py-2 ${transferMsgType === "error" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>
-                {transferMsg}
-              </div>
-            )}
+            <StatusMsg msg={transferMsg} type={transferMsgType} />
           </form>
         )}
       </div>
 
       {/* Tagihan & Pengingat Jatuh Tempo */}
-      <div className="bg-white border border-neutral-border rounded-xl p-3">
-        <h2 className="text-sm font-semibold text-neutral-900 mb-1">Tagihan & Pengingat</h2>
-        <p className="text-xs text-neutral-500 mb-2">
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={Bell} tone="coral" title="Tagihan & Pengingat" />
+        <p className="mb-2 text-xs text-neutral-500">
           Catat tagihan rutin/sekali bayar, dapat pengingat di beranda 3 hari sebelum jatuh tempo.
         </p>
 
         {bills.length > 0 && (
           <div className="mb-3">
             {bills.map((b) => (
-              <div key={b.id} className="flex items-center justify-between gap-2 py-2 border-b border-neutral-border last:border-0">
+              <div key={b.id} className="flex items-center justify-between gap-2 border-b border-neutral-border/60 py-2 last:border-0">
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-neutral-900 truncate">
-                    {b.name} {b.is_recurring && <span className="text-neutral-500 font-normal">(berulang)</span>}
+                  <div className="truncate text-sm font-semibold text-navy">
+                    {b.name} {b.is_recurring && <span className="font-normal text-neutral-500">(berulang)</span>}
                   </div>
                   <div className="text-xs text-neutral-500">
                     {fmtRp(b.amount)} · jatuh tempo {b.due_date}
                     {b.paid_at && !b.is_recurring && " · Lunas"}
                   </div>
                 </div>
-                <div className="flex gap-1.5 flex-shrink-0">
+                <div className="flex flex-shrink-0 gap-1.5">
                   {!(b.paid_at && !b.is_recurring) && (
                     <button
                       type="button"
                       onClick={() => handleMarkPaid(b.id)}
                       disabled={billBusyId === b.id}
-                      className="min-h-[36px] px-2.5 rounded-md bg-success text-white text-xs font-bold disabled:opacity-60"
+                      className="flex h-9 items-center justify-center rounded-full bg-mint px-3 text-xs font-bold text-white disabled:opacity-60"
                     >
                       Lunas
                     </button>
@@ -600,7 +607,7 @@ export default function AccountPage({
                     type="button"
                     onClick={() => handleDeleteBill(b.id)}
                     disabled={billBusyId === b.id}
-                    className="min-h-[36px] px-2.5 rounded-md border border-neutral-border text-xs font-semibold text-neutral-500 disabled:opacity-60"
+                    className="flex h-9 items-center justify-center rounded-full border border-neutral-border px-3 text-xs font-semibold text-neutral-500 disabled:opacity-60"
                   >
                     Hapus
                   </button>
@@ -619,7 +626,7 @@ export default function AccountPage({
             value={billName}
             onChange={(e) => setBillName(e.target.value)}
             placeholder="Nama tagihan, mis. Listrik"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+            className={inputClass}
           />
           <div className="flex gap-2">
             <input
@@ -630,46 +637,36 @@ export default function AccountPage({
               value={billAmount}
               onChange={(e) => setBillAmount(e.target.value)}
               placeholder="Nominal"
-              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+              className={inputClass}
             />
             <input
               type="date"
               required
               value={billDueDate}
               onChange={(e) => setBillDueDate(e.target.value)}
-              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+              className={inputClass}
             />
           </div>
-          <label className="flex items-center gap-2 text-xs text-neutral-500">
+          <label className="flex items-center gap-2 px-1 text-xs text-neutral-500">
             <input type="checkbox" checked={billRecurring} onChange={(e) => setBillRecurring(e.target.checked)} />
             Tagihan berulang tiap bulan
           </label>
-          <button
-            type="submit"
-            disabled={billSaving}
-            className="min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
-          >
+          <button type="submit" disabled={billSaving} className={primaryBtnClass}>
             Tambah Tagihan
           </button>
-          {billMsg && (
-            <div className={`text-xs rounded-md px-3 py-2 ${billMsgType === "error" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>
-              {billMsg}
-            </div>
-          )}
+          <StatusMsg msg={billMsg} type={billMsgType} />
         </form>
       </div>
 
       {/* Tanggal Uang Bulanan (student only) */}
       {isStudent && (
-        <div className="bg-white border border-neutral-border rounded-xl p-3">
-          <h2 className="text-sm font-semibold text-neutral-900 mb-1">Tanggal Uang Bulanan</h2>
-          <p className="text-xs text-neutral-500 mb-2">
+        <div className="gloss-panel mb-4 rounded-2xl p-4">
+          <SectionHeader icon={CalendarClock} tone="gold" title="Tanggal Uang Bulanan" />
+          <p className="mb-2 text-xs text-neutral-500">
             Atur tanggal biasanya uang kiriman/bulanan cair, supaya dapat pengingat lembut di beranda.
           </p>
           <form onSubmit={handleSaveIncomeDay} className="flex flex-col gap-2">
-            <label htmlFor="income-day" className="sr-only">
-              Tanggal uang bulanan (1-31)
-            </label>
+            <label htmlFor="income-day" className="sr-only">Tanggal uang bulanan (1-31)</label>
             <input
               id="income-day"
               type="number"
@@ -678,37 +675,23 @@ export default function AccountPage({
               value={monthlyIncomeDayInput}
               onChange={(e) => setMonthlyIncomeDayInput(e.target.value)}
               placeholder="mis. 25"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+              className={inputClass}
             />
-            <button
-              type="submit"
-              disabled={incomeDaySaving}
-              className="min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
-            >
+            <button type="submit" disabled={incomeDaySaving} className={primaryBtnClass}>
               Simpan
             </button>
-            {incomeDayMsg && (
-              <div
-                className={`text-xs rounded-md px-3 py-2 ${
-                  incomeDayMsgType === "error" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"
-                }`}
-              >
-                {incomeDayMsg}
-              </div>
-            )}
+            <StatusMsg msg={incomeDayMsg} type={incomeDayMsgType} />
           </form>
         </div>
       )}
 
       {/* Arisan & Iuran */}
-      <div className="bg-white border border-neutral-border rounded-xl p-3">
-        <h2 className="text-sm font-semibold text-neutral-900 mb-1">Arisan & Iuran</h2>
-        <p className="text-xs text-neutral-500 mb-2">
-          Catat setoran & giliran arisan, terpisah dari transaksi rumah tangga biasa.
-        </p>
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={Users} tone="mint" title="Arisan & Iuran" />
+        <p className="mb-2 text-xs text-neutral-500">Catat setoran & giliran arisan, terpisah dari transaksi rumah tangga biasa.</p>
 
         {arisanGroups.length > 0 && (
-          <div className="flex flex-col gap-2 mb-3">
+          <div className="mb-3 flex flex-col gap-2">
             {arisanGroups.map((g) => (
               <ArisanGroupCard key={g.id} group={g} onDeleted={handleArisanGroupDeleted} />
             ))}
@@ -724,7 +707,7 @@ export default function AccountPage({
             value={arisanName}
             onChange={(e) => setArisanName(e.target.value)}
             placeholder="Nama arisan, mis. Arisan RT 05"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+            className={inputClass}
           />
           <div className="flex gap-2">
             <input
@@ -735,47 +718,63 @@ export default function AccountPage({
               value={arisanAmount}
               onChange={(e) => setArisanAmount(e.target.value)}
               placeholder="Iuran per periode"
-              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+              className={inputClass}
             />
             <input
               type="text"
               value={arisanFrequency}
               onChange={(e) => setArisanFrequency(e.target.value)}
               placeholder="Bulanan"
-              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+              className={inputClass}
             />
           </div>
-          <button
-            type="submit"
-            disabled={arisanSaving}
-            className="min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
-          >
+          <button type="submit" disabled={arisanSaving} className={primaryBtnClass}>
             Buat Grup Arisan
           </button>
         </form>
       </div>
 
       {/* Kategori — bisa tambah/ubah/hapus, termasuk kategori bawaan sistem */}
-      <div className="bg-white border border-neutral-border rounded-xl p-3">
-        <h2 className="text-sm font-semibold text-neutral-900 mb-2">Kategori</h2>
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={Tag} tone="violet" title="Kategori" />
 
-        <div className="text-xs font-semibold text-neutral-500 mb-1">Pengeluaran</div>
-        {categoriesExpense.map((c) => (
+        <div className="mb-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setCategoryTab("expense")}
+            className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border text-sm font-semibold ${
+              categoryTab === "expense" ? "border-coral bg-coral-light text-coral" : "border-white/80 bg-white/60 text-neutral-500"
+            }`}
+          >
+            <ArrowDownLeft size={15} />
+            Pengeluaran
+          </button>
+          <button
+            type="button"
+            onClick={() => setCategoryTab("income")}
+            className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border text-sm font-semibold ${
+              categoryTab === "income" ? "border-mint bg-mint-light text-mint" : "border-white/80 bg-white/60 text-neutral-500"
+            }`}
+          >
+            <ArrowUpRight size={15} />
+            Pemasukan
+          </button>
+        </div>
+
+        {(categoryTab === "expense" ? categoriesExpense : categoriesIncome).map((c) => (
           <CategoryRow key={c.id} category={c} onRename={onRenameCategory} onDelete={onDeleteCategory} />
         ))}
+        {(categoryTab === "expense" ? categoriesExpense : categoriesIncome).length === 0 && (
+          <div className="py-2 text-xs font-medium text-neutral-500">Belum ada kategori.</div>
+        )}
 
-        <div className="text-xs font-semibold text-neutral-500 mb-1 mt-3">Pemasukan</div>
-        {categoriesIncome.map((c) => (
-          <CategoryRow key={c.id} category={c} onRename={onRenameCategory} onDelete={onDeleteCategory} />
-        ))}
-
-        <form onSubmit={handleAddCategory} className="flex gap-2 mt-3">
+        <form onSubmit={handleAddCategory} className="mt-3 flex gap-2">
           <label htmlFor="new-category-type" className="sr-only">Tipe kategori baru</label>
           <select
             id="new-category-type"
             value={newCategoryType}
             onChange={(e) => setNewCategoryType(e.target.value)}
-            className="px-2 py-2 text-sm rounded-lg border border-neutral-border"
+            className="h-11 rounded-full border border-neutral-border bg-white/70 px-3 text-sm font-medium text-navy outline-none backdrop-blur"
           >
             <option value="expense">Pengeluaran</option>
             <option value="income">Pemasukan</option>
@@ -788,13 +787,9 @@ export default function AccountPage({
             value={newCategoryName}
             onChange={(e) => setNewCategoryName(e.target.value)}
             placeholder="Nama kategori baru"
-            className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+            className={`${inputClass} flex-1`}
           />
-          <button
-            type="submit"
-            disabled={categorySaving}
-            className="min-h-[40px] px-4 rounded-lg bg-navy text-white text-xs font-bold disabled:opacity-60"
-          >
+          <button type="submit" disabled={categorySaving} className={primaryBtnClass}>
             Tambah
           </button>
         </form>
@@ -802,12 +797,10 @@ export default function AccountPage({
 
       {/* Undang Anggota (owner only) */}
       {isOwner && (
-        <div className="bg-white border border-neutral-border rounded-xl p-3">
-          <h2 className="text-sm font-semibold text-neutral-900 mb-1">Undang Anggota Keluarga</h2>
+        <div className="gloss-panel mb-4 rounded-2xl p-4">
+          <SectionHeader icon={UserPlus} tone="mint" title="Undang Anggota Keluarga" />
           <form onSubmit={handleSendInvite} className="flex flex-col gap-2">
-            <label htmlFor="invite-email" className="sr-only">
-              Email anggota yang diundang
-            </label>
+            <label htmlFor="invite-email" className="sr-only">Email anggota yang diundang</label>
             <input
               id="invite-email"
               type="email"
@@ -815,50 +808,34 @@ export default function AccountPage({
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="pasangan@email.com"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+              className={inputClass}
             />
-            <button
-              type="submit"
-              disabled={inviteLoading}
-              className="min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
-            >
+            <button type="submit" disabled={inviteLoading} className={primaryBtnClass}>
               Kirim Undangan
             </button>
-            {inviteMsg && (
-              <div
-                className={`text-xs rounded-md px-3 py-2 ${
-                  inviteMsgType === "error" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"
-                }`}
-              >
-                {inviteMsg}
-              </div>
-            )}
+            <StatusMsg msg={inviteMsg} type={inviteMsgType} />
           </form>
-          <p className="text-xs text-neutral-500 mt-2">
-            Undangan berlaku 7 hari. Anggota bisa menerima lewat halaman ini setelah login/daftar dengan email yang
-            sama.
+          <p className="mt-2 text-xs text-neutral-500">
+            Undangan berlaku 7 hari. Anggota bisa menerima lewat halaman ini setelah login/daftar dengan email yang sama.
           </p>
         </div>
       )}
 
       {/* Undangan Menunggu */}
       {invites.length > 0 && (
-        <div className="bg-white border border-neutral-border rounded-xl p-3">
-          <h2 className="text-sm font-semibold text-neutral-900 mb-1">Undangan Menunggu</h2>
+        <div className="gloss-panel mb-4 rounded-2xl p-4">
+          <SectionHeader icon={Mail} tone="coral" title="Undangan Menunggu" />
           {invites.map((inv) => (
-            <div
-              key={inv.id}
-              className="flex items-center justify-between gap-2 py-2 border-b border-neutral-border last:border-0"
-            >
+            <div key={inv.id} className="flex items-center justify-between gap-2 border-b border-neutral-border/60 py-2 last:border-0">
               <div>
-                <div className="text-sm font-semibold text-neutral-900">{inv.household_name}</div>
+                <div className="text-sm font-semibold text-navy">{inv.household_name}</div>
                 <div className="text-xs text-neutral-500">Diundang sebagai anggota</div>
               </div>
               <button
                 type="button"
                 disabled={acceptingId === inv.id}
                 onClick={() => handleAcceptInvite(inv.id)}
-                className="min-h-[40px] bg-success text-white rounded-md px-3 text-xs font-bold whitespace-nowrap disabled:opacity-60"
+                className="flex h-10 items-center justify-center whitespace-nowrap rounded-full bg-mint px-3 text-xs font-bold text-white disabled:opacity-60"
               >
                 Terima
               </button>
