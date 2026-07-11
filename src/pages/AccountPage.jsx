@@ -1,12 +1,12 @@
 // src/pages/AccountPage.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { updateMonthlyIncomeDay, HOUSEHOLD_TYPE_LABELS } from "../api/households.js";
 import { createInvite, acceptInvite } from "../api/invites.js";
-import { createPayment, PLANS } from "../api/payments.js";
+import { createPayment, getPaymentHistory, PAYMENT_STATUS_LABELS, PLANS } from "../api/payments.js";
 import { exportMonthCSV } from "../api/transactions.js";
 import { uploadAvatar } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
-import { monthKey, todayStr } from "../utils/format.js";
+import { fmtRp, monthKey, todayStr } from "../utils/format.js";
 
 export default function AccountPage({
   user,
@@ -31,9 +31,14 @@ export default function AccountPage({
   const [acceptingId, setAcceptingId] = useState(null);
   const [payingPlan, setPayingPlan] = useState(null);
   const [exportLoading, setExportLoading] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState([]);
 
   const isOwner = household.role === "owner";
   const isStudent = household.household_type === "student";
+
+  useEffect(() => {
+    getPaymentHistory().then(setPaymentHistory).catch(() => setPaymentHistory([]));
+  }, []);
 
   async function handleAvatarChange(e) {
     const file = e.target.files[0];
@@ -199,6 +204,36 @@ export default function AccountPage({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Riwayat Pembayaran */}
+      {paymentHistory.length > 0 && (
+        <div className="bg-white border border-neutral-border rounded-xl p-3">
+          <h2 className="text-sm font-semibold text-neutral-900 mb-1">Riwayat Pembayaran</h2>
+          {paymentHistory.map((p) => (
+            <div
+              key={p.order_id}
+              className="flex items-center justify-between gap-2 py-2 border-b border-neutral-border last:border-0"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-neutral-900 truncate">
+                  {PLANS.find((pl) => pl.id === p.plan)?.label || p.plan}
+                </div>
+                <div className="text-xs text-neutral-500">{new Date(p.created_at).toLocaleDateString("id-ID")}</div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <div className="text-sm font-bold text-neutral-900">{fmtRp(p.amount)}</div>
+                <div
+                  className={`text-xs ${
+                    p.status === "paid" ? "text-success" : p.status === "failed" ? "text-danger" : "text-gold"
+                  }`}
+                >
+                  {PAYMENT_STATUS_LABELS[p.status] || p.status}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

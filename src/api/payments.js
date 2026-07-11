@@ -20,3 +20,14 @@ export async function getPaymentStatus(orderId) {
   const data = await apiFetch(`/payments/status/${orderId}`);
   return data.payment;
 }
+
+export const PAYMENT_STATUS_LABELS = {
+  paid: "Berhasil",
+  pending: "Menunggu",
+  failed: "Gagal"
+};
+
+export async function getPaymentHistory() {
+  const data = await apiFetch('/payments/history');
+  return data.payments || [];
+}
