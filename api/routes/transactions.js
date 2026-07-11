@@ -1,9 +1,24 @@
 import { Router } from 'express';
+import multer from 'multer';
+import Anthropic from '@anthropic-ai/sdk';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { notifyHousehold, crossedThreshold } from '../lib/webpush.js';
 
 const router = Router();
 router.use(authMiddleware);
+
+// Memory storage — foto struk hanya dipakai sesaat untuk ekstraksi, tidak disimpan
+const receiptUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.mimetype)) {
+      return cb(new Error('Format foto harus PNG, JPG, atau WEBP'));
+    }
+    cb(null, true);
+  },
+});
 
 async function getUserHouseholdId(userId) {
   const result = await pool.query(
@@ -51,21 +66,150 @@ router.post('/', async (req, res) => {
     const householdId = await getUserHouseholdId(req.user.userId);
     if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
 
-    const { date, type, category, amount, note } = req.body;
+    const { date, type, category, amount, note, wallet_id } = req.body;
     if (!date || !type || !category || amount == null) {
       return res.status(400).json({ error: 'date, type, category, amount wajib diisi' });
     }
 
+    // wallet_id opsional — kalau tidak dikirim (user tidak peduli multi-dompet),
+    // pakai wallet default household supaya saldo tetap konsisten terhitung.
+    let walletId = wallet_id || null;
+    if (walletId) {
+      const walletCheck = await pool.query(
+        'SELECT id FROM wallets WHERE id = $1 AND household_id = $2',
+        [walletId, householdId]
+      );
+      if (walletCheck.rows.length === 0) {
+        return res.status(400).json({ error: 'Dompet tidak ditemukan' });
+      }
+    } else {
+      const defaultWallet = await pool.query(
+        'SELECT id FROM wallets WHERE household_id = $1 AND is_default = true LIMIT 1',
+        [householdId]
+      );
+      walletId = defaultWallet.rows[0]?.id || null;
+    }
+
     const result = await pool.query(
-      `INSERT INTO transactions (household_id, created_by, date, type, category, amount, note)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [householdId, req.user.userId, date, type, category, amount, note || null]
+      `INSERT INTO transactions (household_id, created_by, date, type, category, amount, note, wallet_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, to_char(date, 'YYYY-MM-DD') as date, type, category, amount, note, created_at, created_by, wallet_id`,
+      [householdId, req.user.userId, date, type, category, amount, note || null, walletId]
     );
     res.status(201).json({ transaction: result.rows[0] });
+
+    // Notifikasi budget — tidak menunda response, jalan setelah dikirim ke client.
+    // Hanya untuk expense di kategori berbudget & tanggalnya bulan berjalan.
+    if (type === 'expense') {
+      checkBudgetThreshold(householdId, category, date, Number(amount)).catch((err) =>
+        console.error('Budget threshold check error:', err)
+      );
+    }
   } catch (err) {
     console.error('Create transaction error:', err);
     res.status(500).json({ error: 'Gagal menambah transaksi' });
   }
+});
+
+async function checkBudgetThreshold(householdId, category, date, newAmount) {
+  const now = new Date();
+  const txDate = new Date(date + 'T00:00:00');
+  if (txDate.getFullYear() !== now.getFullYear() || txDate.getMonth() !== now.getMonth()) return;
+
+  const budgetResult = await pool.query(
+    'SELECT amount FROM budgets WHERE household_id = $1 AND category = $2',
+    [householdId, category]
+  );
+  const budget = parseFloat(budgetResult.rows[0]?.amount || 0);
+  if (budget <= 0) return;
+
+  const spentResult = await pool.query(
+    `SELECT COALESCE(SUM(amount), 0) as spent FROM transactions
+     WHERE household_id = $1 AND category = $2 AND type = 'expense'
+       AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
+       AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE)`,
+    [householdId, category]
+  );
+  const spentAfter = parseFloat(spentResult.rows[0].spent);
+  const spentBefore = spentAfter - newAmount;
+
+  const pctBefore = (spentBefore / budget) * 100;
+  const pctAfter = (spentAfter / budget) * 100;
+  const threshold = crossedThreshold(pctBefore, pctAfter);
+  if (!threshold) return;
+
+  const title = threshold >= 100 ? `Budget "${category}" terlampaui` : `Budget "${category}" hampir habis`;
+  const body = threshold >= 100
+    ? `Pengeluaran kategori ini sudah melewati budget bulan ini.`
+    : `Pengeluaran kategori ini sudah mencapai ${threshold}% dari budget bulan ini.`;
+
+  await notifyHousehold(householdId, { title, body });
+}
+
+// POST /api/transactions/scan-receipt — ekstrak tanggal/nominal/kategori dari foto struk
+// pakai Claude vision. TIDAK langsung menyimpan transaksi — cuma prefill,
+// user tetap review & submit lewat POST / yang normal seperti biasa.
+router.post('/scan-receipt', (req, res) => {
+  receiptUpload.single('receipt')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Gagal membaca foto struk' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'File foto wajib diisi' });
+    }
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey || apiKey === 'isi-anthropic-api-key') {
+      return res.status(503).json({ error: 'Fitur scan struk belum dikonfigurasi (ANTHROPIC_API_KEY belum diisi)' });
+    }
+
+    try {
+      const anthropic = new Anthropic({ apiKey });
+      const base64Image = req.file.buffer.toString('base64');
+
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 300,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: req.file.mimetype, data: base64Image }
+            },
+            {
+              type: 'text',
+              text: 'Ini foto struk belanja. Ekstrak informasinya dan balas HANYA dengan JSON ' +
+                'valid (tanpa markdown/teks lain) persis format ini: ' +
+                '{"date":"YYYY-MM-DD","amount":<angka total belanja tanpa titik/koma>,' +
+                '"suggested_category":"<kategori singkat dalam Bahasa Indonesia, mis. Rumah Tangga/Kebutuhan Pokok/Transportasi>",' +
+                '"note":"<nama toko/warung kalau ada>"}. ' +
+                'Kalau tanggal tidak terbaca, pakai null. Kalau total tidak terbaca, pakai 0.'
+            }
+          ]
+        }]
+      });
+
+      const textBlock = message.content.find(b => b.type === 'text');
+      const raw = (textBlock?.text || '').trim().replace(/^```json\s*|```$/g, '');
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return res.status(502).json({ error: 'Gagal membaca hasil dari AI, coba lagi dengan foto yang lebih jelas' });
+      }
+
+      res.json({
+        date: parsed.date || null,
+        amount: Number(parsed.amount) || 0,
+        suggested_category: parsed.suggested_category || '',
+        note: parsed.note || ''
+      });
+    } catch (err) {
+      console.error('Scan receipt error:', err);
+      res.status(500).json({ error: 'Gagal memproses foto struk' });
+    }
+  });
 });
 
 // DELETE /api/transactions/:id — hapus transaksi

@@ -10,6 +10,10 @@ import householdsRoutes from './routes/households.js';
 import invitesRoutes from './routes/invites.js';
 import webhookRoutes from './routes/webhook.js';
 import paymentsRoutes from './routes/payments.js';
+import billsRoutes from './routes/bills.js';
+import walletsRoutes from './routes/wallets.js';
+import arisanRoutes from './routes/arisan.js';
+import pushRoutes from './routes/push.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -34,6 +38,10 @@ app.use('/api/households', householdsRoutes);
 app.use('/api/invites', invitesRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/payments', paymentsRoutes);
+app.use('/api/bills', billsRoutes);
+app.use('/api/wallets', walletsRoutes);
+app.use('/api/arisan', arisanRoutes);
+app.use('/api/push', pushRoutes);
 
 // 404 handler
 app.use((req, res) => {
