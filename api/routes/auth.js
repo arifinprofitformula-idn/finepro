@@ -2,12 +2,21 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import path from 'path';
+import rateLimit from 'express-rate-limit';
 import { mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import pool from '../db.js';
 import { generateToken, authMiddleware, JWT_SECRET } from '../middleware/auth.js';
 
 const router = Router();
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Terlalu banyak percobaan, coba lagi beberapa menit lagi' },
+});
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AVATAR_DIR = path.join(__dirname, '..', 'uploads', 'avatars');
@@ -31,7 +40,7 @@ const avatarUpload = multer({
 });
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   try {
     const { email, password, name } = req.body;
 
@@ -65,7 +74,7 @@ router.post('/register', async (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 

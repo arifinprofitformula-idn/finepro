@@ -107,6 +107,10 @@ export async function getContributions(monthKey) {
   return data.contributions || [];
 }
 
+export async function getZakatSummary() {
+  return apiFetch('/transactions/zakat-summary');
+}
+
 export function summarize(transactions) {
   const income = transactions.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const expense = transactions.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);

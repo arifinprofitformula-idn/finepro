@@ -347,4 +347,41 @@ router.get('/summary', async (req, res) => {
   }
 });
 
+// GET /api/transactions/zakat-summary — total Zakat & Sedekah bulan ini + streak bulan berturut-turut
+router.get('/zakat-summary', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.json({ thisMonth: 0, streakMonths: 0 });
+
+    const result = await pool.query(
+      `SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month, SUM(amount) as total
+       FROM transactions
+       WHERE household_id = $1 AND type = 'expense' AND category = 'Ibadah & Sedekah'
+       GROUP BY 1
+       ORDER BY 1 DESC`,
+      [householdId]
+    );
+
+    const monthsWithEntries = new Set(result.rows.map((r) => r.month));
+    const thisMonthKey = new Date().toISOString().slice(0, 7);
+    const thisMonth = parseFloat(
+      result.rows.find((r) => r.month === thisMonthKey)?.total || 0
+    );
+
+    let streakMonths = 0;
+    const cursor = new Date();
+    while (true) {
+      const key = cursor.toISOString().slice(0, 7);
+      if (!monthsWithEntries.has(key)) break;
+      streakMonths += 1;
+      cursor.setMonth(cursor.getMonth() - 1);
+    }
+
+    res.json({ thisMonth, streakMonths });
+  } catch (err) {
+    console.error('Zakat summary error:', err);
+    res.status(500).json({ error: 'Gagal mengambil ringkasan zakat' });
+  }
+});
+
 export default router;

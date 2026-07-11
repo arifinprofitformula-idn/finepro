@@ -20,6 +20,7 @@ import AuthPage from "./pages/AuthPage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import AccountPage from "./pages/AccountPage.jsx";
+import PaymentStatusPage from "./pages/PaymentStatusPage.jsx";
 import AppHeader from "./components/AppHeader.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import TransactionModal from "./components/TransactionModal.jsx";
@@ -59,7 +60,7 @@ export default function App() {
     if (!orderId) return;
 
     window.history.replaceState({}, "", window.location.pathname);
-    setPage("account");
+    setPage("payment-status");
     paymentStatus.poll(orderId, refreshHousehold);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [household?.id]);
@@ -108,13 +109,19 @@ export default function App() {
         />
       )}
 
+      {page === "payment-status" && (
+        <PaymentStatusPage
+          polling={paymentStatus.polling}
+          statusMsg={paymentStatus.statusMsg}
+          onDone={() => setPage("account")}
+        />
+      )}
+
       {page === "account" && (
         <AccountPage
           user={user}
           household={household}
           invites={invites}
-          paymentPolling={paymentStatus.polling}
-          paymentStatusMsg={paymentStatus.statusMsg}
           onUserUpdated={updateUser}
           onHouseholdUpdated={setHousehold}
           onInvitesChanged={refreshInvites}

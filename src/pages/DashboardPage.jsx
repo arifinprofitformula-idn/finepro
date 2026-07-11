@@ -9,11 +9,12 @@ import KpiCard from "../components/KpiCard.jsx";
 import CategoryChart from "../components/CategoryChart.jsx";
 import TransactionItem from "../components/TransactionItem.jsx";
 import BudgetRow from "../components/BudgetRow.jsx";
+import ZakatWidget from "../components/ZakatWidget.jsx";
 import { setBudget } from "../api/budgets.js";
 import { getContributions } from "../api/transactions.js";
 import { getBills } from "../api/bills.js";
 import { fmtRp, daysUntilMonthlyDay, daysUntilDate, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
-import { ArrowRight, Bell, ChevronUp, Eye, EyeOff, HandHeart, PieChart, Sparkles, Users } from "lucide-react";
+import { ArrowRight, Bell, ChevronUp, Eye, EyeOff, PieChart, Sparkles, Users } from "lucide-react";
 
 const DEFAULT_TX_SHOWN = 20;
 const SHOW_CONTRIBUTIONS_KEY = "finepro-show-contributions";
@@ -129,17 +130,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         <KpiCard label="Saldo" value={fmtRp(kpi.income - kpi.expense)} tone="balance" />
       </div>
 
-      {isFamily && (
-        <div className="gloss-panel mb-4 flex items-center justify-between rounded-2xl p-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gold-light text-gold">
-              <HandHeart size={16} />
-            </div>
-            <div className="text-sm font-semibold text-navy">Ibadah & Sedekah bulan ini</div>
-          </div>
-          <div className="text-sm font-bold text-navy">{fmtRp(byCategory["Ibadah & Sedekah"] || 0)}</div>
-        </div>
-      )}
+      <ZakatWidget householdId={household.id} />
 
       <div className="gloss-panel mb-4 rounded-2xl p-4">
         <div className="mb-3 flex items-center justify-between">

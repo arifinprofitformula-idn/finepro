@@ -5,9 +5,10 @@ import { createInvite, acceptInvite } from "../api/invites.js";
 import { createPayment, getPaymentHistory, PAYMENT_STATUS_LABELS, PLANS } from "../api/payments.js";
 import { exportMonthCSV, exportMonthPDF } from "../api/transactions.js";
 import { getBills, createBill, markBillPaid, deleteBill } from "../api/bills.js";
-import { getWallets, createWallet, transferBetweenWallets } from "../api/wallets.js";
 import { getArisanGroups, createArisanGroup } from "../api/arisan.js";
 import ArisanGroupCard from "../components/ArisanGroupCard.jsx";
+import WalletCard from "../components/WalletCard.jsx";
+import { useWallets } from "../hooks/useWallets.js";
 import { uploadAvatar } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
@@ -17,8 +18,6 @@ export default function AccountPage({
   user,
   household,
   invites,
-  paymentPolling,
-  paymentStatusMsg,
   onUserUpdated,
   onHouseholdUpdated,
   onInvitesChanged,
@@ -47,7 +46,7 @@ export default function AccountPage({
   const [billMsg, setBillMsg] = useState("");
   const [billMsgType, setBillMsgType] = useState("");
   const [billBusyId, setBillBusyId] = useState(null);
-  const [wallets, setWallets] = useState([]);
+  const { wallets, createWallet: addWallet, transfer: transferWallets } = useWallets(household.id);
   const [newWalletName, setNewWalletName] = useState("");
   const [walletSaving, setWalletSaving] = useState(false);
   const [transferFrom, setTransferFrom] = useState("");
@@ -72,11 +71,17 @@ export default function AccountPage({
   useEffect(() => {
     getPaymentHistory().then(setPaymentHistory).catch(() => setPaymentHistory([]));
     refreshBills();
-    refreshWallets();
     refreshArisan();
     getPushPermissionState().then(setPushPermission);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (wallets.length >= 2) {
+      setTransferFrom((prev) => prev || wallets[0].id);
+      setTransferTo((prev) => prev || wallets[1].id);
+    }
+  }, [wallets]);
 
   async function handleEnablePush() {
     setPushSubscribing(true);
@@ -123,26 +128,12 @@ export default function AccountPage({
     setArisanGroups((prev) => prev.filter((g) => g.id !== groupId));
   }
 
-  async function refreshWallets() {
-    try {
-      const w = await getWallets();
-      setWallets(w);
-      if (w.length >= 2) {
-        setTransferFrom((prev) => prev || w[0].id);
-        setTransferTo((prev) => prev || w[1].id);
-      }
-    } catch {
-      setWallets([]);
-    }
-  }
-
   async function handleAddWallet(e) {
     e.preventDefault();
     setWalletSaving(true);
     try {
-      await createWallet(newWalletName);
+      await addWallet(newWalletName);
       setNewWalletName("");
-      await refreshWallets();
     } catch (err) {
       alert("Gagal membuat dompet: " + err.message);
     } finally {
@@ -155,7 +146,7 @@ export default function AccountPage({
     setTransferSaving(true);
     setTransferMsg("");
     try {
-      await transferBetweenWallets({
+      await transferWallets({
         from_wallet_id: transferFrom,
         to_wallet_id: transferTo,
         amount: parseFloat(transferAmount) || 0,
@@ -165,7 +156,6 @@ export default function AccountPage({
       setTransferNote("");
       setTransferMsg("Transfer berhasil.");
       setTransferMsgType("success");
-      await refreshWallets();
     } catch (err) {
       setTransferMsg(err.message);
       setTransferMsgType("error");
@@ -364,13 +354,6 @@ export default function AccountPage({
           Tipe: {HOUSEHOLD_TYPE_LABELS[household.household_type] || household.household_type}
         </p>
 
-        {(paymentPolling || paymentStatusMsg) && (
-          <div className="mt-2 text-xs rounded-md px-3 py-2 bg-gold/10 text-neutral-900">
-            {paymentPolling && "⏳ "}
-            {paymentStatusMsg}
-          </div>
-        )}
-
         {pushPermission !== "granted" && pushPermission !== "unsupported" && (
           <button
             type="button"
@@ -481,12 +464,7 @@ export default function AccountPage({
       <div className="bg-white border border-neutral-border rounded-xl p-3">
         <h2 className="text-sm font-semibold text-neutral-900 mb-2">Dompet</h2>
         {wallets.map((w) => (
-          <div key={w.id} className="flex items-center justify-between py-2 border-b border-neutral-border last:border-0">
-            <div className="text-sm font-semibold text-neutral-900">
-              {w.name} {w.is_default && <span className="text-neutral-500 font-normal text-xs">(utama)</span>}
-            </div>
-            <div className="text-sm font-bold text-neutral-900">{fmtRp(w.balance)}</div>
-          </div>
+          <WalletCard key={w.id} wallet={w} />
         ))}
 
         <form onSubmit={handleAddWallet} className="flex gap-2 mt-3">
