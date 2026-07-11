@@ -1,39 +1,24 @@
 // src/lib/transactions.js
-// CRUD transaksi keuangan, dibatasi otomatis oleh RLS ke household milik user.
+// CRUD transaksi via API lokal
 
-import { supabase } from "./supabaseClient.js";
+import { apiFetch } from "./apiClient.js";
 
 export async function getMonthTransactions(householdId, monthKey) {
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("household_id", householdId)
-    .gte("date", monthKey + "-01")
-    .lte("date", monthKey + "-31")
-    .order("date", { ascending: false });
-
-  if (error) throw error;
-  return data || [];
+  const [year, month] = monthKey.split('-');
+  const data = await apiFetch(`/transactions?month=${month}&year=${year}`);
+  return data.transactions || [];
 }
 
 export async function addTransaction({ householdId, userId, date, type, category, amount, note }) {
-  const { data, error } = await supabase
-    .from("transactions")
-    .insert({
-      household_id: householdId,
-      created_by: userId,
-      date, type, category, amount, note
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+  const data = await apiFetch('/transactions', {
+    method: 'POST',
+    body: JSON.stringify({ date, type, category, amount, note }),
+  });
+  return data.transaction;
 }
 
 export async function deleteTransaction(id) {
-  const { error } = await supabase.from("transactions").delete().eq("id", id);
-  if (error) throw error;
+  await apiFetch(`/transactions/${id}`, { method: 'DELETE' });
 }
 
 export function summarize(transactions) {

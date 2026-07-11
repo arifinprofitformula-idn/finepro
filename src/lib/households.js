@@ -1,43 +1,23 @@
 // src/lib/households.js
-// Household = unit keluarga/individu/mahasiswa yang memiliki data keuangan sendiri.
-// Satu user bisa jadi anggota dari satu household (versi awal ini: 1 household per user).
+// Household management via API lokal
 
-import { supabase } from "./supabaseClient.js";
+import { apiFetch } from "./apiClient.js";
 
-/**
- * Cek apakah user sudah tergabung dalam household.
- * Return household_id jika ada, null jika belum (berarti perlu onboarding).
- */
 export async function getMyHousehold(userId) {
-  const { data, error } = await supabase
-    .from("household_members")
-    .select("household_id, households(*)")
-    .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data ? data.households : null;
+  const data = await apiFetch('/households');
+  const households = data.households || [];
+  return households.length > 0 ? households[0] : null;
 }
 
-/**
- * Buat household baru sesuai persona yang dipilih user saat onboarding.
- * Trigger di database otomatis: tambahkan user sebagai owner,
- * buat subscription trial 14 hari, dan seed kategori sesuai household_type.
- */
 export async function createHousehold(ownerId, householdType, name) {
-  const { data, error } = await supabase
-    .from("households")
-    .insert({
-      owner_id: ownerId,
+  const data = await apiFetch('/households', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: name || defaultNameForType(householdType),
       household_type: householdType,
-      name: name || defaultNameForType(householdType)
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+    }),
+  });
+  return data.household;
 }
 
 function defaultNameForType(type) {

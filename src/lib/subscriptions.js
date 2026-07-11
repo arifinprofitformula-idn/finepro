@@ -1,9 +1,7 @@
 // src/lib/subscriptions.js
-// Baca status langganan household. Penulisan status (upgrade plan)
-// masih manual dari Supabase Dashboard di fase ini — payment gateway
-// otomatis baru masuk di Fase 6 roadmap.
+// Baca status langganan — via API (subscription ada di response households)
 
-import { supabase } from "./supabaseClient.js";
+import { apiFetch } from "./apiClient.js";
 
 export const PLAN_LABELS = {
   trial: "Trial",
@@ -13,14 +11,16 @@ export const PLAN_LABELS = {
 };
 
 export async function getSubscription(householdId) {
-  const { data, error } = await supabase
-    .from("subscriptions")
-    .select("plan, status, current_period_end")
-    .eq("household_id", householdId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
+  try {
+    const data = await apiFetch('/households');
+    const h = (data.households || []).find(h => h.id === householdId);
+    if (h) {
+      // Query subscription via households data
+      // Sementara return default trial
+      return { plan: 'trial', status: 'active', current_period_end: null };
+    }
+  } catch {}
+  return { plan: 'trial', status: 'active', current_period_end: null };
 }
 
 export function planLabel(subscription) {

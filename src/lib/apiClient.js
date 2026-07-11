@@ -1,0 +1,48 @@
+// src/lib/apiClient.js
+// API client pengganti Supabase — semua request ke Express.js backend via fetch.
+// Token JWT disimpan di localStorage, otomatis disertakan di setiap request.
+
+const API_BASE = '/api';
+
+let _token = localStorage.getItem('keuangan_token');
+
+export function setToken(token) {
+  _token = token;
+  if (token) localStorage.setItem('keuangan_token', token);
+  else localStorage.removeItem('keuangan_token');
+}
+
+export function getToken() {
+  return _token;
+}
+
+export async function apiFetch(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  if (_token) {
+    headers['Authorization'] = `Bearer ${_token}`;
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+
+  // Jika token expired, hapus dan reload ke halaman login
+  if (res.status === 401 && _token) {
+    setToken(null);
+    window.location.reload();
+    throw new Error('Sesi berakhir. Silakan login kembali.');
+  }
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || 'Terjadi kesalahan');
+  }
+
+  return data;
+}

@@ -1,38 +1,50 @@
 // src/lib/auth.js
-// Logika autentikasi: login, signup, logout, cek sesi aktif.
+// Autentikasi via API lokal (Express.js + JWT), menggantikan Supabase Auth.
 
-import { supabase } from "./supabaseClient.js";
+import { apiFetch, setToken, getToken } from "./apiClient.js";
 
 export async function signUp(email, password) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error) throw error;
-  return data; // data.session null jika project mewajibkan konfirmasi email
+  const data = await apiFetch('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+  setToken(data.token);
+  return data;
 }
 
 export async function signIn(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
+  const data = await apiFetch('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+  setToken(data.token);
   return data;
 }
 
 export async function signOut() {
-  await supabase.auth.signOut();
+  setToken(null);
 }
 
 export async function getCurrentUser() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const data = await apiFetch('/auth/me');
+    return data.user;
+  } catch {
+    return null;
+  }
 }
 
 export async function getSession() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session;
+  const user = await getCurrentUser();
+  return user ? { user } : null;
 }
 
 export function translateAuthError(msg) {
   if (!msg) return "Terjadi kesalahan. Coba lagi.";
-  if (msg.includes("Invalid login credentials")) return "Email atau kata sandi salah.";
-  if (msg.includes("already registered")) return "Email sudah terdaftar. Coba menu Masuk.";
-  if (msg.includes("Password should be")) return "Kata sandi minimal 6 karakter.";
+  if (msg.includes("Email atau password salah")) return "Email atau kata sandi salah.";
+  if (msg.includes("sudah terdaftar")) return "Email sudah terdaftar. Coba menu Masuk.";
+  if (msg.includes("minimal 6 karakter")) return "Kata sandi minimal 6 karakter.";
   return msg;
 }

@@ -2,18 +2,20 @@
 // Entry point aplikasi. Alpine.js dipakai hanya sebagai lapisan reactivity
 // tipis (bukan framework besar) — semua logika data/bisnis tetap hidup
 // di src/lib dan src/pages, main.js hanya menyambungkannya ke UI.
+//
+// v1.1 — Migrasi dari Supabase ke PostgreSQL + Express.js API
 
 import Alpine from "alpinejs";
 import { registerSW } from "virtual:pwa-register";
 
-import { supabase } from "./lib/supabaseClient.js";
-import { signUp, signIn, signOut, getCurrentUser, getSession, translateAuthError } from "./lib/auth.js";
+import { signUp, signIn, signOut, getSession, translateAuthError } from "./lib/auth.js";
 import { getMyHousehold, createHousehold, HOUSEHOLD_TYPE_LABELS } from "./lib/households.js";
 import { getCategories } from "./lib/categories.js";
 import { addTransaction } from "./lib/transactions.js";
 import { getSubscription, planLabel } from "./lib/subscriptions.js";
 import { loadDashboardData } from "./pages/dashboard.js";
 import { fmtRp, todayStr } from "./utils/format.js";
+import { getToken } from "./lib/apiClient.js";
 
 // Registrasi service worker otomatis (vite-plugin-pwa)
 registerSW({ immediate: true });
@@ -72,13 +74,6 @@ function appState() {
       } else {
         this.view = "auth";
       }
-
-      // Dengarkan perubahan auth (mis. setelah konfirmasi email di tab lain)
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === "SIGNED_OUT") {
-          this.view = "auth";
-        }
-      });
     },
 
     // =========================================================
@@ -88,19 +83,13 @@ function appState() {
       this.authLoading = true;
       this.authMsg = "";
       try {
+        let data;
         if (this.authMode === "signup") {
-          const data = await signUp(this.authEmail, this.authPassword);
-          if (data.user && !data.session) {
-            this.authMsg = "Pendaftaran berhasil. Cek email untuk konfirmasi sebelum masuk.";
-            this.authMsgType = "success";
-            this.authLoading = false;
-            return;
-          }
-          await this.enterAppFor(data.user);
+          data = await signUp(this.authEmail, this.authPassword);
         } else {
-          const data = await signIn(this.authEmail, this.authPassword);
-          await this.enterAppFor(data.user);
+          data = await signIn(this.authEmail, this.authPassword);
         }
+        await this.enterAppFor(data.user);
       } catch (err) {
         this.authMsg = translateAuthError(err.message);
         this.authMsgType = "error";
