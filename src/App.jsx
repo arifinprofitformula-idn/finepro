@@ -26,11 +26,11 @@ import TransactionModal from "./components/TransactionModal.jsx";
 
 function SplashScreen() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-neutral-bg">
-      <div className="w-14 h-14 rounded-2xl bg-navy text-white flex items-center justify-center font-bold text-xl">
+    <div className="app-glow-bg min-h-screen flex flex-col items-center justify-center gap-3">
+      <div className="gloss-panel w-16 h-16 rounded-3xl bg-violet text-white flex items-center justify-center font-semibold text-2xl">
         KK
       </div>
-      <div className="text-sm text-neutral-500">Memuat...</div>
+      <div className="text-sm font-medium text-neutral-500">Memuat...</div>
     </div>
   );
 }
@@ -88,7 +88,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-bg pb-[60px]">
+    <div className="app-glow-bg min-h-screen pb-[78px]">
       <AppHeader
         user={user}
         planLabel={planLabel(household)}
@@ -125,10 +125,10 @@ export default function App() {
       <button
         type="button"
         onClick={handleOpenModal}
-        className="fixed bottom-[76px] right-4 w-12 h-12 rounded-full bg-gold text-white flex items-center justify-center shadow-lg z-20"
+        className="fixed bottom-[96px] right-5 z-20 flex h-[72px] w-[72px] items-center justify-center rounded-full border border-white/70 bg-violet text-white shadow-float"
         aria-label="Tambah transaksi"
       >
-        <Plus size={22} />
+        <Plus size={40} strokeWidth={2.3} />
       </button>
 
       <BottomNav page={page} onNavigate={setPage} onAdd={handleOpenModal} />

@@ -2,36 +2,40 @@ import { Home, Plus, User } from "lucide-react";
 
 export default function BottomNav({ page, onNavigate, onAdd, addDisabled }) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-border flex justify-around items-center h-[60px] pb-[env(safe-area-inset-bottom)] z-20">
+    <div className="fixed bottom-0 left-0 right-0 z-20 flex justify-center px-0">
+      <div className="gloss-panel flex h-[78px] w-full max-w-lg items-center justify-around rounded-t-[30px] border-b-0 pb-[env(safe-area-inset-bottom)]">
       <button
         type="button"
         onClick={() => onNavigate("dashboard")}
-        className={`flex flex-col items-center gap-0.5 min-w-[44px] min-h-[44px] justify-center text-[10px] ${
-          page === "dashboard" ? "text-navy font-bold" : "text-neutral-500"
+        className={`flex min-h-[58px] min-w-[72px] flex-col items-center justify-center gap-1 text-sm ${
+          page === "dashboard" ? "text-violet font-semibold" : "text-neutral-500 font-medium"
         }`}
       >
-        <Home size={20} />
+        <Home size={28} fill={page === "dashboard" ? "currentColor" : "none"} />
         Beranda
       </button>
       <button
         type="button"
         onClick={onAdd}
         disabled={addDisabled}
-        className="flex flex-col items-center gap-0.5 min-w-[44px] min-h-[44px] justify-center text-[10px] text-neutral-500 disabled:opacity-50"
+        className="flex min-h-[58px] min-w-[72px] flex-col items-center justify-center gap-1 text-sm font-medium text-neutral-500 disabled:opacity-50"
       >
-        <Plus size={20} />
+        <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-neutral-500/80">
+          <Plus size={24} />
+        </span>
         Tambah
       </button>
       <button
         type="button"
         onClick={() => onNavigate("account")}
-        className={`flex flex-col items-center gap-0.5 min-w-[44px] min-h-[44px] justify-center text-[10px] ${
-          page === "account" ? "text-navy font-bold" : "text-neutral-500"
+        className={`flex min-h-[58px] min-w-[72px] flex-col items-center justify-center gap-1 text-sm ${
+          page === "account" ? "text-violet font-semibold" : "text-neutral-500 font-medium"
         }`}
       >
-        <User size={20} />
+        <User size={28} />
         Akun
       </button>
+      </div>
     </div>
   );
 }

@@ -5,6 +5,24 @@ export function fmtRp(n) {
   return sign + "Rp " + Math.abs(Math.round(n)).toLocaleString("id-ID");
 }
 
+export function formatNumberIdInput(value) {
+  const raw = String(value ?? "").replace(/[^\d,]/g, "");
+  if (!raw) return "";
+
+  const hasDecimal = raw.includes(",");
+  const [integerRaw, ...decimalParts] = raw.split(",");
+  const integer = integerRaw.replace(/^0+(?=\d)/, "");
+  const formattedInteger = (integer || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const decimal = decimalParts.join("");
+
+  return hasDecimal ? `${formattedInteger},${decimal}` : formattedInteger;
+}
+
+export function parseNumberId(value) {
+  const normalized = String(value ?? "").replace(/\./g, "").replace(",", ".");
+  return parseFloat(normalized) || 0;
+}
+
 export function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }

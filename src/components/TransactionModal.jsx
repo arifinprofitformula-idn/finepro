@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import { todayStr } from "../utils/format.js";
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, NotebookPen, Tags, Wallet } from "lucide-react";
 
 const STUDENT_QUICK_CATEGORIES = [
   "Uang Makan",
@@ -53,34 +54,37 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
 
   return (
     <Dialog open={open} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
+      <div className="fixed inset-0 bg-navy/35 backdrop-blur-sm" aria-hidden="true" />
       <div className="fixed inset-0 flex items-end justify-center">
-        <DialogPanel className="w-full max-w-md bg-white rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
-          <DialogTitle className="text-[15px] font-bold text-neutral-900 mb-3">Tambah Transaksi</DialogTitle>
+        <DialogPanel className="gloss-panel w-full max-w-md rounded-t-[30px] p-5 max-h-[85vh] overflow-y-auto">
+          <DialogTitle className="mb-4 text-xl font-semibold text-navy">Tambah Transaksi</DialogTitle>
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => handleTypeChange("expense")}
-                className={`flex-1 min-h-[40px] rounded-lg border text-sm font-semibold ${
-                  type === "expense" ? "bg-danger/10 border-danger text-danger" : "border-neutral-border text-neutral-500"
+                className={`flex min-h-[46px] flex-1 items-center justify-center gap-2 rounded-full border text-sm font-semibold ${
+                  type === "expense" ? "bg-coral-light border-coral text-coral" : "border-white/80 bg-white/60 text-neutral-500"
                 }`}
               >
+                <ArrowDownLeft size={18} />
                 Pengeluaran
               </button>
               <button
                 type="button"
                 onClick={() => handleTypeChange("income")}
-                className={`flex-1 min-h-[40px] rounded-lg border text-sm font-semibold ${
-                  type === "income" ? "bg-success/10 border-success text-success" : "border-neutral-border text-neutral-500"
+                className={`flex min-h-[46px] flex-1 items-center justify-center gap-2 rounded-full border text-sm font-semibold ${
+                  type === "income" ? "bg-mint-light border-mint text-mint" : "border-white/80 bg-white/60 text-neutral-500"
                 }`}
               >
+                <ArrowUpRight size={18} />
                 Pemasukan
               </button>
             </div>
 
             <div>
-              <label htmlFor="tx-date" className="block text-xs text-neutral-500 mb-1">
+              <label htmlFor="tx-date" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500">
+                <CalendarDays size={14} />
                 Tanggal
               </label>
               <input
@@ -89,7 +93,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                 required
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+                className="w-full rounded-2xl border border-white/80 bg-white/70 px-3 py-3 text-sm font-medium text-navy outline-none"
               />
             </div>
 
@@ -100,8 +104,8 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                     key={c}
                     type="button"
                     onClick={() => setCategory(c)}
-                    className={`min-h-[40px] px-3 rounded-full border text-xs ${
-                      category === c ? "bg-navy border-navy text-white" : "border-neutral-border text-neutral-900"
+                    className={`min-h-[40px] px-3 rounded-full border text-xs font-medium ${
+                      category === c ? "bg-violet border-violet text-white" : "border-white/80 bg-white/60 text-navy"
                     }`}
                   >
                     {c}
@@ -111,14 +115,15 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
             )}
 
             <div>
-              <label htmlFor="tx-category" className="block text-xs text-neutral-500 mb-1">
+              <label htmlFor="tx-category" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500">
+                <Tags size={14} />
                 Kategori
               </label>
               <select
                 id="tx-category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+                className="w-full rounded-2xl border border-white/80 bg-white/70 px-3 py-3 text-sm font-medium text-navy outline-none"
               >
                 {currentCategories.map((c) => (
                   <option key={c.id} value={c.name}>
@@ -129,7 +134,8 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
             </div>
 
             <div>
-              <label htmlFor="tx-amount" className="block text-xs text-neutral-500 mb-1">
+              <label htmlFor="tx-amount" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500">
+                <Wallet size={14} />
                 Nominal (Rp)
               </label>
               <input
@@ -141,12 +147,13 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+                className="w-full rounded-2xl border border-white/80 bg-white/70 px-3 py-3 text-sm font-medium text-navy outline-none"
               />
             </div>
 
             <div>
-              <label htmlFor="tx-note" className="block text-xs text-neutral-500 mb-1">
+              <label htmlFor="tx-note" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500">
+                <NotebookPen size={14} />
                 Catatan
               </label>
               <input
@@ -155,7 +162,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="mis. struk Indomaret"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+                className="w-full rounded-2xl border border-white/80 bg-white/70 px-3 py-3 text-sm font-medium text-navy outline-none"
               />
             </div>
 
@@ -163,14 +170,14 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 min-h-[44px] border border-navy text-navy rounded-lg text-sm font-semibold"
+                className="flex-1 min-h-[48px] border border-violet text-violet rounded-full text-sm font-semibold"
               >
                 Batal
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 min-h-[44px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
+                className="flex-1 min-h-[48px] bg-violet text-white rounded-full text-sm font-semibold shadow-soft disabled:opacity-60"
               >
                 Simpan
               </button>
