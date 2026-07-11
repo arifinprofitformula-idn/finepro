@@ -2,20 +2,24 @@
 // Routing state-based (tanpa react-router-dom): 4 layar (auth/onboarding/
 // dashboard/account) cukup di-switch lewat kondisi user+household, sama
 // seperti pola view/page di versi Alpine — lebih ringan, tanpa perlu
-// konfigurasi SPA-fallback tambahan di Nginx.
+// konfigurasi SPA-fallback tambahan di Nginx. Konsekuensinya: tidak ada
+// URL per halaman, jadi tidak ada isu refresh-di-URL-mana-pun yang perlu
+// ditangani Nginx (poin 4 Step 4 di dokumen migrasi jadi otomatis aman).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { useAuth } from "./hooks/useAuth.js";
 import { useHousehold } from "./hooks/useHousehold.js";
 import { useCategories } from "./hooks/useCategories.js";
 import { useInvites } from "./hooks/useInvites.js";
 import { useDashboard } from "./hooks/useDashboard.js";
+import { usePaymentStatus } from "./hooks/usePaymentStatus.js";
 import { addTransaction } from "./api/transactions.js";
 import { planLabel } from "./api/subscriptions.js";
 import AuthPage from "./pages/AuthPage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
+import AccountPage from "./pages/AccountPage.jsx";
 import AppHeader from "./components/AppHeader.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import TransactionModal from "./components/TransactionModal.jsx";
@@ -32,13 +36,33 @@ function SplashScreen() {
 }
 
 export default function App() {
-  const { user, initializing } = useAuth();
-  const { household, loading: householdLoading, createHousehold, refresh: refreshHousehold } = useHousehold(user);
+  const { user, initializing, logout, updateUser } = useAuth();
+  const {
+    household,
+    loading: householdLoading,
+    createHousehold,
+    refresh: refreshHousehold,
+    setHousehold
+  } = useHousehold(user);
   const { categoriesExpense, categoriesIncome } = useCategories(household?.id);
-  const { invites } = useInvites(!!household);
+  const { invites, refresh: refreshInvites } = useInvites(!!household);
   const dashboard = useDashboard(household?.id);
+  const paymentStatus = usePaymentStatus();
   const [page, setPage] = useState("dashboard");
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Deteksi redirect balik dari Midtrans (?order_id=...) dan poll status pembayaran.
+  useEffect(() => {
+    if (!household) return;
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get("order_id");
+    if (!orderId) return;
+
+    window.history.replaceState({}, "", window.location.pathname);
+    setPage("account");
+    paymentStatus.poll(orderId, refreshHousehold);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [household?.id]);
 
   if (initializing) return <SplashScreen />;
   if (!user) return <AuthPage />;
@@ -85,9 +109,17 @@ export default function App() {
       )}
 
       {page === "account" && (
-        <div className="px-4 pt-1 pb-24 max-w-lg mx-auto text-sm text-neutral-500">
-          Halaman Akun dibangun di Step 4.
-        </div>
+        <AccountPage
+          user={user}
+          household={household}
+          invites={invites}
+          paymentPolling={paymentStatus.polling}
+          paymentStatusMsg={paymentStatus.statusMsg}
+          onUserUpdated={updateUser}
+          onHouseholdUpdated={setHousehold}
+          onInvitesChanged={refreshInvites}
+          onLogout={logout}
+        />
       )}
 
       <button
