@@ -125,6 +125,26 @@ router.get('/status/:orderId', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/payments/history — riwayat pembayaran household user yang login
+router.get('/history', authMiddleware, async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.json({ payments: [] });
+
+    const result = await pool.query(
+      `SELECT order_id, plan, amount, status, created_at, paid_at
+       FROM payments
+       WHERE household_id = $1
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [householdId]
+    );
+    res.json({ payments: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal mengambil riwayat pembayaran' });
+  }
+});
+
 // POST /api/payments/webhook — dipanggil server-to-server oleh Midtrans, TANPA authMiddleware
 // (Midtrans tidak mengirim Bearer token kita). Signature WAJIB diverifikasi
 // sebelum payload dipercaya — jangan proses apa pun kalau gagal.

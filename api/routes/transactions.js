@@ -136,6 +136,45 @@ router.get('/export', async (req, res) => {
   }
 });
 
+// GET /api/transactions/contributions?month=YYYY-MM — total pengeluaran per anggota
+// (Fase 3: transparansi "siapa belanja apa", sensitif — UI-nya default disembunyikan)
+router.get('/contributions', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.json({ contributions: [] });
+
+    const { month } = req.query;
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ error: 'Parameter month wajib format YYYY-MM' });
+    }
+    const [year, mm] = month.split('-');
+
+    const result = await pool.query(
+      `SELECT t.created_by, u.name as creator_name, u.email as creator_email,
+              COALESCE(SUM(CASE WHEN t.type='expense' THEN t.amount ELSE 0 END), 0) as expense,
+              COALESCE(SUM(CASE WHEN t.type='income' THEN t.amount ELSE 0 END), 0) as income
+       FROM transactions t
+       JOIN users u ON u.id = t.created_by
+       WHERE t.household_id = $1
+         AND EXTRACT(MONTH FROM t.date) = $2 AND EXTRACT(YEAR FROM t.date) = $3
+       GROUP BY t.created_by, u.name, u.email
+       ORDER BY expense DESC`,
+      [householdId, mm, year]
+    );
+
+    res.json({
+      contributions: result.rows.map(r => ({
+        userId: r.created_by,
+        name: r.creator_name || r.creator_email,
+        expense: parseFloat(r.expense),
+        income: parseFloat(r.income)
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal mengambil ringkasan kontribusi' });
+  }
+});
+
 // GET /api/transactions/summary — ringkasan dashboard
 router.get('/summary', async (req, res) => {
   try {

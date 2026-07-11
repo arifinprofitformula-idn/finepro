@@ -7,7 +7,7 @@ import { Doughnut } from "react-chartjs-2";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-const PALETTE = ["#0f1f3d", "#b8892b", "#1f8a56", "#c0392b", "#5b6ee1", "#e9c877", "#8e6c34", "#6b7280", "#4a90a4"];
+const PALETTE = ["#6f55f2", "#18c594", "#ff4b4b", "#f5b82e", "#19a7ce", "#0f1f3d", "#e9c877", "#9aa1ac", "#ff8a65"];
 
 export default function CategoryChart({ byCategory }) {
   const labels = Object.keys(byCategory);
@@ -15,26 +15,27 @@ export default function CategoryChart({ byCategory }) {
 
   if (labels.length === 0) {
     return (
-      <div className="h-48 flex items-center justify-center text-xs text-neutral-500">
+      <div className="h-48 flex items-center justify-center text-sm font-semibold text-neutral-500">
         Belum ada pengeluaran bulan ini
       </div>
     );
   }
 
   return (
-    <div className="h-48">
+    <div className="h-56">
       <Doughnut
         data={{
           labels,
-          datasets: [{ data, backgroundColor: PALETTE, borderColor: "#ffffff", borderWidth: 2 }]
+          datasets: [{ data, backgroundColor: PALETTE, borderColor: "rgba(255,255,255,0.92)", borderWidth: 4, hoverOffset: 6 }]
         }}
         options={{
           responsive: true,
           maintainAspectRatio: false,
+          cutout: "66%",
           plugins: {
             legend: {
               position: "bottom",
-              labels: { boxWidth: 10, font: { size: 10 }, color: "#1c2230" }
+              labels: { boxWidth: 10, usePointStyle: true, pointStyle: "circle", padding: 14, font: { size: 11, weight: "700" }, color: "#1c2230" }
             }
           }
         }}
