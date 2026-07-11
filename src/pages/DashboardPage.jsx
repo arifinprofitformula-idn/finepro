@@ -4,25 +4,52 @@
 // tombol "Tambah" di BottomNav bisa dipicu dari halaman mana pun, sama
 // seperti modal-backdrop global di versi Alpine lama.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import KpiCard from "../components/KpiCard.jsx";
 import CategoryChart from "../components/CategoryChart.jsx";
 import TransactionItem from "../components/TransactionItem.jsx";
 import BudgetRow from "../components/BudgetRow.jsx";
 import { setBudget } from "../api/budgets.js";
-import { fmtRp, daysUntilMonthlyDay, formatNumberIdInput, parseNumberId } from "../utils/format.js";
-import { ArrowRight, ChevronUp, PieChart, Sparkles } from "lucide-react";
+import { getContributions } from "../api/transactions.js";
+import { fmtRp, daysUntilMonthlyDay, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
+import { ArrowRight, ChevronUp, Eye, EyeOff, PieChart, Sparkles, Users } from "lucide-react";
 
 const DEFAULT_TX_SHOWN = 20;
+const SHOW_CONTRIBUTIONS_KEY = "finepro-show-contributions";
 
 export default function DashboardPage({ household, transactions, kpi, budgets, byCategory, categoriesExpense, onDataChanged }) {
   const [showAll, setShowAll] = useState(false);
   const [budgetInputs, setBudgetInputs] = useState({});
   const [savingCategory, setSavingCategory] = useState(null);
+  const [showContributions, setShowContributions] = useState(false);
+  const [contributions, setContributions] = useState([]);
 
   const isStudent = household.household_type === "student";
+  const isFamily = household.household_type === "family";
   const subscriptionExpired = household.subscription_status === "expired";
   const daysUntilIncome = isStudent ? daysUntilMonthlyDay(household.monthly_income_day) : null;
+
+  useEffect(() => {
+    const saved = localStorage.getItem(SHOW_CONTRIBUTIONS_KEY) === "1";
+    setShowContributions(saved);
+    if (saved && isFamily) {
+      getContributions(monthKey(todayStr())).then(setContributions).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [household.id]);
+
+  async function handleToggleContributions() {
+    const next = !showContributions;
+    setShowContributions(next);
+    localStorage.setItem(SHOW_CONTRIBUTIONS_KEY, next ? "1" : "0");
+    if (next) {
+      try {
+        setContributions(await getContributions(monthKey(todayStr())));
+      } catch {
+        setContributions([]);
+      }
+    }
+  }
 
   const budgetProgress = useMemo(() => {
     return categoriesExpense.map((c) => {
@@ -110,6 +137,42 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
               saving={savingCategory === b.category}
             />
           ))}
+        </div>
+      )}
+
+      {isFamily && (
+        <div className="gloss-panel mb-4 rounded-2xl p-4">
+          <div className="mb-1 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-mint-light text-mint">
+                <Users size={16} />
+              </div>
+              <h2 className="text-base font-semibold text-navy">Kontribusi Anggota</h2>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleContributions}
+              className="flex min-h-[36px] items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-violet"
+            >
+              {showContributions ? <EyeOff size={15} /> : <Eye size={15} />}
+              {showContributions ? "Sembunyikan" : "Tampilkan"}
+            </button>
+          </div>
+          {showContributions && (
+            contributions.length === 0 ? (
+              <div className="py-2 text-xs font-medium text-neutral-500">Belum ada data bulan ini.</div>
+            ) : (
+              contributions.map((c) => (
+                <div
+                  key={c.userId}
+                  className="flex items-center justify-between border-b border-neutral-border/60 py-2 last:border-0"
+                >
+                  <div className="truncate text-sm font-medium text-navy">{c.name}</div>
+                  <div className="text-sm font-semibold text-coral">{fmtRp(c.expense)}</div>
+                </div>
+              ))
+            )
+          )}
         </div>
       )}
 

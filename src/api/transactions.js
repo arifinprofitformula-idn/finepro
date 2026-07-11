@@ -45,6 +45,11 @@ export async function exportMonthCSV(monthKey) {
   URL.revokeObjectURL(url);
 }
 
+export async function getContributions(monthKey) {
+  const data = await apiFetch(`/transactions/contributions?month=${monthKey}`);
+  return data.contributions || [];
+}
+
 export function summarize(transactions) {
   const income = transactions.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const expense = transactions.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
