@@ -1,8 +1,10 @@
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   plugins: [
+    react(),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["icon-192.png", "icon-512.png"],
@@ -22,9 +24,12 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Eksplisit NetworkOnly untuk semua panggilan API — jangan sampai
+        // data transaksi/household ke-cache Workbox dan jadi basi.
+        // (default globPatterns tidak match /api/*, ini defense-in-depth.)
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.hostname.includes("supabase.co"),
+            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
             handler: "NetworkOnly"
           }
         ]
@@ -35,6 +40,10 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
+        target: "http://127.0.0.1:3001",
+        changeOrigin: true
+      },
+      "/uploads": {
         target: "http://127.0.0.1:3001",
         changeOrigin: true
       }
