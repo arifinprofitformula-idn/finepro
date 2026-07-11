@@ -45,3 +45,23 @@ export async function toggleArisanPaid(participantId, periodLabel) {
   });
   return data.paid;
 }
+
+// Ledger setoran & giliran menerima — pelengkap roster peserta di atas,
+// mencatat histori nominal+tanggal bebas per anggota (lihat catatan di
+// supabase/migrations/015_arisan_entries.sql).
+export async function getArisanEntries(groupId) {
+  const data = await apiFetch(`/arisan/${groupId}/entries`);
+  return data.entries || [];
+}
+
+export async function addArisanEntry(groupId, { date, member_name, amount, is_payout }) {
+  const data = await apiFetch(`/arisan/${groupId}/entries`, {
+    method: 'POST',
+    body: JSON.stringify({ date, member_name, amount, is_payout }),
+  });
+  return data.entry;
+}
+
+export async function deleteArisanEntry(id) {
+  await apiFetch(`/arisan/entries/${id}`, { method: 'DELETE' });
+}

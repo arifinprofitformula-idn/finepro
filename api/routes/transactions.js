@@ -450,6 +450,56 @@ router.get('/monthly-summary', async (req, res) => {
   }
 });
 
+// GET /api/transactions/summary-by-category?category=X&period=year — total
+// pengeluaran per bulan untuk satu kategori, 12 bulan terakhir (rolling,
+// berakhir di bulan berjalan) — dipakai untuk grafik tren kategori tertentu
+// (mis. Zakat & Sedekah) di luar ringkasan bulan-ini yang sudah ada di
+// /zakat-summary. period=year saat ini satu-satunya nilai yang didukung.
+router.get('/summary-by-category', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    const { category, period } = req.query;
+    if (!category) return res.status(400).json({ error: 'Parameter category wajib diisi' });
+    if (period && period !== 'year') return res.status(400).json({ error: 'Parameter period saat ini hanya mendukung "year"' });
+
+    if (!householdId) return res.json({ category, months: [] });
+
+    const result = await pool.query(
+      `SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month, SUM(amount) as total
+       FROM transactions
+       WHERE household_id = $1 AND type = 'expense' AND category = $2
+         AND date >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
+       GROUP BY 1`,
+      [householdId, category]
+    );
+    const byMonth = new Map(result.rows.map((r) => [r.month, parseFloat(r.total)]));
+
+    // Bangun key YYYY-MM lewat aritmatika tahun/bulan langsung, BUKAN
+    // `new Date(y, m, 1).toISOString()` — toISOString() mengonversi ke UTC,
+    // dan di server WIB (UTC+7) itu menggeser tanggal 1 mundur ke akhir
+    // bulan sebelumnya, jadi bulan berjalan hilang dari hasil.
+    const months = [];
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth(); // 0-indexed
+    for (let i = 11; i >= 0; i--) {
+      let mm = m - i;
+      let yy = y;
+      while (mm < 0) {
+        mm += 12;
+        yy -= 1;
+      }
+      const key = `${yy}-${String(mm + 1).padStart(2, '0')}`;
+      months.push({ month: key, total: byMonth.get(key) || 0 });
+    }
+
+    res.json({ category, months });
+  } catch (err) {
+    console.error('Summary by category error:', err);
+    res.status(500).json({ error: 'Gagal mengambil ringkasan per kategori' });
+  }
+});
+
 // GET /api/transactions/zakat-summary — total Zakat & Sedekah bulan ini + streak bulan berturut-turut
 router.get('/zakat-summary', async (req, res) => {
   try {
@@ -459,7 +509,7 @@ router.get('/zakat-summary', async (req, res) => {
     const result = await pool.query(
       `SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month, SUM(amount) as total
        FROM transactions
-       WHERE household_id = $1 AND type = 'expense' AND category = 'Ibadah & Sedekah'
+       WHERE household_id = $1 AND type = 'expense' AND category = 'Zakat & Sedekah'
        GROUP BY 1
        ORDER BY 1 DESC`,
       [householdId]

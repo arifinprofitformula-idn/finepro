@@ -194,4 +194,74 @@ router.post('/participants/:id/toggle-paid', async (req, res) => {
   }
 });
 
+// GET /api/arisan/:groupId/entries — riwayat setoran & giliran menerima, terbaru dulu
+router.get('/:groupId/entries', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!(await assertGroupOwnership(req.params.groupId, householdId))) {
+      return res.status(404).json({ error: 'Grup arisan tidak ditemukan' });
+    }
+
+    const result = await pool.query(
+      `SELECT id, to_char(date, 'YYYY-MM-DD') as date, member_name, amount, is_payout, created_at
+       FROM arisan_entries WHERE arisan_group_id = $1
+       ORDER BY date DESC, created_at DESC`,
+      [req.params.groupId]
+    );
+    res.json({ entries: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal mengambil riwayat setoran' });
+  }
+});
+
+// POST /api/arisan/:groupId/entries — catat setoran, atau tandai giliran menerima (is_payout: true)
+router.post('/:groupId/entries', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!(await assertGroupOwnership(req.params.groupId, householdId))) {
+      return res.status(404).json({ error: 'Grup arisan tidak ditemukan' });
+    }
+
+    const { date, member_name, amount, is_payout } = req.body;
+    if (!member_name || !member_name.trim()) {
+      return res.status(400).json({ error: 'Nama anggota wajib diisi' });
+    }
+    const numAmount = Number(amount);
+    if (!Number.isFinite(numAmount) || numAmount < 0) {
+      return res.status(400).json({ error: 'Nominal tidak valid' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO arisan_entries (arisan_group_id, date, member_name, amount, is_payout, created_by)
+       VALUES ($1, COALESCE($2, CURRENT_DATE), $3, $4, $5, $6)
+       RETURNING id, to_char(date, 'YYYY-MM-DD') as date, member_name, amount, is_payout, created_at`,
+      [req.params.groupId, date || null, member_name.trim(), numAmount, !!is_payout, req.user.userId]
+    );
+    res.status(201).json({ entry: result.rows[0] });
+  } catch (err) {
+    console.error('Create arisan entry error:', err);
+    res.status(500).json({ error: 'Gagal mencatat setoran' });
+  }
+});
+
+// DELETE /api/arisan/entries/:id
+router.delete('/entries/:id', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    const result = await pool.query(
+      `DELETE FROM arisan_entries e
+       USING arisan_groups g
+       WHERE e.id = $1 AND e.arisan_group_id = g.id AND g.household_id = $2
+       RETURNING e.id`,
+      [req.params.id, householdId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Catatan setoran tidak ditemukan' });
+    }
+    res.json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal menghapus catatan setoran' });
+  }
+});
+
 export default router;

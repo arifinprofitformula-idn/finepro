@@ -67,7 +67,7 @@ export async function computeFinancialStats(householdId) {
   const zakatResult = await pool.query(
     `SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month
      FROM transactions
-     WHERE household_id = $1 AND type = 'expense' AND category = 'Ibadah & Sedekah'
+     WHERE household_id = $1 AND type = 'expense' AND category = 'Zakat & Sedekah'
      GROUP BY 1
      ORDER BY 1 DESC`,
     [householdId]

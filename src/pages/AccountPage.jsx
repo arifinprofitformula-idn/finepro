@@ -4,12 +4,11 @@ import { updateMonthlyIncomeDay, HOUSEHOLD_TYPE_LABELS } from "../api/households
 import { createInvite, acceptInvite } from "../api/invites.js";
 import { createPayment, getPaymentHistory, PAYMENT_STATUS_LABELS, PLANS } from "../api/payments.js";
 import { exportMonthCSV, exportMonthPDF } from "../api/transactions.js";
-import { getBills, createBill, markBillPaid, deleteBill } from "../api/bills.js";
-import { getArisanGroups, createArisanGroup } from "../api/arisan.js";
 import ArisanGroupCard from "../components/ArisanGroupCard.jsx";
 import WalletCard from "../components/WalletCard.jsx";
 import CategoryRow from "../components/CategoryRow.jsx";
 import { useWallets } from "../hooks/useWallets.js";
+import { useArisan } from "../hooks/useArisan.js";
 import { uploadAvatar } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
@@ -94,15 +93,6 @@ export default function AccountPage({
   const [exportLoading, setExportLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
-  const [bills, setBills] = useState([]);
-  const [billName, setBillName] = useState("");
-  const [billAmount, setBillAmount] = useState("");
-  const [billDueDate, setBillDueDate] = useState("");
-  const [billRecurring, setBillRecurring] = useState(false);
-  const [billSaving, setBillSaving] = useState(false);
-  const [billMsg, setBillMsg] = useState("");
-  const [billMsgType, setBillMsgType] = useState("");
-  const [billBusyId, setBillBusyId] = useState(null);
   const { wallets, createWallet: addWallet, transfer: transferWallets } = useWallets(household.id);
   const [newWalletName, setNewWalletName] = useState("");
   const [walletSaving, setWalletSaving] = useState(false);
@@ -113,7 +103,7 @@ export default function AccountPage({
   const [transferSaving, setTransferSaving] = useState(false);
   const [transferMsg, setTransferMsg] = useState("");
   const [transferMsgType, setTransferMsgType] = useState("");
-  const [arisanGroups, setArisanGroups] = useState([]);
+  const { groups: arisanGroups, addGroup: addArisanGroupToHook, removeGroup: removeArisanGroup } = useArisan(household.id);
   const [arisanName, setArisanName] = useState("");
   const [arisanAmount, setArisanAmount] = useState("");
   const [arisanFrequency, setArisanFrequency] = useState("Bulanan");
@@ -131,8 +121,6 @@ export default function AccountPage({
 
   useEffect(() => {
     getPaymentHistory().then(setPaymentHistory).catch(() => setPaymentHistory([]));
-    refreshBills();
-    refreshArisan();
     getPushPermissionState().then(setPushPermission);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -158,26 +146,17 @@ export default function AccountPage({
     }
   }
 
-  async function refreshArisan() {
-    try {
-      setArisanGroups(await getArisanGroups());
-    } catch {
-      setArisanGroups([]);
-    }
-  }
-
   async function handleAddArisanGroup(e) {
     e.preventDefault();
     setArisanSaving(true);
     try {
-      await createArisanGroup({
+      await addArisanGroupToHook({
         name: arisanName,
         amount_per_period: parseFloat(arisanAmount) || 0,
         frequency_label: arisanFrequency
       });
       setArisanName("");
       setArisanAmount("");
-      await refreshArisan();
     } catch (err) {
       alert("Gagal membuat grup arisan: " + err.message);
     } finally {
@@ -185,8 +164,8 @@ export default function AccountPage({
     }
   }
 
-  function handleArisanGroupDeleted(groupId) {
-    setArisanGroups((prev) => prev.filter((g) => g.id !== groupId));
+  async function handleArisanGroupDeleted(groupId) {
+    await removeArisanGroup(groupId);
   }
 
   async function handleAddWallet(e) {
@@ -235,62 +214,6 @@ export default function AccountPage({
       alert("Gagal menambah kategori: " + err.message);
     } finally {
       setCategorySaving(false);
-    }
-  }
-
-  async function refreshBills() {
-    try {
-      setBills(await getBills());
-    } catch {
-      setBills([]);
-    }
-  }
-
-  async function handleAddBill(e) {
-    e.preventDefault();
-    setBillSaving(true);
-    setBillMsg("");
-    try {
-      await createBill({
-        name: billName,
-        amount: parseFloat(billAmount) || 0,
-        due_date: billDueDate,
-        is_recurring: billRecurring
-      });
-      setBillName("");
-      setBillAmount("");
-      setBillDueDate("");
-      setBillRecurring(false);
-      await refreshBills();
-    } catch (err) {
-      setBillMsg(err.message);
-      setBillMsgType("error");
-    } finally {
-      setBillSaving(false);
-    }
-  }
-
-  async function handleMarkPaid(id) {
-    setBillBusyId(id);
-    try {
-      await markBillPaid(id);
-      await refreshBills();
-    } catch (err) {
-      alert("Gagal menandai lunas: " + err.message);
-    } finally {
-      setBillBusyId(null);
-    }
-  }
-
-  async function handleDeleteBill(id) {
-    setBillBusyId(id);
-    try {
-      await deleteBill(id);
-      await refreshBills();
-    } catch (err) {
-      alert("Gagal menghapus tagihan: " + err.message);
-    } finally {
-      setBillBusyId(null);
     }
   }
 
@@ -570,92 +493,6 @@ export default function AccountPage({
             <StatusMsg msg={transferMsg} type={transferMsgType} />
           </form>
         )}
-      </div>
-
-      {/* Tagihan & Pengingat Jatuh Tempo */}
-      <div className="gloss-panel mb-4 rounded-2xl p-4">
-        <SectionHeader icon={Bell} tone="coral" title="Tagihan & Pengingat" />
-        <p className="mb-2 text-xs text-neutral-500">
-          Catat tagihan rutin/sekali bayar, dapat pengingat di beranda 3 hari sebelum jatuh tempo.
-        </p>
-
-        {bills.length > 0 && (
-          <div className="mb-3">
-            {bills.map((b) => (
-              <div key={b.id} className="flex items-center justify-between gap-2 border-b border-neutral-border/60 py-2 last:border-0">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-navy">
-                    {b.name} {b.is_recurring && <span className="font-normal text-neutral-500">(berulang)</span>}
-                  </div>
-                  <div className="text-xs text-neutral-500">
-                    {fmtRp(b.amount)} · jatuh tempo {b.due_date}
-                    {b.paid_at && !b.is_recurring && " · Lunas"}
-                  </div>
-                </div>
-                <div className="flex flex-shrink-0 gap-1.5">
-                  {!(b.paid_at && !b.is_recurring) && (
-                    <button
-                      type="button"
-                      onClick={() => handleMarkPaid(b.id)}
-                      disabled={billBusyId === b.id}
-                      className="flex h-9 items-center justify-center rounded-full bg-mint px-3 text-xs font-bold text-white disabled:opacity-60"
-                    >
-                      Lunas
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteBill(b.id)}
-                    disabled={billBusyId === b.id}
-                    className="flex h-9 items-center justify-center rounded-full border border-neutral-border px-3 text-xs font-semibold text-neutral-500 disabled:opacity-60"
-                  >
-                    Hapus
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <form onSubmit={handleAddBill} className="flex flex-col gap-2">
-          <label htmlFor="bill-name" className="sr-only">Nama tagihan</label>
-          <input
-            id="bill-name"
-            type="text"
-            required
-            value={billName}
-            onChange={(e) => setBillName(e.target.value)}
-            placeholder="Nama tagihan, mis. Listrik"
-            className={inputClass}
-          />
-          <div className="flex gap-2">
-            <input
-              type="number"
-              min="0"
-              step="1000"
-              required
-              value={billAmount}
-              onChange={(e) => setBillAmount(e.target.value)}
-              placeholder="Nominal"
-              className={inputClass}
-            />
-            <input
-              type="date"
-              required
-              value={billDueDate}
-              onChange={(e) => setBillDueDate(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <label className="flex items-center gap-2 px-1 text-xs text-neutral-500">
-            <input type="checkbox" checked={billRecurring} onChange={(e) => setBillRecurring(e.target.checked)} />
-            Tagihan berulang tiap bulan
-          </label>
-          <button type="submit" disabled={billSaving} className={primaryBtnClass}>
-            Tambah Tagihan
-          </button>
-          <StatusMsg msg={billMsg} type={billMsgType} />
-        </form>
       </div>
 
       {/* Tanggal Uang Bulanan (student only) */}
