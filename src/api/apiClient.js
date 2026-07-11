@@ -31,10 +31,9 @@ export async function apiFetch(path, options = {}) {
     headers,
   });
 
-  // Jika token expired, hapus dan reload ke halaman login
+  // Jika token expired, hapus token — React auth context akan redirect ke login
   if (res.status === 401 && _token) {
     setToken(null);
-    window.location.reload();
     throw new Error('Sesi berakhir. Silakan login kembali.');
   }
 
