@@ -35,25 +35,6 @@ export async function deleteTransaction(id) {
   await apiFetch(`/transactions/${id}`, { method: 'DELETE' });
 }
 
-// FormData, bukan JSON, jadi tidak lewat apiFetch — sama pola dengan uploadAvatar.
-export async function scanReceipt(file) {
-  const token = getToken();
-  const formData = new FormData();
-  formData.append('receipt', file);
-
-  const res = await fetch('/api/transactions/scan-receipt', {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: formData,
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Gagal memindai struk');
-  }
-  return data;
-}
-
 // Export CSV bukan lewat apiFetch karena responsnya file, bukan JSON —
 // fetch manual supaya tetap bisa kirim header Authorization (bukan link biasa).
 export async function exportMonthCSV(monthKey) {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import { todayStr } from "../utils/format.js";
 import { getWallets } from "../api/wallets.js";
-import { scanReceipt } from "../api/transactions.js";
+import { scanReceipt, getScanQuota } from "../api/receipts.js";
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, Camera, NotebookPen, Tags, Wallet } from "lucide-react";
 
 const STUDENT_QUICK_CATEGORIES = [
@@ -23,6 +23,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
   const [walletId, setWalletId] = useState("");
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
+  const [scanQuota, setScanQuota] = useState(null);
 
   const currentCategories = type === "income" ? categoriesIncome : categoriesExpense;
 
@@ -44,6 +45,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
         if (match) setCategory(match.name);
       }
       setScanMsg("Terisi otomatis dari struk — cek dulu sebelum simpan.");
+      setScanQuota((prev) => (prev ? { ...prev, used: prev.used + 1, remaining: Math.max(0, prev.remaining - 1) } : prev));
     } catch (err) {
       setScanMsg(err.message);
     } finally {
@@ -65,6 +67,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
           setWalletId(w.find((x) => x.is_default)?.id || w[0]?.id || "");
         })
         .catch(() => setWallets([]));
+      getScanQuota().then(setScanQuota).catch(() => setScanQuota(null));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -122,20 +125,36 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
 
             {type === "expense" && (
               <div>
-                <label
-                  htmlFor="tx-scan-receipt"
-                  className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-full border border-dashed border-violet text-sm font-semibold text-violet cursor-pointer"
-                >
-                  <Camera size={18} />
-                  {scanning ? "Memindai struk..." : "Scan Struk (Otomatis Isi)"}
-                </label>
+                <div className="relative">
+                  <label
+                    htmlFor="tx-scan-receipt"
+                    aria-disabled={scanQuota?.remaining === 0}
+                    className={`flex min-h-[46px] w-full items-center justify-center gap-2 rounded-full border border-dashed text-sm font-semibold cursor-pointer ${
+                      scanQuota?.remaining === 0
+                        ? "border-neutral-300 text-neutral-400 cursor-not-allowed"
+                        : "border-violet text-violet"
+                    }`}
+                  >
+                    <Camera size={18} />
+                    {scanning ? "Memindai struk..." : "Scan Struk (Otomatis Isi)"}
+                  </label>
+                  {scanQuota && (
+                    <span
+                      className={`absolute -top-2 -right-2 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        scanQuota.remaining === 0 ? "bg-coral-light text-coral" : "bg-violet-light text-violet"
+                      }`}
+                    >
+                      {scanQuota.remaining}/{scanQuota.limit} kuota
+                    </span>
+                  )}
+                </div>
                 <input
                   id="tx-scan-receipt"
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
                   capture="environment"
                   className="hidden"
-                  disabled={scanning}
+                  disabled={scanning || scanQuota?.remaining === 0}
                   onChange={handleScanReceipt}
                 />
                 {scanMsg && <p className="mt-1 text-xs text-neutral-500">{scanMsg}</p>}
