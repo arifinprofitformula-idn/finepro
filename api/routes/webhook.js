@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import { execSync } from 'child_process';
+import { readdirSync } from 'fs';
+import { join } from 'path';
 import { Router } from 'express';
 
 const router = Router();
@@ -25,6 +27,21 @@ function run(cmd, cwd = PROJECT_DIR) {
   return execSync(cmd, { cwd, encoding: 'utf-8', timeout: 120000 });
 }
 
+function runMigrations() {
+  const migDir = join(PROJECT_DIR, 'supabase', 'migrations');
+  const files = readdirSync(migDir).filter(f => f.endsWith('.sql')).sort();
+  const results = [];
+  for (const f of files) {
+    const path = join(migDir, f);
+    const out = execSync(
+      `PGPASSWORD="${process.env.DB_PASSWORD}" psql -h 127.0.0.1 -U keuangan_app -d keuangan -f "${path}" 2>&1`,
+      { encoding: 'utf-8', timeout: 30000 }
+    ).trim();
+    results.push(`${f}: ${out || 'OK (no changes)'}`);
+  }
+  return results.join('\n');
+}
+
 // POST /api/webhook/github
 router.post('/github', (req, res) => {
   // Verifikasi signature
@@ -44,7 +61,9 @@ router.post('/github', (req, res) => {
   try {
     log.push(run('git fetch origin main').trim());
     log.push(run('git reset --hard origin/main').trim());
+    log.push('Migrations:\n' + runMigrations());
     log.push(run('npm install --production=false 2>&1').trim().split('\n').slice(-3).join('\n'));
+    log.push(run('npm install --production=false 2>&1', PROJECT_DIR + '/api').trim().split('\n').slice(-3).join('\n'));
     log.push(run('npm run build 2>&1').trim().split('\n').slice(-3).join('\n'));
     run(`cp -r ${PROJECT_DIR}/dist/* ${DEPLOY_DIR}/`);
 
