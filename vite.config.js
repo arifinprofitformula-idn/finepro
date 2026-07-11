@@ -1,8 +1,10 @@
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   plugins: [
+    react(),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["icon-192.png", "icon-512.png"],
@@ -20,14 +22,6 @@ export default defineConfig({
           { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
           { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
         ]
-      },
-      workbox: {
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.hostname.includes("supabase.co"),
-            handler: "NetworkOnly"
-          }
-        ]
       }
     })
   ],
@@ -35,6 +29,10 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
+        target: "http://127.0.0.1:3001",
+        changeOrigin: true
+      },
+      "/uploads": {
         target: "http://127.0.0.1:3001",
         changeOrigin: true
       }
