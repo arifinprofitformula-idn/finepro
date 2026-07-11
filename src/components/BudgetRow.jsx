@@ -29,20 +29,24 @@ export default function BudgetRow({ category, budget, spent, pct, inputValue, on
         </div>
       </div>
       <div className="flex gap-2">
+        <label htmlFor={`budget-${category}`} className="sr-only">
+          Set budget untuk {category}
+        </label>
         <input
+          id={`budget-${category}`}
           type="number"
           min="0"
           step="1000"
           value={inputValue}
           onChange={onInputChange}
           placeholder="Set budget"
-          className="flex-1 min-w-0 px-3 py-1.5 text-sm rounded-lg border border-neutral-border"
+          className="flex-1 min-w-0 min-h-[40px] px-3 text-sm rounded-lg border border-neutral-border"
         />
         <button
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="min-h-[36px] px-3 rounded-lg border border-navy text-navy text-xs font-semibold disabled:opacity-60"
+          className="min-h-[40px] px-3 rounded-lg border border-navy text-navy text-xs font-semibold disabled:opacity-60"
         >
           Simpan
         </button>

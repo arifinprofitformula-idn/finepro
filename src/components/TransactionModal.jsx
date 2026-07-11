@@ -100,7 +100,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                     key={c}
                     type="button"
                     onClick={() => setCategory(c)}
-                    className={`px-2.5 py-1 rounded-full border text-xs ${
+                    className={`min-h-[40px] px-3 rounded-full border text-xs ${
                       category === c ? "bg-navy border-navy text-white" : "border-neutral-border text-neutral-900"
                     }`}
                   >

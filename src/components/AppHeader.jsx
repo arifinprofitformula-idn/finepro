@@ -29,7 +29,7 @@ export default function AppHeader({ user, planLabel, pendingInviteCount, onNavig
       <button
         type="button"
         onClick={onNavigateAccount}
-        className="w-9 h-9 rounded-lg border border-neutral-border bg-white flex items-center justify-center relative"
+        className="w-10 h-10 rounded-lg border border-neutral-border bg-white flex items-center justify-center relative"
         title="Notifikasi"
       >
         <Bell size={16} />

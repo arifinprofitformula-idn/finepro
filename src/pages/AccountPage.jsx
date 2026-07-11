@@ -192,7 +192,7 @@ export default function AccountPage({
                   type="button"
                   onClick={() => handleUpgrade(p.id)}
                   disabled={payingPlan === p.id}
-                  className="min-h-[36px] px-4 rounded-lg bg-navy text-white text-xs font-bold disabled:opacity-60"
+                  className="min-h-[40px] px-4 rounded-lg bg-navy text-white text-xs font-bold disabled:opacity-60"
                 >
                   Pilih
                 </button>
@@ -224,7 +224,11 @@ export default function AccountPage({
             Atur tanggal biasanya uang kiriman/bulanan cair, supaya dapat pengingat lembut di beranda.
           </p>
           <form onSubmit={handleSaveIncomeDay} className="flex flex-col gap-2">
+            <label htmlFor="income-day" className="sr-only">
+              Tanggal uang bulanan (1-31)
+            </label>
             <input
+              id="income-day"
               type="number"
               min="1"
               max="31"
@@ -264,7 +268,11 @@ export default function AccountPage({
         <div className="bg-white border border-neutral-border rounded-xl p-3">
           <h2 className="text-sm font-semibold text-neutral-900 mb-1">Undang Anggota Keluarga</h2>
           <form onSubmit={handleSendInvite} className="flex flex-col gap-2">
+            <label htmlFor="invite-email" className="sr-only">
+              Email anggota yang diundang
+            </label>
             <input
+              id="invite-email"
               type="email"
               required
               value={inviteEmail}
@@ -313,7 +321,7 @@ export default function AccountPage({
                 type="button"
                 disabled={acceptingId === inv.id}
                 onClick={() => handleAcceptInvite(inv.id)}
-                className="min-h-[36px] bg-success text-white rounded-md px-3 text-xs font-bold whitespace-nowrap disabled:opacity-60"
+                className="min-h-[40px] bg-success text-white rounded-md px-3 text-xs font-bold whitespace-nowrap disabled:opacity-60"
               >
                 Terima
               </button>

@@ -42,7 +42,7 @@ export default function AuthPage() {
         <div className="flex gap-1.5 mb-4 bg-neutral-100 rounded-lg p-1">
           <button
             type="button"
-            className={`flex-1 text-center py-1.5 rounded-md text-sm font-semibold transition-colors ${
+            className={`flex-1 text-center min-h-[40px] rounded-md text-sm font-semibold transition-colors ${
               mode === "login" ? "bg-white text-navy shadow-sm" : "text-neutral-500"
             }`}
             onClick={() => setMode("login")}
@@ -51,7 +51,7 @@ export default function AuthPage() {
           </button>
           <button
             type="button"
-            className={`flex-1 text-center py-1.5 rounded-md text-sm font-semibold transition-colors ${
+            className={`flex-1 text-center min-h-[40px] rounded-md text-sm font-semibold transition-colors ${
               mode === "signup" ? "bg-white text-navy shadow-sm" : "text-neutral-500"
             }`}
             onClick={() => setMode("signup")}

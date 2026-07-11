@@ -86,7 +86,7 @@ export default function OnboardingPage({ onCreateHousehold, onInviteAccepted }) 
                   type="button"
                   disabled={acceptingId === inv.id}
                   onClick={() => handleAccept(inv.id)}
-                  className="min-h-[36px] bg-success text-white rounded-md px-3 text-xs font-bold whitespace-nowrap disabled:opacity-60"
+                  className="min-h-[40px] bg-success text-white rounded-md px-3 text-xs font-bold whitespace-nowrap disabled:opacity-60"
                 >
                   Terima
                 </button>

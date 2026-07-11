@@ -112,7 +112,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
           <button
             type="button"
             onClick={() => setShowAll(true)}
-            className="w-full text-center text-xs font-semibold text-navy py-2 min-h-[36px]"
+            className="w-full text-center text-xs font-semibold text-navy py-2 min-h-[40px]"
           >
             Lihat semua ({transactions.length})
           </button>
