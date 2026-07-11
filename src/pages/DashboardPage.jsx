@@ -9,10 +9,12 @@ import KpiCard from "../components/KpiCard.jsx";
 import CategoryChart from "../components/CategoryChart.jsx";
 import TransactionItem from "../components/TransactionItem.jsx";
 import BudgetRow from "../components/BudgetRow.jsx";
+import ZakatWidget from "../components/ZakatWidget.jsx";
 import { setBudget } from "../api/budgets.js";
 import { getContributions } from "../api/transactions.js";
-import { fmtRp, daysUntilMonthlyDay, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
-import { ArrowRight, ChevronUp, Eye, EyeOff, PieChart, Sparkles, Users } from "lucide-react";
+import { getBills } from "../api/bills.js";
+import { fmtRp, daysUntilMonthlyDay, daysUntilDate, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
+import { ArrowRight, Bell, ChevronUp, Eye, EyeOff, PieChart, Sparkles, Users } from "lucide-react";
 
 const DEFAULT_TX_SHOWN = 20;
 const SHOW_CONTRIBUTIONS_KEY = "finepro-show-contributions";
@@ -23,6 +25,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
   const [savingCategory, setSavingCategory] = useState(null);
   const [showContributions, setShowContributions] = useState(false);
   const [contributions, setContributions] = useState([]);
+  const [upcomingBills, setUpcomingBills] = useState([]);
 
   const isStudent = household.household_type === "student";
   const isFamily = household.household_type === "family";
@@ -35,6 +38,11 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
     if (saved && isFamily) {
       getContributions(monthKey(todayStr())).then(setContributions).catch(() => {});
     }
+    getBills()
+      .then((bills) =>
+        setUpcomingBills(bills.filter((b) => !b.paid_at && daysUntilDate(b.due_date) <= 3))
+      )
+      .catch(() => setUpcomingBills([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [household.id]);
 
@@ -96,11 +104,33 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         </div>
       )}
 
+      {upcomingBills.length > 0 && (
+        <div className="gloss-panel mb-4 rounded-3xl p-4">
+          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-coral">
+            <Bell size={16} />
+            Tagihan segera jatuh tempo
+          </div>
+          {upcomingBills.map((b) => {
+            const d = daysUntilDate(b.due_date);
+            return (
+              <div key={b.id} className="flex items-center justify-between py-1 text-sm">
+                <span className="text-navy">{b.name}</span>
+                <span className="font-semibold text-coral">
+                  {fmtRp(b.amount)} · {d < 0 ? `Telat ${-d} hari` : d === 0 ? "Hari ini" : `${d} hari lagi`}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="mb-4 grid gap-2.5">
         <KpiCard label="Pemasukan" value={fmtRp(kpi.income)} tone="income" />
         <KpiCard label="Pengeluaran" value={fmtRp(kpi.expense)} tone="expense" />
         <KpiCard label="Saldo" value={fmtRp(kpi.income - kpi.expense)} tone="balance" />
       </div>
+
+      <ZakatWidget householdId={household.id} />
 
       <div className="gloss-panel mb-4 rounded-2xl p-4">
         <div className="mb-3 flex items-center justify-between">

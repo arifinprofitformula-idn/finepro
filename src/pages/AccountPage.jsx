@@ -3,17 +3,27 @@ import { useState, useEffect } from "react";
 import { updateMonthlyIncomeDay, HOUSEHOLD_TYPE_LABELS } from "../api/households.js";
 import { createInvite, acceptInvite } from "../api/invites.js";
 import { createPayment, getPaymentHistory, PAYMENT_STATUS_LABELS, PLANS } from "../api/payments.js";
-import { exportMonthCSV } from "../api/transactions.js";
+import { exportMonthCSV, exportMonthPDF } from "../api/transactions.js";
+import { getBills, createBill, markBillPaid, deleteBill } from "../api/bills.js";
+import { getArisanGroups, createArisanGroup } from "../api/arisan.js";
+import ArisanGroupCard from "../components/ArisanGroupCard.jsx";
+import WalletCard from "../components/WalletCard.jsx";
+import CategoryRow from "../components/CategoryRow.jsx";
+import { useWallets } from "../hooks/useWallets.js";
 import { uploadAvatar } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
+import { subscribeToPush, getPushPermissionState } from "../api/push.js";
 import { fmtRp, monthKey, todayStr } from "../utils/format.js";
 
 export default function AccountPage({
   user,
   household,
   invites,
-  paymentPolling,
-  paymentStatusMsg,
+  categoriesExpense,
+  categoriesIncome,
+  onCreateCategory,
+  onRenameCategory,
+  onDeleteCategory,
   onUserUpdated,
   onHouseholdUpdated,
   onInvitesChanged,
@@ -31,14 +41,206 @@ export default function AccountPage({
   const [acceptingId, setAcceptingId] = useState(null);
   const [payingPlan, setPayingPlan] = useState(null);
   const [exportLoading, setExportLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [bills, setBills] = useState([]);
+  const [billName, setBillName] = useState("");
+  const [billAmount, setBillAmount] = useState("");
+  const [billDueDate, setBillDueDate] = useState("");
+  const [billRecurring, setBillRecurring] = useState(false);
+  const [billSaving, setBillSaving] = useState(false);
+  const [billMsg, setBillMsg] = useState("");
+  const [billMsgType, setBillMsgType] = useState("");
+  const [billBusyId, setBillBusyId] = useState(null);
+  const { wallets, createWallet: addWallet, transfer: transferWallets } = useWallets(household.id);
+  const [newWalletName, setNewWalletName] = useState("");
+  const [walletSaving, setWalletSaving] = useState(false);
+  const [transferFrom, setTransferFrom] = useState("");
+  const [transferTo, setTransferTo] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferNote, setTransferNote] = useState("");
+  const [transferSaving, setTransferSaving] = useState(false);
+  const [transferMsg, setTransferMsg] = useState("");
+  const [transferMsgType, setTransferMsgType] = useState("");
+  const [arisanGroups, setArisanGroups] = useState([]);
+  const [arisanName, setArisanName] = useState("");
+  const [arisanAmount, setArisanAmount] = useState("");
+  const [arisanFrequency, setArisanFrequency] = useState("Bulanan");
+  const [arisanSaving, setArisanSaving] = useState(false);
+  const [pushPermission, setPushPermission] = useState("default");
+  const [pushSubscribing, setPushSubscribing] = useState(false);
+  const [pushMsg, setPushMsg] = useState("");
+  const [newCategoryType, setNewCategoryType] = useState("expense");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
 
   const isOwner = household.role === "owner";
   const isStudent = household.household_type === "student";
 
   useEffect(() => {
     getPaymentHistory().then(setPaymentHistory).catch(() => setPaymentHistory([]));
+    refreshBills();
+    refreshArisan();
+    getPushPermissionState().then(setPushPermission);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (wallets.length >= 2) {
+      setTransferFrom((prev) => prev || wallets[0].id);
+      setTransferTo((prev) => prev || wallets[1].id);
+    }
+  }, [wallets]);
+
+  async function handleEnablePush() {
+    setPushSubscribing(true);
+    setPushMsg("");
+    try {
+      await subscribeToPush();
+      setPushMsg("Notifikasi budget aktif.");
+      setPushPermission("granted");
+    } catch (err) {
+      setPushMsg(err.message);
+    } finally {
+      setPushSubscribing(false);
+    }
+  }
+
+  async function refreshArisan() {
+    try {
+      setArisanGroups(await getArisanGroups());
+    } catch {
+      setArisanGroups([]);
+    }
+  }
+
+  async function handleAddArisanGroup(e) {
+    e.preventDefault();
+    setArisanSaving(true);
+    try {
+      await createArisanGroup({
+        name: arisanName,
+        amount_per_period: parseFloat(arisanAmount) || 0,
+        frequency_label: arisanFrequency
+      });
+      setArisanName("");
+      setArisanAmount("");
+      await refreshArisan();
+    } catch (err) {
+      alert("Gagal membuat grup arisan: " + err.message);
+    } finally {
+      setArisanSaving(false);
+    }
+  }
+
+  function handleArisanGroupDeleted(groupId) {
+    setArisanGroups((prev) => prev.filter((g) => g.id !== groupId));
+  }
+
+  async function handleAddWallet(e) {
+    e.preventDefault();
+    setWalletSaving(true);
+    try {
+      await addWallet(newWalletName);
+      setNewWalletName("");
+    } catch (err) {
+      alert("Gagal membuat dompet: " + err.message);
+    } finally {
+      setWalletSaving(false);
+    }
+  }
+
+  async function handleTransfer(e) {
+    e.preventDefault();
+    setTransferSaving(true);
+    setTransferMsg("");
+    try {
+      await transferWallets({
+        from_wallet_id: transferFrom,
+        to_wallet_id: transferTo,
+        amount: parseFloat(transferAmount) || 0,
+        note: transferNote
+      });
+      setTransferAmount("");
+      setTransferNote("");
+      setTransferMsg("Transfer berhasil.");
+      setTransferMsgType("success");
+    } catch (err) {
+      setTransferMsg(err.message);
+      setTransferMsgType("error");
+    } finally {
+      setTransferSaving(false);
+    }
+  }
+
+  async function handleAddCategory(e) {
+    e.preventDefault();
+    setCategorySaving(true);
+    try {
+      await onCreateCategory(newCategoryType, newCategoryName);
+      setNewCategoryName("");
+    } catch (err) {
+      alert("Gagal menambah kategori: " + err.message);
+    } finally {
+      setCategorySaving(false);
+    }
+  }
+
+  async function refreshBills() {
+    try {
+      setBills(await getBills());
+    } catch {
+      setBills([]);
+    }
+  }
+
+  async function handleAddBill(e) {
+    e.preventDefault();
+    setBillSaving(true);
+    setBillMsg("");
+    try {
+      await createBill({
+        name: billName,
+        amount: parseFloat(billAmount) || 0,
+        due_date: billDueDate,
+        is_recurring: billRecurring
+      });
+      setBillName("");
+      setBillAmount("");
+      setBillDueDate("");
+      setBillRecurring(false);
+      await refreshBills();
+    } catch (err) {
+      setBillMsg(err.message);
+      setBillMsgType("error");
+    } finally {
+      setBillSaving(false);
+    }
+  }
+
+  async function handleMarkPaid(id) {
+    setBillBusyId(id);
+    try {
+      await markBillPaid(id);
+      await refreshBills();
+    } catch (err) {
+      alert("Gagal menandai lunas: " + err.message);
+    } finally {
+      setBillBusyId(null);
+    }
+  }
+
+  async function handleDeleteBill(id) {
+    setBillBusyId(id);
+    try {
+      await deleteBill(id);
+      await refreshBills();
+    } catch (err) {
+      alert("Gagal menghapus tagihan: " + err.message);
+    } finally {
+      setBillBusyId(null);
+    }
+  }
 
   async function handleAvatarChange(e) {
     const file = e.target.files[0];
@@ -129,6 +331,17 @@ export default function AccountPage({
     }
   }
 
+  async function handleExportPDF() {
+    setPdfLoading(true);
+    try {
+      await exportMonthPDF(household.id, monthKey(todayStr()));
+    } catch (err) {
+      alert("Gagal export PDF: " + err.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   return (
     <div className="px-4 pt-1 pb-24 max-w-lg mx-auto flex flex-col gap-3">
       {/* Profil */}
@@ -163,12 +376,20 @@ export default function AccountPage({
           Tipe: {HOUSEHOLD_TYPE_LABELS[household.household_type] || household.household_type}
         </p>
 
-        {(paymentPolling || paymentStatusMsg) && (
-          <div className="mt-2 text-xs rounded-md px-3 py-2 bg-gold/10 text-neutral-900">
-            {paymentPolling && "⏳ "}
-            {paymentStatusMsg}
-          </div>
+        {pushPermission !== "granted" && pushPermission !== "unsupported" && (
+          <button
+            type="button"
+            onClick={handleEnablePush}
+            disabled={pushSubscribing}
+            className="w-full min-h-[40px] mt-3 bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
+          >
+            {pushSubscribing ? "Mengaktifkan..." : "Aktifkan Notifikasi Budget"}
+          </button>
         )}
+        {pushPermission === "granted" && (
+          <p className="text-xs text-success mt-3">✓ Notifikasi budget aktif</p>
+        )}
+        {pushMsg && <p className="text-xs text-neutral-500 mt-1">{pushMsg}</p>}
 
         <button
           type="button"
@@ -240,15 +461,202 @@ export default function AccountPage({
       {/* Export */}
       <div className="bg-white border border-neutral-border rounded-xl p-3">
         <h2 className="text-sm font-semibold text-neutral-900 mb-1">Export Data</h2>
-        <p className="text-xs text-neutral-500 mb-2">Unduh transaksi bulan berjalan dalam format CSV.</p>
-        <button
-          type="button"
-          onClick={handleExportCSV}
-          disabled={exportLoading}
-          className="w-full min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
-        >
-          Export CSV Bulan Ini
-        </button>
+        <p className="text-xs text-neutral-500 mb-2">Unduh transaksi bulan berjalan.</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            disabled={exportLoading}
+            className="flex-1 min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
+          >
+            {exportLoading ? "..." : "CSV"}
+          </button>
+          <button
+            type="button"
+            onClick={handleExportPDF}
+            disabled={pdfLoading}
+            className="flex-1 min-h-[40px] border border-navy text-navy rounded-lg text-sm font-bold disabled:opacity-60"
+          >
+            {pdfLoading ? "Menyiapkan..." : "PDF"}
+          </button>
+        </div>
+      </div>
+
+      {/* Dompet & Transfer */}
+      <div className="bg-white border border-neutral-border rounded-xl p-3">
+        <h2 className="text-sm font-semibold text-neutral-900 mb-2">Dompet</h2>
+        {wallets.map((w) => (
+          <WalletCard key={w.id} wallet={w} />
+        ))}
+
+        <form onSubmit={handleAddWallet} className="flex gap-2 mt-3">
+          <label htmlFor="new-wallet" className="sr-only">Nama dompet baru</label>
+          <input
+            id="new-wallet"
+            type="text"
+            required
+            value={newWalletName}
+            onChange={(e) => setNewWalletName(e.target.value)}
+            placeholder="Nama dompet baru, mis. BCA"
+            className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+          />
+          <button
+            type="submit"
+            disabled={walletSaving}
+            className="min-h-[40px] px-4 rounded-lg bg-navy text-white text-xs font-bold disabled:opacity-60"
+          >
+            Tambah
+          </button>
+        </form>
+
+        {wallets.length >= 2 && (
+          <form onSubmit={handleTransfer} className="flex flex-col gap-2 mt-4 pt-3 border-t border-neutral-border">
+            <div className="text-xs font-semibold text-neutral-500">Transfer Antar Dompet</div>
+            <div className="flex gap-2">
+              <select
+                value={transferFrom}
+                onChange={(e) => setTransferFrom(e.target.value)}
+                className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+              >
+                {wallets.map((w) => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+              <select
+                value={transferTo}
+                onChange={(e) => setTransferTo(e.target.value)}
+                className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+              >
+                {wallets.map((w) => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+            </div>
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              required
+              value={transferAmount}
+              onChange={(e) => setTransferAmount(e.target.value)}
+              placeholder="Nominal transfer"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+            />
+            <input
+              type="text"
+              value={transferNote}
+              onChange={(e) => setTransferNote(e.target.value)}
+              placeholder="Catatan (opsional)"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+            />
+            <button
+              type="submit"
+              disabled={transferSaving}
+              className="min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
+            >
+              Transfer
+            </button>
+            {transferMsg && (
+              <div className={`text-xs rounded-md px-3 py-2 ${transferMsgType === "error" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>
+                {transferMsg}
+              </div>
+            )}
+          </form>
+        )}
+      </div>
+
+      {/* Tagihan & Pengingat Jatuh Tempo */}
+      <div className="bg-white border border-neutral-border rounded-xl p-3">
+        <h2 className="text-sm font-semibold text-neutral-900 mb-1">Tagihan & Pengingat</h2>
+        <p className="text-xs text-neutral-500 mb-2">
+          Catat tagihan rutin/sekali bayar, dapat pengingat di beranda 3 hari sebelum jatuh tempo.
+        </p>
+
+        {bills.length > 0 && (
+          <div className="mb-3">
+            {bills.map((b) => (
+              <div key={b.id} className="flex items-center justify-between gap-2 py-2 border-b border-neutral-border last:border-0">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-neutral-900 truncate">
+                    {b.name} {b.is_recurring && <span className="text-neutral-500 font-normal">(berulang)</span>}
+                  </div>
+                  <div className="text-xs text-neutral-500">
+                    {fmtRp(b.amount)} · jatuh tempo {b.due_date}
+                    {b.paid_at && !b.is_recurring && " · Lunas"}
+                  </div>
+                </div>
+                <div className="flex gap-1.5 flex-shrink-0">
+                  {!(b.paid_at && !b.is_recurring) && (
+                    <button
+                      type="button"
+                      onClick={() => handleMarkPaid(b.id)}
+                      disabled={billBusyId === b.id}
+                      className="min-h-[36px] px-2.5 rounded-md bg-success text-white text-xs font-bold disabled:opacity-60"
+                    >
+                      Lunas
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteBill(b.id)}
+                    disabled={billBusyId === b.id}
+                    className="min-h-[36px] px-2.5 rounded-md border border-neutral-border text-xs font-semibold text-neutral-500 disabled:opacity-60"
+                  >
+                    Hapus
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={handleAddBill} className="flex flex-col gap-2">
+          <label htmlFor="bill-name" className="sr-only">Nama tagihan</label>
+          <input
+            id="bill-name"
+            type="text"
+            required
+            value={billName}
+            onChange={(e) => setBillName(e.target.value)}
+            placeholder="Nama tagihan, mis. Listrik"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+          />
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              required
+              value={billAmount}
+              onChange={(e) => setBillAmount(e.target.value)}
+              placeholder="Nominal"
+              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+            />
+            <input
+              type="date"
+              required
+              value={billDueDate}
+              onChange={(e) => setBillDueDate(e.target.value)}
+              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-neutral-500">
+            <input type="checkbox" checked={billRecurring} onChange={(e) => setBillRecurring(e.target.checked)} />
+            Tagihan berulang tiap bulan
+          </label>
+          <button
+            type="submit"
+            disabled={billSaving}
+            className="min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
+          >
+            Tambah Tagihan
+          </button>
+          {billMsg && (
+            <div className={`text-xs rounded-md px-3 py-2 ${billMsgType === "error" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>
+              {billMsg}
+            </div>
+          )}
+        </form>
       </div>
 
       {/* Tanggal Uang Bulanan (student only) */}
@@ -292,10 +700,104 @@ export default function AccountPage({
         </div>
       )}
 
-      {/* Kategori custom — backend-nya masih placeholder (lihat api/categories.js addCustomCategory) */}
-      <div className="bg-white border border-neutral-border rounded-xl p-3 opacity-60">
-        <h2 className="text-sm font-semibold text-neutral-900 mb-1">Kategori Custom</h2>
-        <p className="text-xs text-neutral-500">Segera hadir — endpoint backend untuk kategori custom belum tersedia.</p>
+      {/* Arisan & Iuran */}
+      <div className="bg-white border border-neutral-border rounded-xl p-3">
+        <h2 className="text-sm font-semibold text-neutral-900 mb-1">Arisan & Iuran</h2>
+        <p className="text-xs text-neutral-500 mb-2">
+          Catat setoran & giliran arisan, terpisah dari transaksi rumah tangga biasa.
+        </p>
+
+        {arisanGroups.length > 0 && (
+          <div className="flex flex-col gap-2 mb-3">
+            {arisanGroups.map((g) => (
+              <ArisanGroupCard key={g.id} group={g} onDeleted={handleArisanGroupDeleted} />
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={handleAddArisanGroup} className="flex flex-col gap-2">
+          <label htmlFor="arisan-name" className="sr-only">Nama arisan</label>
+          <input
+            id="arisan-name"
+            type="text"
+            required
+            value={arisanName}
+            onChange={(e) => setArisanName(e.target.value)}
+            placeholder="Nama arisan, mis. Arisan RT 05"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border"
+          />
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              required
+              value={arisanAmount}
+              onChange={(e) => setArisanAmount(e.target.value)}
+              placeholder="Iuran per periode"
+              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+            />
+            <input
+              type="text"
+              value={arisanFrequency}
+              onChange={(e) => setArisanFrequency(e.target.value)}
+              placeholder="Bulanan"
+              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={arisanSaving}
+            className="min-h-[40px] bg-navy text-white rounded-lg text-sm font-bold disabled:opacity-60"
+          >
+            Buat Grup Arisan
+          </button>
+        </form>
+      </div>
+
+      {/* Kategori — bisa tambah/ubah/hapus, termasuk kategori bawaan sistem */}
+      <div className="bg-white border border-neutral-border rounded-xl p-3">
+        <h2 className="text-sm font-semibold text-neutral-900 mb-2">Kategori</h2>
+
+        <div className="text-xs font-semibold text-neutral-500 mb-1">Pengeluaran</div>
+        {categoriesExpense.map((c) => (
+          <CategoryRow key={c.id} category={c} onRename={onRenameCategory} onDelete={onDeleteCategory} />
+        ))}
+
+        <div className="text-xs font-semibold text-neutral-500 mb-1 mt-3">Pemasukan</div>
+        {categoriesIncome.map((c) => (
+          <CategoryRow key={c.id} category={c} onRename={onRenameCategory} onDelete={onDeleteCategory} />
+        ))}
+
+        <form onSubmit={handleAddCategory} className="flex gap-2 mt-3">
+          <label htmlFor="new-category-type" className="sr-only">Tipe kategori baru</label>
+          <select
+            id="new-category-type"
+            value={newCategoryType}
+            onChange={(e) => setNewCategoryType(e.target.value)}
+            className="px-2 py-2 text-sm rounded-lg border border-neutral-border"
+          >
+            <option value="expense">Pengeluaran</option>
+            <option value="income">Pemasukan</option>
+          </select>
+          <label htmlFor="new-category-name" className="sr-only">Nama kategori baru</label>
+          <input
+            id="new-category-name"
+            type="text"
+            required
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            placeholder="Nama kategori baru"
+            className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-border"
+          />
+          <button
+            type="submit"
+            disabled={categorySaving}
+            className="min-h-[40px] px-4 rounded-lg bg-navy text-white text-xs font-bold disabled:opacity-60"
+          >
+            Tambah
+          </button>
+        </form>
       </div>
 
       {/* Undang Anggota (owner only) */}

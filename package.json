@@ -11,6 +11,8 @@
   "dependencies": {
     "@headlessui/react": "^2.2.10",
     "chart.js": "^4.5.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",
     "react-chartjs-2": "^5.3.1",
@@ -22,6 +24,9 @@
     "postcss": "^8.5.16",
     "tailwindcss": "^3.4.19",
     "vite": "^5.4.0",
-    "vite-plugin-pwa": "^0.20.0"
+    "vite-plugin-pwa": "^0.20.0",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "workbox-strategies": "^7.4.1"
   }
 }

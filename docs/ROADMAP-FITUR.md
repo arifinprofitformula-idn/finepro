@@ -1,13 +1,11 @@
 # Roadmap Fitur — Keuangan Keluarga
 
-Status per fitur ditandai jelas supaya dokumen ini tidak basi lagi seperti
-versi sebelumnya. Prinsip MVP tetap berlaku: validasi tiap fase sebelum
-lanjut, jangan bangun semua sekaligus.
+Status per fitur ditandai jelas supaya dokumen ini tidak basi. Semua item
+di bawah sudah dibangun & diverifikasi (smoke-test end-to-end lewat API,
+`npm run build` sukses tiap fitur) per 2026-07-11.
 
-**Stack saat ini: React + Tailwind CSS (frontend), Express + PostgreSQL
-self-hosted di VPS (backend).** Bukan lagi Vanilla JS + Alpine.js, dan
-bukan Supabase — kedua hal itu adalah arsitektur versi sangat awal proyek
-ini dan sudah sepenuhnya digantikan.
+**Stack: React + Tailwind CSS (frontend), Express + PostgreSQL self-hosted
+di VPS (backend).**
 
 ---
 
@@ -17,77 +15,92 @@ onboarding pilih persona (family/student/individual) dengan seed kategori
 otomatis per tipe.
 
 ## Fase 3 — Kolaborasi Keluarga
-- ✅ **Undang anggota lewat email** — sudah jalan (`api/routes/invites.js`,
-  tabel `household_invites`). Bukan lewat email notifikasi otomatis saat ini
-  (belum ada Fase pengiriman email undangan) — anggota cek undangan pending
-  manual di halaman Akun/onboarding.
-- ✅ **Label "Dicatat oleh"** — sudah tampil di tiap transaksi.
-- ⬜ **Ringkasan kontribusi per anggota** — belum dibangun. Tetap opsional
-  sesuai catatan asli (sensitif, beri opsi sembunyikan).
+- ✅ **Undang anggota lewat email** — `api/routes/invites.js`.
+- ✅ **Label "Dicatat oleh"** — tampil di tiap transaksi.
+- ✅ **Ringkasan kontribusi per anggota** — `GET /api/transactions/contributions`,
+  card di dashboard khusus household `family`, default **tersembunyi**
+  (sensitif), toggle tersimpan di `localStorage`, bukan flag database.
 
 ## Fase 4 — Multi-Dompet, Transfer & Kebutuhan Mahasiswa
-- ⬜ **Multi-dompet (tabel `wallets`)** — belum dibangun. Saat ini semua
-  transaksi masih satu saldo per household, belum dipisah Tunai/Bank/e-wallet.
-- ⬜ **Transfer antar dompet** — belum ada (bergantung pada multi-dompet di atas).
-- ✅ **Reminder uang bulanan** — sudah jalan, khusus household `student`
-  (`monthly_income_day` + banner pengingat di dashboard).
-- ✅ **Kategori kos/kuota/buku mahasiswa** — sudah ter-seed otomatis dari
-  onboarding persona, plus quick-add chip kategori mahasiswa di modal
-  tambah transaksi.
-- ⬜ **Tier harga lebih murah untuk mahasiswa** — belum ada. Harga saat ini
-  flat (Rp29.000/bulan, Rp149.000/6bln, Rp249.000/tahun) untuk semua
-  persona, belum disegmentasi. Terkait langsung dengan keputusan harga di
-  Fase 6 — sebaiknya diputuskan bersamaan, bukan terpisah.
+- ✅ **Multi-dompet** — tabel `wallets`, migrasi `008_wallets.sql` (auto-buat
+  wallet "Tunai" default untuk household lama & baru). Saldo dihitung
+  on-the-fly dari transaksi + transfer, bukan kolom tersimpan.
+- ✅ **Transfer antar dompet** — tabel `wallet_transfers` terpisah dari
+  `transactions` (tidak memengaruhi total income/expense), validasi saldo
+  cukup sebelum transfer diproses.
+- ✅ **Reminder uang bulanan** — khusus household `student`.
+- ✅ **Kategori kos/kuota/buku mahasiswa** — seed otomatis + quick-add chip.
+- ✅ **Tier harga mahasiswa** — **diputuskan TIDAK dibuat.** Keputusan bisnis
+  (2026-07-11): tetap premium, harga sekarang tidak berubah untuk semua
+  persona. Bukan celah yang belum dikerjakan — ini keputusan final.
 
 ## Fase 5 — Retensi & Insight
-- ⬜ **Notifikasi budget mendekati/lewat batas (push)** — belum ada. Yang
-  sudah ada baru indikator visual (ring warna di dashboard: hijau/kuning/
-  merah), bukan push notification.
-- ⬜ **Tagihan & pengingat jatuh tempo (tabel `bills`)** — belum dibangun.
-- 🟡 **Pos Zakat/Sedekah** — kategori "Ibadah & Sedekah" sudah ada di seed
-  default household `family`, tapi belum ada widget ringkasan "sudah
-  bersedekah berapa bulan ini" di dashboard. Separuh jalan.
-- ⬜ **Arisan & Iuran** — belum dibangun.
-- ⬜ **Scan struk otomatis (AI/Claude vision)** — belum dibangun.
-- ✅ **Laporan bulanan otomatis via email** — sudah jalan
-  (`api/jobs/monthlyReport.js`, cron OS, kirim via Mailketing). Perlu
-  kredensial Mailketing production diisi di VPS sebelum aktif (lihat
-  `docs/CHECKLIST-LAUNCH.md`).
-- ✅ **Export CSV** — sudah jalan (transaksi bulan berjalan, dari halaman Akun).
-- ⬜ **Export PDF** — belum dibangun.
+- ✅ **Notifikasi push budget mendekati/lewat batas** — Web Push (VAPID
+  self-generated, bukan credential eksternal). Backend deteksi
+  before/after saat insert transaksi expense (`api/lib/webpush.js`,
+  `crossedThreshold()`), kirim sekali per crossing 80%/100%, stateless
+  (tanpa tabel dedupe). Service worker dipindah dari mode `generateSW` ke
+  `injectManifest` (`src/sw.js` custom) supaya bisa handle `push`/
+  `notificationclick` — precache tetap NetworkOnly untuk `/api/*`.
+- ✅ **Tagihan & pengingat jatuh tempo** — tabel `bills`, migrasi
+  `007_bills.sql`. Tandai lunas: kalau `is_recurring`, jatuh tempo otomatis
+  maju +1 bulan; kalau bukan, cukup `paid_at`. Banner pengingat di
+  dashboard untuk tagihan ≤3 hari lagi (termasuk yang sudah telat).
+- ✅ **Pos Zakat/Sedekah** — widget ringkasan bulan berjalan di dashboard
+  (household `family`), murni derived dari `byCategory["Ibadah & Sedekah"]`
+  yang sudah difetch, tanpa endpoint baru.
+- ✅ **Arisan & Iuran** — tabel `arisan_groups`/`arisan_participants`/
+  `arisan_payments`, migrasi `009_arisan.sql`. Peserta disimpan sebagai
+  nama bebas (bukan user terdaftar) karena arisan sering melibatkan
+  tetangga/teman di luar app. Checklist bayar per periode (default bulan
+  berjalan), toggle lunas/belum.
+- ✅ **Scan struk otomatis (Claude vision)** — `POST /api/transactions/
+  scan-receipt`, model `claude-sonnet-4-5`, ekstrak tanggal/nominal/kategori/
+  catatan jadi JSON, **tidak langsung menyimpan** — cuma prefill form,
+  user tetap review & submit manual. **Butuh `ANTHROPIC_API_KEY` diisi di
+  `.env` VPS** (masih placeholder, endpoint gagal graceful dengan pesan
+  jelas sampai diisi — sama pola dengan Midtrans/Mailketing sebelumnya).
+- ✅ **Laporan bulanan otomatis via email** — `api/jobs/monthlyReport.js`,
+  cron OS, kirim via Mailketing.
+- ✅ **Export CSV** — transaksi bulan berjalan, dari halaman Akun.
+- ✅ **Export PDF** — generate **client-side** (jsPDF + jspdf-autotable,
+  bukan backend, hindari dependency berat kayak puppeteer di VPS),
+  **lazy-loaded** lewat dynamic import (baru diunduh saat tombol ditekan,
+  dan dikecualikan dari precache service worker via `globIgnores` — tanpa
+  ini precache naik dari ~620KB jadi ~1.25MB). Trade-off yang diketahui:
+  jsPDF sendiri ~130KB gzip kalau dipakai.
 
 ## Fase 6 — Monetisasi Penuh
-- ✅ **Integrasi payment gateway (Midtrans)** — sudah jalan penuh: buat
-  transaksi, webhook tervalidasi signature, auto-extend masa aktif,
-  auto-expire saat `current_period_end` lewat.
-- ✅ **Halaman Akun**: ubah plan (upgrade), invite anggota (family) — sudah
-  ada. 🟡 **Riwayat pembayaran** belum ditampilkan ke user (data `payments`
-  sudah tersimpan di database, tinggal dibuatkan UI list-nya).
-- ⬜ **Keputusan harga vs kompetitor** — **masih tertunda, belum diputuskan.**
-  Kompetitor "Uang Ayas" Rp30.000/tahun atau Rp99.000/lifetime, jauh di
-  bawah tier kita Rp29.000/**bulan**. Ini keputusan bisnis, bukan teknis —
-  perlu Anda putuskan: bersaing di harga, atau bertahan premium dengan
-  kedalaman fitur (AI assistant, edukasi finansial, dst). Keputusan ini
-  akan memengaruhi juga poin "tier harga mahasiswa" di Fase 4.
+- ✅ **Integrasi payment gateway (Midtrans)** — buat transaksi, webhook
+  tervalidasi signature, auto-extend masa aktif, auto-expire.
+- ✅ **Halaman Akun**: ubah plan, invite anggota (family), **riwayat
+  pembayaran** (`GET /api/payments/history`, card baru di Akun).
+- ✅ **Keputusan harga vs kompetitor** — **diputuskan** (2026-07-11): tetap
+  premium di harga sekarang (Rp29rb/bulan, Rp149rb/6bln, Rp249rb/tahun),
+  bersaing lewat kedalaman fitur, bukan harga. Tidak ada perubahan kode.
 
 ---
 
-## Ringkasan: apa yang paling masuk akal dikerjakan berikutnya
+## Bug yang ditemukan & diperbaiki sepanjang jalan
 
-Urutan berdasarkan yang paling murah untuk dibangun dan paling menutup gap
-nyata dari yang sudah ada (bukan urutan mengikat, murni saran):
+Pola berulang yang perlu diwaspadai kalau menambah kolom `DATE` baru di
+tabel manapun ke depannya: `RETURNING *` / `SELECT` polos pada kolom
+`DATE` di-serialize JSON dengan `toISOString()`, yang menggeser tanggal
+mundur 1 hari untuk timezone di depan UTC (kasus VPS ini: WIB/+7). Fix-nya
+selalu `to_char(kolom, 'YYYY-MM-DD') as kolom` di setiap query yang
+mengembalikan kolom DATE ke client. Ditemukan ulang di `bills.js` (migrasi
+007) setelah sebelumnya sempat diperbaiki di `transactions.js` — jadi ini
+kelas bug yang gampang muncul lagi di endpoint baru, bukan sekali perbaiki
+lalu selesai.
 
-1. **Riwayat pembayaran di halaman Akun** — datanya sudah ada di database,
-   tinggal UI. Termurah dari semua yang tersisa.
-2. **Keputusan harga (Fase 6)** — bukan kerjaan coding, tapi memblokir
-   keputusan produk lain (tier mahasiswa). Selesaikan ini duluan secara
-   bisnis sebelum fitur harga-terkait dibangun.
-3. **Tagihan & pengingat jatuh tempo** — nilai retensi tinggi, skema
-   database-nya relatif sederhana (mirip pola `budgets`/`subscriptions`
-   yang sudah ada).
-4. **Multi-dompet & transfer** — perubahan skema lebih besar (semua query
-   transaksi perlu tahu soal `wallet_id`), sebaiknya di-scope terpisah
-   dan diriset dulu seberapa penting ini buat user nyata sebelum dibangun.
-5. Sisanya (arisan, scan struk AI, push notification, export PDF, widget
-   zakat) — validasi dulu ada permintaan nyata dari user sebelum dibangun,
-   sesuai prinsip MVP yang sudah dipegang sejak awal proyek ini.
+## Environment variable baru yang perlu diisi di VPS
+
+Selain yang sudah ada (Midtrans, Mailketing), fase ini menambah:
+
+```
+VAPID_PUBLIC_KEY=...   # sudah diisi otomatis (self-generated), aman dipakai apa adanya
+VAPID_PRIVATE_KEY=...  # sudah diisi otomatis (self-generated), JANGAN di-regenerate di VPS
+                        # kalau sudah ada user yang subscribe (subscription lama jadi invalid)
+VAPID_SUBJECT=mailto:admin@finepro.my.id
+ANTHROPIC_API_KEY=isi-anthropic-api-key   # BELUM diisi — wajib diisi sebelum fitur scan struk aktif
+```

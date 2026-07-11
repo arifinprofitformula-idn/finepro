@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import { todayStr } from "../utils/format.js";
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, NotebookPen, Tags, Wallet } from "lucide-react";
+import { getWallets } from "../api/wallets.js";
+import { scanReceipt } from "../api/transactions.js";
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, Camera, NotebookPen, Tags, Wallet } from "lucide-react";
 
 const STUDENT_QUICK_CATEGORIES = [
   "Uang Makan",
@@ -17,8 +19,38 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [wallets, setWallets] = useState([]);
+  const [walletId, setWalletId] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState("");
 
   const currentCategories = type === "income" ? categoriesIncome : categoriesExpense;
+
+  async function handleScanReceipt(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setScanning(true);
+    setScanMsg("");
+    try {
+      const result = await scanReceipt(file);
+      if (result.date) setDate(result.date);
+      if (result.amount) setAmount(String(result.amount));
+      if (result.note) setNote(result.note);
+      if (result.suggested_category) {
+        const match = categoriesExpense.find(
+          (c) => c.name.toLowerCase().includes(result.suggested_category.toLowerCase()) ||
+                 result.suggested_category.toLowerCase().includes(c.name.toLowerCase())
+        );
+        if (match) setCategory(match.name);
+      }
+      setScanMsg("Terisi otomatis dari struk — cek dulu sebelum simpan.");
+    } catch (err) {
+      setScanMsg(err.message);
+    } finally {
+      setScanning(false);
+      e.target.value = "";
+    }
+  }
 
   useEffect(() => {
     if (open) {
@@ -27,6 +59,12 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
       setAmount("");
       setNote("");
       setCategory(categoriesExpense[0]?.name || "");
+      getWallets()
+        .then((w) => {
+          setWallets(w);
+          setWalletId(w.find((x) => x.is_default)?.id || w[0]?.id || "");
+        })
+        .catch(() => setWallets([]));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -43,7 +81,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
     if (!date || !amt || amt <= 0) return;
     setSubmitting(true);
     try {
-      await onSubmit({ date, type, category, amount: amt, note });
+      await onSubmit({ date, type, category, amount: amt, note, wallet_id: walletId || undefined });
       onClose();
     } catch (err) {
       alert("Gagal menyimpan transaksi: " + err.message);
@@ -81,6 +119,28 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                 Pemasukan
               </button>
             </div>
+
+            {type === "expense" && (
+              <div>
+                <label
+                  htmlFor="tx-scan-receipt"
+                  className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-full border border-dashed border-violet text-sm font-semibold text-violet cursor-pointer"
+                >
+                  <Camera size={18} />
+                  {scanning ? "Memindai struk..." : "Scan Struk (Otomatis Isi)"}
+                </label>
+                <input
+                  id="tx-scan-receipt"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  capture="environment"
+                  className="hidden"
+                  disabled={scanning}
+                  onChange={handleScanReceipt}
+                />
+                {scanMsg && <p className="mt-1 text-xs text-neutral-500">{scanMsg}</p>}
+              </div>
+            )}
 
             <div>
               <label htmlFor="tx-date" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500">
@@ -150,6 +210,27 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                 className="w-full rounded-2xl border border-white/80 bg-white/70 px-3 py-3 text-sm font-medium text-navy outline-none"
               />
             </div>
+
+            {wallets.length > 1 && (
+              <div>
+                <label htmlFor="tx-wallet" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500">
+                  <Wallet size={14} />
+                  Dompet
+                </label>
+                <select
+                  id="tx-wallet"
+                  value={walletId}
+                  onChange={(e) => setWalletId(e.target.value)}
+                  className="w-full rounded-2xl border border-white/80 bg-white/70 px-3 py-3 text-sm font-medium text-navy outline-none"
+                >
+                  {wallets.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label htmlFor="tx-note" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500">

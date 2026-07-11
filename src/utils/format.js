@@ -51,3 +51,13 @@ export function daysUntilMonthlyDay(day) {
 
   return Math.round((target - today) / 86400000);
 }
+
+// Selisih hari ke tanggal spesifik (YYYY-MM-DD), untuk pengingat tagihan.
+// Beda dari daysUntilMonthlyDay: ini tanggal pasti, bukan tanggal berulang di bulan berjalan.
+export function daysUntilDate(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr + "T00:00:00");
+  return Math.round((target - today) / 86400000);
+}

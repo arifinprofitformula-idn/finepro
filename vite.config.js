@@ -6,6 +6,13 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // injectManifest (bukan generateSW default) — dibutuhkan supaya bisa
+      // pakai service worker custom (src/sw.js) dengan push/notificationclick
+      // handler sendiri untuk notifikasi budget. Plugin cuma menyuntik
+      // precache manifest ke dalamnya, sisanya kode kita.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.js",
       registerType: "autoUpdate",
       includeAssets: ["icon-192.png", "icon-512.png"],
       manifest: {
@@ -23,16 +30,13 @@ export default defineConfig({
           { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
         ]
       },
-      workbox: {
-        // Eksplisit NetworkOnly untuk semua panggilan API — jangan sampai
-        // data transaksi/household ke-cache Workbox dan jadi basi.
-        // (default globPatterns tidak match /api/*, ini defense-in-depth.)
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
-            handler: "NetworkOnly"
-          }
-        ]
+      injectManifest: {
+        // jsPDF (+ html2canvas/purify) di-lazy-load lewat dynamic import
+        // hanya saat tombol Export PDF ditekan — jangan ikut di-precache
+        // saat install SW, supaya tetap benar-benar "on demand", bukan
+        // diam-diam diunduh semua orang di background (~780KB gzip kalau
+        // ikut precache, vs 146KB kalau tidak).
+        globIgnores: ["**/jspdf*.js", "**/html2canvas*.js", "**/purify*.js"]
       }
     })
   ],

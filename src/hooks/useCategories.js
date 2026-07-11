@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getCategories } from "../api/categories.js";
+import { getCategories, createCategory as apiCreateCategory, renameCategory as apiRenameCategory, deleteCategory as apiDeleteCategory } from "../api/categories.js";
 
 export function useCategories(householdId) {
   const [categoriesExpense, setCategoriesExpense] = useState([]);
@@ -25,5 +25,20 @@ export function useCategories(householdId) {
     refresh();
   }, [refresh]);
 
-  return { categoriesExpense, categoriesIncome, loading, refresh };
+  const createCategory = useCallback(async (type, name) => {
+    await apiCreateCategory(type, name);
+    await refresh();
+  }, [refresh]);
+
+  const renameCategory = useCallback(async (id, name) => {
+    await apiRenameCategory(id, name);
+    await refresh();
+  }, [refresh]);
+
+  const deleteCategory = useCallback(async (id) => {
+    await apiDeleteCategory(id);
+    await refresh();
+  }, [refresh]);
+
+  return { categoriesExpense, categoriesIncome, loading, refresh, createCategory, renameCategory, deleteCategory };
 }
