@@ -28,32 +28,102 @@ async function getUserHouseholdId(userId) {
   return result.rows[0]?.household_id || null;
 }
 
-// GET /api/transactions — list transaksi bulan ini
+// Cursor keyset pagination dipilih (bukan page+limit/OFFSET) karena tabel
+// transactions diurut DESC by (date, created_at, id) dan bisa tumbuh ribuan
+// baris per household seiring waktu pakai. OFFSET N harus men-scan &
+// membuang N baris pertama tiap request — makin lambat makin jauh usernya
+// scroll ke belakang. Keyset ("ambil yang lebih lama dari baris terakhir
+// yang saya lihat") selalu pakai index idx_transactions_household_date,
+// jadi biaya query konstan di halaman manapun. Trade-off: tidak bisa lompat
+// ke "halaman 5" langsung — cocok untuk pola akses riwayat yang selalu
+// linear (scroll/"muat lebih banyak"), yang memang satu-satunya pola akses
+// yang dibutuhkan HistoryPage (frontend/src/pages/HistoryPage.jsx).
+function encodeCursor(row) {
+  return Buffer.from(JSON.stringify({ date: row.date, created_at: row.created_at, id: row.id })).toString('base64url');
+}
+function decodeCursor(raw) {
+  try {
+    const obj = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+    if (!obj.date || !obj.created_at || !obj.id) return null;
+    return obj;
+  } catch {
+    return null;
+  }
+}
+
+function buildTransactionFilters(req, householdId) {
+  const { month, year, type, category, wallet_id, search, date_from, date_to } = req.query;
+  const where = ['t.household_id = $1'];
+  const params = [householdId];
+
+  if (month && year) {
+    params.push(month, year);
+    where.push(`EXTRACT(MONTH FROM t.date) = $${params.length - 1} AND EXTRACT(YEAR FROM t.date) = $${params.length}`);
+  }
+  if (type && ['income', 'expense'].includes(type)) {
+    params.push(type);
+    where.push(`t.type = $${params.length}`);
+  }
+  if (category) {
+    params.push(category);
+    where.push(`t.category = $${params.length}`);
+  }
+  if (wallet_id) {
+    params.push(wallet_id);
+    where.push(`t.wallet_id = $${params.length}`);
+  }
+  if (search) {
+    params.push(`%${search}%`);
+    where.push(`t.note ILIKE $${params.length}`);
+  }
+  if (date_from) {
+    params.push(date_from);
+    where.push(`t.date >= $${params.length}`);
+  }
+  if (date_to) {
+    params.push(date_to);
+    where.push(`t.date <= $${params.length}`);
+  }
+
+  return { where, params };
+}
+
+// GET /api/transactions — riwayat transaksi, dengan filter opsional (type,
+// category, wallet_id, search di kolom note, date_from/date_to, atau
+// month+year untuk kompatibilitas lama) dan cursor pagination (lihat
+// encodeCursor di atas untuk alasan keyset vs offset).
 router.get('/', async (req, res) => {
   try {
     const householdId = await getUserHouseholdId(req.user.userId);
-    if (!householdId) return res.json({ transactions: [] });
+    if (!householdId) return res.json({ transactions: [], next_cursor: null, has_more: false });
 
-    const { month, year } = req.query;
-    let dateFilter = '';
-    const params = [householdId];
+    const { where, params } = buildTransactionFilters(req, householdId);
 
-    if (month && year) {
-      dateFilter = 'AND EXTRACT(MONTH FROM date) = $2 AND EXTRACT(YEAR FROM date) = $3';
-      params.push(month, year);
+    const cursor = req.query.cursor ? decodeCursor(req.query.cursor) : null;
+    if (cursor) {
+      params.push(cursor.date, cursor.created_at, cursor.id);
+      where.push(`(t.date, t.created_at, t.id) < ($${params.length - 2}::date, $${params.length - 1}::timestamptz, $${params.length}::uuid)`);
     }
 
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 100);
+    params.push(limit + 1);
+
     const result = await pool.query(
-      `SELECT t.id, to_char(t.date, 'YYYY-MM-DD') as date, t.type, t.category, t.amount, t.note, t.created_at, t.created_by,
+      `SELECT t.id, to_char(t.date, 'YYYY-MM-DD') as date, t.type, t.category, t.amount, t.note, t.created_at, t.created_by, t.wallet_id,
               u.name as creator_name, u.email as creator_email
        FROM transactions t
        JOIN users u ON u.id = t.created_by
-       WHERE t.household_id = $1 ${dateFilter}
-       ORDER BY t.date DESC, t.created_at DESC
-       LIMIT 100`,
+       WHERE ${where.join(' AND ')}
+       ORDER BY t.date DESC, t.created_at DESC, t.id DESC
+       LIMIT $${params.length}`,
       params
     );
-    res.json({ transactions: result.rows });
+
+    const hasMore = result.rows.length > limit;
+    const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+    const nextCursor = hasMore ? encodeCursor(rows[rows.length - 1]) : null;
+
+    res.json({ transactions: rows, next_cursor: nextCursor, has_more: hasMore });
   } catch (err) {
     console.error('List transactions error:', err);
     res.status(500).json({ error: 'Gagal mengambil transaksi' });
@@ -229,29 +299,27 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// GET /api/transactions/export?month=YYYY-MM — export transaksi bulan tertentu sebagai file CSV
-// CSV dibuat di backend (bukan JSON mentah ke frontend) supaya escaping/format
-// hanya hidup di satu tempat dan frontend tinggal trigger download file, tanpa
-// perlu library CSV di bundle.
+// GET /api/transactions/export?format=csv — export transaksi sebagai file CSV,
+// menerima filter query yang sama dengan GET /api/transactions (type, category,
+// wallet_id, search, date_from/date_to, atau month+year lama). Filter kosong =
+// seluruh riwayat household. CSV dibuat di backend (bukan JSON mentah ke
+// frontend) supaya escaping/format hanya hidup di satu tempat dan frontend
+// tinggal trigger download file, tanpa perlu library CSV di bundle.
 router.get('/export', async (req, res) => {
   try {
     const householdId = await getUserHouseholdId(req.user.userId);
     if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
 
+    const { where, params } = buildTransactionFilters(req, householdId);
     const { month } = req.query;
-    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
-      return res.status(400).json({ error: 'Parameter month wajib format YYYY-MM' });
-    }
-    const [year, mm] = month.split('-');
 
     const result = await pool.query(
       `SELECT to_char(t.date, 'YYYY-MM-DD') as date, t.type, t.category, t.amount, t.note, u.name as creator_name, u.email as creator_email
        FROM transactions t
        JOIN users u ON u.id = t.created_by
-       WHERE t.household_id = $1
-         AND EXTRACT(MONTH FROM t.date) = $2 AND EXTRACT(YEAR FROM t.date) = $3
+       WHERE ${where.join(' AND ')}
        ORDER BY t.date, t.created_at`,
-      [householdId, mm, year]
+      params
     );
 
     const escapeCsv = (v) => {
@@ -271,8 +339,9 @@ router.get('/export', async (req, res) => {
 
     const csv = [header.join(','), ...rows].join('\n');
 
+    const filenameSuffix = month || new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="transaksi-${month}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="transaksi-${filenameSuffix}.csv"`);
     res.send(csv);
   } catch (err) {
     console.error('Export transactions error:', err);

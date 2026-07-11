@@ -9,6 +9,20 @@ export async function getMonthTransactions(householdId, monthKey) {
   return data.transactions || [];
 }
 
+// Riwayat transaksi dengan filter + cursor pagination — dipakai HistoryPage.
+// filters: { type, category, wallet_id, search, date_from, date_to }
+export async function getTransactionHistory(filters = {}, cursor = null, limit = 20) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') params.set(k, v);
+  });
+  if (cursor) params.set('cursor', cursor);
+  params.set('limit', limit);
+
+  const data = await apiFetch(`/transactions?${params.toString()}`);
+  return { transactions: data.transactions || [], nextCursor: data.next_cursor || null, hasMore: !!data.has_more };
+}
+
 export async function addTransaction({ householdId, userId, date, type, category, amount, note, wallet_id }) {
   const data = await apiFetch('/transactions', {
     method: 'POST',
@@ -62,6 +76,48 @@ export async function exportMonthCSV(monthKey) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// Fetch manual (bukan apiFetch) + trigger download blob — dipakai
+// exportTransactionsCsv & downloadBackup, sama pola dengan exportMonthCSV.
+async function fetchAndDownload(path, fallbackFilename) {
+  const token = getToken();
+  const res = await fetch(`/api${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Gagal mengunduh file');
+  }
+
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match ? match[1] : fallbackFilename;
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Export CSV riwayat transaksi memakai filter yang sedang aktif di HistoryPage.
+export async function exportTransactionsCsv(filters = {}) {
+  const params = new URLSearchParams({ format: 'csv' });
+  Object.entries(filters).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') params.set(k, v);
+  });
+  await fetchAndDownload(`/transactions/export?${params.toString()}`, 'transaksi.csv');
+}
+
+// Cadangan JSON penuh household — tidak terpengaruh filter apapun.
+export async function downloadBackup() {
+  await fetchAndDownload('/households/me/backup', 'cadangan-keuangan.json');
 }
 
 // PDF di-generate di frontend (bukan backend, hindari dependency berat kayak

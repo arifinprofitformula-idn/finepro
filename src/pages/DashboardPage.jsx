@@ -12,14 +12,14 @@ import MonthlyChart from "../components/MonthlyChart.jsx";
 import TransactionItem from "../components/TransactionItem.jsx";
 import BudgetRow from "../components/BudgetRow.jsx";
 import ZakatWidget from "../components/ZakatWidget.jsx";
+import BillsSection from "../components/BillsSection.jsx";
 import InsightButton from "../components/InsightButton.jsx";
 import InsightCard from "../components/InsightCard.jsx";
 import { useAiInsight } from "../hooks/useAiInsight.js";
 import { setBudget } from "../api/budgets.js";
 import { getContributions, groupByDay, getMonthlySummary } from "../api/transactions.js";
-import { getBills } from "../api/bills.js";
-import { fmtRp, daysUntilMonthlyDay, daysUntilDate, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
-import { ArrowRight, Bell, BarChart3, CalendarDays, ChevronUp, Eye, EyeOff, PieChart, Sparkles, Users } from "lucide-react";
+import { fmtRp, daysUntilMonthlyDay, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
+import { ArrowRight, BarChart3, CalendarDays, ChevronUp, Eye, EyeOff, PieChart, Sparkles, Users } from "lucide-react";
 
 const DEFAULT_TX_SHOWN = 20;
 const SHOW_CONTRIBUTIONS_KEY = "finepro-show-contributions";
@@ -36,7 +36,6 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
   const [savingCategory, setSavingCategory] = useState(null);
   const [showContributions, setShowContributions] = useState(false);
   const [contributions, setContributions] = useState([]);
-  const [upcomingBills, setUpcomingBills] = useState([]);
   const [chartMode, setChartMode] = useState("daily");
   const [monthlyData, setMonthlyData] = useState(null);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
@@ -64,11 +63,6 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
     if (saved && isFamily) {
       getContributions(monthKey(todayStr())).then(setContributions).catch(() => {});
     }
-    getBills()
-      .then((bills) =>
-        setUpcomingBills(bills.filter((b) => !b.paid_at && daysUntilDate(b.due_date) <= 3))
-      )
-      .catch(() => setUpcomingBills([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [household.id]);
 
@@ -130,26 +124,6 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         </div>
       )}
 
-      {upcomingBills.length > 0 && (
-        <div className="gloss-panel mb-4 rounded-3xl p-4">
-          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-coral">
-            <Bell size={16} />
-            Tagihan segera jatuh tempo
-          </div>
-          {upcomingBills.map((b) => {
-            const d = daysUntilDate(b.due_date);
-            return (
-              <div key={b.id} className="flex items-center justify-between py-1 text-sm">
-                <span className="text-navy">{b.name}</span>
-                <span className="font-semibold text-coral">
-                  {fmtRp(b.amount)} · {d < 0 ? `Telat ${-d} hari` : d === 0 ? "Hari ini" : `${d} hari lagi`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       <div className="mb-4 grid gap-2.5">
         <KpiCard label="Pemasukan" value={fmtRp(kpi.income)} tone="income" />
         <KpiCard label="Pengeluaran" value={fmtRp(kpi.expense)} tone="expense" />
@@ -166,6 +140,8 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
       />
 
       <ZakatWidget householdId={household.id} />
+
+      <BillsSection householdId={household.id} />
 
       <div className="gloss-panel mb-4 rounded-2xl p-4">
         <div className="mb-3 flex items-center justify-between">

@@ -7,7 +7,6 @@
 // ditangani Nginx (poin 4 Step 4 di dokumen migrasi jadi otomatis aman).
 
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
 import { useAuth } from "./hooks/useAuth.js";
 import { useHousehold } from "./hooks/useHousehold.js";
 import { useCategories } from "./hooks/useCategories.js";
@@ -19,6 +18,7 @@ import { planLabel } from "./api/subscriptions.js";
 import AuthPage from "./pages/AuthPage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
+import HistoryPage from "./pages/HistoryPage.jsx";
 import AccountPage from "./pages/AccountPage.jsx";
 import PaymentStatusPage from "./pages/PaymentStatusPage.jsx";
 import AppHeader from "./components/AppHeader.jsx";
@@ -110,6 +110,10 @@ export default function App() {
         />
       )}
 
+      {page === "history" && (
+        <HistoryPage household={household} categoriesExpense={categoriesExpense} categoriesIncome={categoriesIncome} />
+      )}
+
       {page === "payment-status" && (
         <PaymentStatusPage
           polling={paymentStatus.polling}
@@ -134,15 +138,6 @@ export default function App() {
           onLogout={logout}
         />
       )}
-
-      <button
-        type="button"
-        onClick={handleOpenModal}
-        className="fixed bottom-[88px] right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full border border-white/70 bg-violet text-white shadow-float"
-        aria-label="Tambah transaksi"
-      >
-        <Plus size={26} strokeWidth={2.3} />
-      </button>
 
       <BottomNav page={page} onNavigate={setPage} onAdd={handleOpenModal} />
 
