@@ -1,10 +1,12 @@
 // src/components/DailyChart.jsx
-// Grafik harian: line Saldo (kumulatif), tanpa bar Masuk/Keluar.
+// Grafik harian: bar Masuk/Keluar + line Saldo (kumulatif), dua sumbu-Y —
 // sama pola dengan CategoryChart.jsx (functional component, data pre-agregasi via props).
 
 import {
   Chart as ChartJS,
+  BarController,
   LineController,
+  BarElement,
   LineElement,
   PointElement,
   CategoryScale,
@@ -14,10 +16,15 @@ import {
 } from "chart.js";
 import { Chart } from "react-chartjs-2";
 
-ChartJS.register(LineController, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend);
+// BarController & LineController wajib didaftarkan manual di sini —
+// beda dari MonthlyChart.jsx/CategoryChart.jsx yang pakai komponen typed
+// react-chartjs-2 (<Bar>/<Doughnut>, auto-registrasi controller-nya sendiri),
+// komponen <Chart> generik di bawah ini dipakai justru karena butuh mixed
+// dataset (bar + line dalam satu chart) sehingga tidak auto ter-registrasi.
+ChartJS.register(BarController, LineController, BarElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend);
 
 export default function DailyChart({ data }) {
-  const { labels, saldo } = data;
+  const { labels, masuk, keluar, saldo } = data;
 
   if (labels.length === 0) {
     return (
@@ -30,17 +37,19 @@ export default function DailyChart({ data }) {
   return (
     <div className="h-56">
       <Chart
-        type="line"
+        type="bar"
         data={{
           labels,
           datasets: [
+            { type: "bar", label: "Masuk", data: masuk, backgroundColor: "#18c594", borderRadius: 3, yAxisID: "y", order: 2 },
+            { type: "bar", label: "Keluar", data: keluar, backgroundColor: "#ff4b4b", borderRadius: 3, yAxisID: "y", order: 2 },
             {
               type: "line",
               label: "Saldo",
               data: saldo,
               borderColor: "#6f55f2",
               backgroundColor: "rgba(111, 85, 242, 0.14)",
-              fill: true,
+              fill: false,
               borderWidth: 2,
               pointRadius: 3,
               pointHoverRadius: 5,
@@ -48,6 +57,8 @@ export default function DailyChart({ data }) {
               pointBorderColor: "#6f55f2",
               pointBorderWidth: 2,
               tension: 0.3,
+              yAxisID: "y1",
+              order: 1
             }
           ]
         }}
@@ -64,8 +75,15 @@ export default function DailyChart({ data }) {
           scales: {
             x: { grid: { display: false }, ticks: { font: { size: 10 }, color: "#9aa1ac" } },
             y: {
+              position: "left",
               beginAtZero: true,
               grid: { color: "rgba(0,0,0,0.05)" },
+              ticks: { font: { size: 10 }, color: "#9aa1ac", callback: (v) => "Rp " + Math.round(v / 1000) + "k" }
+            },
+            y1: {
+              position: "right",
+              beginAtZero: true,
+              grid: { display: false },
               ticks: { font: { size: 10 }, color: "#9aa1ac", callback: (v) => "Rp " + Math.round(v / 1000) + "k" }
             }
           }
