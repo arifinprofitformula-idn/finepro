@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0f1f3d">
+<meta name="theme-color" content="#0c1120">
 <title>Keuangan Keluarga - Coach Arifin</title>
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -105,14 +105,27 @@
   <!-- ============ APP SCREEN ============ -->
   <div id="appScreen" x-show="view === 'app'" x-cloak>
     <div class="app-header">
-      <div>
-        <div class="title">Keuangan Keluarga<span class="badge-plan" x-text="planLabel"></span></div>
-        <div class="sub" x-text="userEmail"></div>
+      <div class="header-left" @click="page = 'account'">
+        <div class="avatar-circle">
+          <img :src="currentUser.avatar_url" x-show="currentUser && currentUser.avatar_url" class="avatar-img" alt="">
+          <span x-show="!currentUser || !currentUser.avatar_url" x-text="avatarInitial"></span>
+        </div>
+        <div>
+          <div class="greeting" x-text="'Hi, ' + greetingName + '!'"></div>
+          <div class="greeting-sub" x-text="planLabel"></div>
+        </div>
       </div>
-      <button class="icon-btn" @click="logout()" title="Keluar">⏻</button>
+      <button class="icon-btn" @click="page = 'account'" title="Notifikasi">
+        🔔
+        <span class="bell-dot" x-show="pendingInvites.length > 0" x-cloak></span>
+      </button>
     </div>
 
     <div class="page" x-show="page === 'dashboard'">
+      <div class="expired-banner" x-show="subscriptionExpired" x-cloak>
+        Langganan Anda telah berakhir. Data lama tetap bisa dilihat, tapi Anda perlu perpanjang di halaman <strong>Akun</strong> untuk menambah transaksi baru.
+      </div>
+
       <div class="reminder-banner" x-show="household && household.household_type === 'student' && daysUntilIncome !== null && daysUntilIncome <= 3" x-cloak>
         <span x-show="daysUntilIncome === 0">Uang bulanan biasanya cair hari ini. Yuk susun rencana pengeluaran.</span>
         <span x-show="daysUntilIncome > 0" x-text="'Uang bulanan biasanya cair ' + daysUntilIncome + ' hari lagi. Yuk susun rencana pengeluaran.'"></span>
@@ -134,11 +147,11 @@
         <template x-for="b in budgetProgress" :key="b.category">
           <div class="budget-item">
             <div class="budget-row">
-              <div class="budget-cat" x-text="b.category"></div>
+              <div class="budget-row-left">
+                <div class="ring" :style="'--pct:' + Math.min(b.pct, 100) + ';--ring-color:' + (b.pct < 80 ? 'var(--green)' : (b.pct <= 100 ? 'var(--gold)' : 'var(--red)'))"></div>
+                <div class="budget-cat" x-text="b.category"></div>
+              </div>
               <div class="budget-amounts" x-text="fmtRp(b.spent) + ' / ' + fmtRp(b.budget)"></div>
-            </div>
-            <div class="progress-track" x-show="b.budget > 0">
-              <div class="progress-fill" :class="b.pct < 80 ? 'ok' : (b.pct <= 100 ? 'warn' : 'over')" :style="'width:' + Math.min(b.pct, 100) + '%'"></div>
             </div>
             <div class="budget-edit">
               <input type="number" x-model="budgetInputs[b.category]" min="0" step="1000" placeholder="Set budget">
@@ -167,11 +180,46 @@
     </div>
 
     <div class="page" x-show="page === 'account'">
+      <div class="card profile-card">
+        <label class="avatar-circle avatar-circle-lg">
+          <img :src="currentUser.avatar_url" x-show="currentUser && currentUser.avatar_url" class="avatar-img" alt="">
+          <span x-show="!currentUser || !currentUser.avatar_url" x-text="avatarInitial"></span>
+          <input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" @change="uploadAvatarFile($event)">
+        </label>
+        <div>
+          <div class="profile-name" x-text="currentUser && currentUser.name || userEmail"></div>
+          <div class="profile-email" x-text="userEmail"></div>
+          <div class="avatar-hint" x-text="avatarUploading ? 'Mengunggah...' : 'Ketuk foto untuk mengganti'"></div>
+        </div>
+      </div>
+
       <div class="card">
         <h2>Akun & Langganan</h2>
         <p class="sub" x-text="'Plan saat ini: ' + planLabel"></p>
         <p class="sub" x-text="'Tipe: ' + householdTypeLabel"></p>
-        <p class="sub" style="margin-top:12px;">Upgrade paket akan tersedia di fase pengembangan berikutnya.</p>
+
+        <div class="payment-status" x-show="paymentPolling || paymentStatusMsg" x-cloak>
+          <span x-show="paymentPolling">⏳</span>
+          <span x-text="paymentStatusMsg"></span>
+        </div>
+
+        <button type="button" class="btn-secondary" style="margin-top:14px;" @click="logout()">Keluar</button>
+      </div>
+
+      <div class="card" x-show="household && household.role === 'owner'" x-cloak>
+        <h2>Upgrade Paket</h2>
+        <p class="sub">Pembayaran diproses via Midtrans, aman dan otomatis aktif setelah bayar.</p>
+        <div class="plan-list">
+          <template x-for="p in plans" :key="p.id">
+            <div class="plan-card">
+              <div>
+                <div class="plan-name" x-text="p.label"></div>
+                <div class="plan-price" x-text="p.priceLabel"></div>
+              </div>
+              <button type="button" class="btn-primary" style="width:auto;margin-top:0;padding:8px 16px;" @click="upgradePlan(p.id)" :disabled="payingPlan === p.id">Pilih</button>
+            </div>
+          </template>
+        </div>
       </div>
 
       <div class="card">
@@ -220,13 +268,13 @@
       </div>
     </div>
 
-    <button class="fab" @click="openModal()">+</button>
+    <button class="fab" @click="openModal()" :disabled="subscriptionExpired">+</button>
 
     <div class="bottom-nav">
       <button class="nav-item" :class="page === 'dashboard' && 'active'" @click="page = 'dashboard'">
         <span class="nav-icon">🏠</span>Beranda
       </button>
-      <button class="nav-item" @click="openModal()">
+      <button class="nav-item" @click="openModal()" :disabled="subscriptionExpired">
         <span class="nav-icon">➕</span>Tambah
       </button>
       <button class="nav-item" :class="page === 'account' && 'active'" @click="page = 'account'">

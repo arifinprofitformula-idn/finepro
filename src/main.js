@@ -8,12 +8,13 @@
 import Alpine from "alpinejs";
 import { registerSW } from "virtual:pwa-register";
 
-import { signUp, signIn, signOut, getSession, translateAuthError } from "./lib/auth.js";
+import { signUp, signIn, signOut, getSession, translateAuthError, uploadAvatar } from "./lib/auth.js";
 import { getMyHousehold, createHousehold, updateMonthlyIncomeDay, HOUSEHOLD_TYPE_LABELS } from "./lib/households.js";
 import { getCategories } from "./lib/categories.js";
 import { addTransaction, exportMonthCSV } from "./lib/transactions.js";
 import { setBudget } from "./lib/budgets.js";
-import { getSubscription, planLabel } from "./lib/subscriptions.js";
+import { planLabel } from "./lib/subscriptions.js";
+import { createPayment, getPaymentStatus, PLANS } from "./lib/payments.js";
 import { createInvite, getMyPendingInvites, acceptInvite } from "./lib/invites.js";
 import { loadDashboardData } from "./pages/dashboard.js";
 import { fmtRp, todayStr, monthKey, daysUntilMonthlyDay } from "./utils/format.js";
@@ -53,6 +54,28 @@ function appState() {
     household: null,
     householdTypeLabel: "",
     planLabel: "Trial",
+    avatarUploading: false,
+
+    get greetingName() {
+      if (!this.currentUser) return "";
+      const name = this.currentUser.name || this.currentUser.email.split("@")[0];
+      return name.split(" ")[0];
+    },
+
+    get avatarInitial() {
+      const name = this.currentUser?.name || this.currentUser?.email || "?";
+      return name.charAt(0).toUpperCase();
+    },
+
+    get subscriptionExpired() {
+      return !!this.household && this.household.subscription_status === "expired";
+    },
+
+    // ---- langganan & pembayaran ----
+    plans: PLANS,
+    payingPlan: null,
+    paymentPolling: false,
+    paymentStatusMsg: "",
 
     // ---- fitur mahasiswa: tanggal uang bulanan ----
     monthlyIncomeDayInput: "",
@@ -106,9 +129,19 @@ function appState() {
     // INIT — dipanggil sekali saat halaman dibuka
     // =========================================================
     async init() {
+      const params = new URLSearchParams(window.location.search);
+      const orderId = params.get("order_id");
+      if (orderId) {
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+
       const session = await getSession();
       if (session) {
         await this.enterAppFor(session.user);
+        if (orderId) {
+          this.page = "account";
+          this.pollPaymentStatus(orderId);
+        }
       } else {
         this.view = "auth";
       }
@@ -133,6 +166,20 @@ function appState() {
         this.authMsgType = "error";
       } finally {
         this.authLoading = false;
+      }
+    },
+
+    async uploadAvatarFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      this.avatarUploading = true;
+      try {
+        this.currentUser = await uploadAvatar(file);
+      } catch (err) {
+        alert("Gagal mengunggah foto: " + err.message);
+      } finally {
+        this.avatarUploading = false;
+        event.target.value = "";
       }
     },
 
@@ -179,12 +226,12 @@ function appState() {
       this.householdTypeLabel = HOUSEHOLD_TYPE_LABELS[this.household.household_type] || this.household.household_type;
       this.monthlyIncomeDayInput = this.household.monthly_income_day || "";
 
-      const [sub, catExpense, catIncome] = await Promise.all([
-        getSubscription(this.household.id),
+      this.planLabel = planLabel(this.household);
+
+      const [catExpense, catIncome] = await Promise.all([
         getCategories(this.household.id, "expense"),
         getCategories(this.household.id, "income")
       ]);
-      this.planLabel = planLabel(sub);
       this.categoriesExpense = catExpense;
       this.categoriesIncome = catIncome;
       this.txCategory = catExpense[0]?.name || "";
@@ -303,9 +350,58 @@ function appState() {
     },
 
     // =========================================================
+    // LANGGANAN & PEMBAYARAN
+    // =========================================================
+    async upgradePlan(planId) {
+      this.payingPlan = planId;
+      try {
+        const { redirectUrl } = await createPayment(planId);
+        window.location.href = redirectUrl;
+      } catch (err) {
+        alert("Gagal memulai pembayaran: " + err.message);
+        this.payingPlan = null;
+      }
+    },
+
+    // Dipanggil saat balik dari halaman pembayaran Midtrans. Webhook Midtrans
+    // biasanya masuk beberapa detik setelah bayar, jadi di-poll, bukan sekali cek.
+    async pollPaymentStatus(orderId) {
+      this.paymentPolling = true;
+      this.paymentStatusMsg = "Memeriksa status pembayaran...";
+
+      const maxAttempts = 20;
+      for (let i = 0; i < maxAttempts; i++) {
+        try {
+          const payment = await getPaymentStatus(orderId);
+          if (payment.status === "paid") {
+            this.paymentStatusMsg = "Pembayaran berhasil! Langganan Anda sudah aktif.";
+            this.paymentPolling = false;
+            await this.enterAppFor(this.currentUser);
+            return;
+          }
+          if (payment.status === "failed") {
+            this.paymentStatusMsg = "Pembayaran gagal atau dibatalkan.";
+            this.paymentPolling = false;
+            return;
+          }
+        } catch {
+          // lanjut coba lagi
+        }
+        await new Promise(r => setTimeout(r, 3000));
+      }
+
+      this.paymentPolling = false;
+      this.paymentStatusMsg = "Status pembayaran belum diketahui. Cek kembali beberapa saat lagi.";
+    },
+
+    // =========================================================
     // MODAL TAMBAH TRANSAKSI
     // =========================================================
     openModal() {
+      if (this.subscriptionExpired) {
+        alert("Langganan Anda telah berakhir. Perpanjang dulu di halaman Akun untuk menambah transaksi baru.");
+        return;
+      }
       this.setTxType("expense");
       this.txDate = todayStr();
       this.txAmount = "";
@@ -323,6 +419,10 @@ function appState() {
     },
 
     async submitTransaction() {
+      if (this.subscriptionExpired) {
+        alert("Langganan Anda telah berakhir. Perpanjang dulu di halaman Akun untuk menambah transaksi baru.");
+        return;
+      }
       const amount = parseFloat(this.txAmount);
       if (!this.txDate || !amount || amount <= 0) return;
 

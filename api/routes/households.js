@@ -14,12 +14,29 @@ async function getUserHouseholdId(userId) {
   return result.rows[0]?.household_id || null;
 }
 
-// GET /api/households — dapatkan household user
+// GET /api/households — dapatkan household user (termasuk status langganan)
 router.get('/', async (req, res) => {
   try {
+    // Auto-expire: kalau current_period_end sudah lewat tapi status masih
+    // 'active' (trial atau plan berbayar), tandai 'expired' di sini —
+    // dicek tiap kali data household dibaca, bukan lewat cron terpisah.
+    await pool.query(
+      `UPDATE subscriptions s
+       SET status = 'expired', updated_at = now()
+       FROM household_members hm
+       WHERE hm.household_id = s.household_id
+         AND hm.user_id = $1
+         AND s.status = 'active'
+         AND s.current_period_end IS NOT NULL
+         AND s.current_period_end < CURRENT_DATE`,
+      [req.user.userId]
+    );
+
     const result = await pool.query(
-      `SELECT h.*, hm.role FROM households h
+      `SELECT h.*, hm.role, s.plan, s.status as subscription_status, s.current_period_end
+       FROM households h
        JOIN household_members hm ON h.id = hm.household_id
+       LEFT JOIN subscriptions s ON s.household_id = h.id
        WHERE hm.user_id = $1`,
       [req.user.userId]
     );

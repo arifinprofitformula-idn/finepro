@@ -41,6 +41,26 @@ export async function getSession() {
   return user ? { user } : null;
 }
 
+// FormData, bukan JSON, jadi tidak lewat apiFetch — browser yang set Content-Type
+// (multipart boundary) sendiri, jangan di-override manual.
+export async function uploadAvatar(file) {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append('avatar', file);
+
+  const res = await fetch('/api/auth/avatar', {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Gagal mengunggah foto');
+  }
+  return data.user;
+}
+
 export function translateAuthError(msg) {
   if (!msg) return "Terjadi kesalahan. Coba lagi.";
   if (msg.includes("Email atau password salah")) return "Email atau kata sandi salah.";
