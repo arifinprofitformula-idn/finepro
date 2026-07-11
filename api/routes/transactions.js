@@ -347,6 +347,40 @@ router.get('/summary', async (req, res) => {
   }
 });
 
+// GET /api/transactions/monthly-summary?year=YYYY — total masuk/keluar per bulan
+// (Jan-Des) untuk grafik "Analisis Bulanan" di dashboard — diagregasi di SQL
+// supaya frontend tidak perlu fetch transaksi 12x per bulan.
+router.get('/monthly-summary', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    const year = parseInt(req.query.year, 10) || new Date().getFullYear();
+    if (!householdId) {
+      return res.json({ year, months: Array.from({ length: 12 }, () => ({ income: 0, expense: 0 })) });
+    }
+
+    const result = await pool.query(
+      `SELECT EXTRACT(MONTH FROM date)::int as month,
+              COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE 0 END), 0) as income,
+              COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0) as expense
+       FROM transactions
+       WHERE household_id = $1 AND EXTRACT(YEAR FROM date) = $2
+       GROUP BY 1`,
+      [householdId, year]
+    );
+
+    const byMonth = new Map(result.rows.map((r) => [r.month, r]));
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const row = byMonth.get(i + 1);
+      return { income: parseFloat(row?.income || 0), expense: parseFloat(row?.expense || 0) };
+    });
+
+    res.json({ year, months });
+  } catch (err) {
+    console.error('Monthly summary error:', err);
+    res.status(500).json({ error: 'Gagal mengambil ringkasan bulanan' });
+  }
+});
+
 // GET /api/transactions/zakat-summary — total Zakat & Sedekah bulan ini + streak bulan berturut-turut
 router.get('/zakat-summary', async (req, res) => {
   try {

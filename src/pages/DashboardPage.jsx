@@ -7,6 +7,8 @@
 import { useEffect, useMemo, useState } from "react";
 import KpiCard from "../components/KpiCard.jsx";
 import CategoryChart from "../components/CategoryChart.jsx";
+import DailyChart from "../components/DailyChart.jsx";
+import MonthlyChart from "../components/MonthlyChart.jsx";
 import TransactionItem from "../components/TransactionItem.jsx";
 import BudgetRow from "../components/BudgetRow.jsx";
 import ZakatWidget from "../components/ZakatWidget.jsx";
@@ -14,13 +16,19 @@ import InsightButton from "../components/InsightButton.jsx";
 import InsightCard from "../components/InsightCard.jsx";
 import { useAiInsight } from "../hooks/useAiInsight.js";
 import { setBudget } from "../api/budgets.js";
-import { getContributions } from "../api/transactions.js";
+import { getContributions, groupByDay, getMonthlySummary } from "../api/transactions.js";
 import { getBills } from "../api/bills.js";
 import { fmtRp, daysUntilMonthlyDay, daysUntilDate, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
-import { ArrowRight, Bell, ChevronUp, Eye, EyeOff, PieChart, Sparkles, Users } from "lucide-react";
+import { ArrowRight, Bell, BarChart3, CalendarDays, ChevronUp, Eye, EyeOff, PieChart, Sparkles, Users } from "lucide-react";
 
 const DEFAULT_TX_SHOWN = 20;
 const SHOW_CONTRIBUTIONS_KEY = "finepro-show-contributions";
+
+const CHART_MODES = {
+  daily: { title: "Analisis Harian", icon: BarChart3 },
+  category: { title: "Pengeluaran per Kategori", icon: PieChart },
+  monthly: { title: "Analisis Bulanan", icon: CalendarDays }
+};
 
 export default function DashboardPage({ household, transactions, kpi, budgets, byCategory, categoriesExpense, onDataChanged }) {
   const [showAll, setShowAll] = useState(false);
@@ -29,7 +37,21 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
   const [showContributions, setShowContributions] = useState(false);
   const [contributions, setContributions] = useState([]);
   const [upcomingBills, setUpcomingBills] = useState([]);
+  const [chartMode, setChartMode] = useState("daily");
+  const [monthlyData, setMonthlyData] = useState(null);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
   const insight = useAiInsight();
+
+  const dailyData = useMemo(() => groupByDay(transactions, monthKey(todayStr())), [transactions]);
+
+  useEffect(() => {
+    if (chartMode !== "monthly" || monthlyData) return;
+    setMonthlyLoading(true);
+    getMonthlySummary(new Date().getFullYear())
+      .then(setMonthlyData)
+      .catch(() => setMonthlyData([]))
+      .finally(() => setMonthlyLoading(false));
+  }, [chartMode, monthlyData]);
 
   const isStudent = household.household_type === "student";
   const isFamily = household.household_type === "family";
@@ -149,12 +171,31 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-light text-violet">
-              <PieChart size={16} />
+              {(() => {
+                const Icon = CHART_MODES[chartMode].icon;
+                return <Icon size={16} />;
+              })()}
             </div>
-            <h2 className="text-base font-semibold text-navy">Pengeluaran per Kategori</h2>
+            <h2 className="text-base font-semibold text-navy">{CHART_MODES[chartMode].title}</h2>
           </div>
         </div>
-        <CategoryChart byCategory={byCategory} />
+        <div className="mb-3 flex gap-2 rounded-full bg-neutral-100 p-1">
+          {Object.entries(CHART_MODES).map(([key, { title }]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setChartMode(key)}
+              className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition ${
+                chartMode === key ? "bg-white text-violet shadow-sm" : "text-neutral-500"
+              }`}
+            >
+              {key === "daily" ? "Harian" : key === "category" ? "Kategori" : "Bulanan"}
+            </button>
+          ))}
+        </div>
+        {chartMode === "daily" && <DailyChart data={dailyData} />}
+        {chartMode === "category" && <CategoryChart byCategory={byCategory} />}
+        {chartMode === "monthly" && <MonthlyChart data={monthlyData || []} loading={monthlyLoading} />}
       </div>
 
       {budgetProgress.length > 0 && (

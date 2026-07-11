@@ -124,3 +124,36 @@ export function groupExpenseByCategory(transactions) {
   });
   return byCat;
 }
+
+// Agregasi transaksi satu bulan (dari getMonthTransactions) jadi per-hari,
+// untuk grafik "Analisis Harian" — dari tanggal 1 s.d. hari ini (kalau bulan
+// berjalan) atau s.d. akhir bulan (kalau bulan lampau). Saldo = kumulatif
+// masuk dikurangi keluar per hari, bukan saldo dompet sesungguhnya.
+export function groupByDay(transactions, monthKey) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
+  const lastDay = isCurrentMonth ? today.getDate() : daysInMonth;
+
+  const masuk = Array(lastDay).fill(0);
+  const keluar = Array(lastDay).fill(0);
+
+  transactions.forEach((t) => {
+    const day = Number(t.date.slice(8, 10));
+    if (day < 1 || day > lastDay) return;
+    if (t.type === 'income') masuk[day - 1] += Number(t.amount);
+    else keluar[day - 1] += Number(t.amount);
+  });
+
+  let cumulative = 0;
+  const saldo = masuk.map((m, i) => (cumulative += m - keluar[i]));
+
+  const labels = Array.from({ length: lastDay }, (_, i) => String(i + 1).padStart(2, '0'));
+  return { labels, masuk, keluar, saldo };
+}
+
+export async function getMonthlySummary(year) {
+  const data = await apiFetch(`/transactions/monthly-summary?year=${year}`);
+  return data.months || [];
+}
