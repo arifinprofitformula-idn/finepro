@@ -10,6 +10,9 @@ import CategoryChart from "../components/CategoryChart.jsx";
 import TransactionItem from "../components/TransactionItem.jsx";
 import BudgetRow from "../components/BudgetRow.jsx";
 import ZakatWidget from "../components/ZakatWidget.jsx";
+import InsightButton from "../components/InsightButton.jsx";
+import InsightCard from "../components/InsightCard.jsx";
+import { useAiInsight } from "../hooks/useAiInsight.js";
 import { setBudget } from "../api/budgets.js";
 import { getContributions } from "../api/transactions.js";
 import { getBills } from "../api/bills.js";
@@ -26,6 +29,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
   const [showContributions, setShowContributions] = useState(false);
   const [contributions, setContributions] = useState([]);
   const [upcomingBills, setUpcomingBills] = useState([]);
+  const insight = useAiInsight();
 
   const isStudent = household.household_type === "student";
   const isFamily = household.household_type === "family";
@@ -129,6 +133,15 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         <KpiCard label="Pengeluaran" value={fmtRp(kpi.expense)} tone="expense" />
         <KpiCard label="Saldo" value={fmtRp(kpi.income - kpi.expense)} tone="balance" />
       </div>
+
+      <InsightButton onClick={insight.generate} loading={insight.loading} />
+      {insight.error && !insight.rateLimited && (
+        <div className="gloss-panel mb-4 rounded-2xl p-3 text-sm font-medium text-coral">{insight.error}</div>
+      )}
+      <InsightCard
+        narrative={insight.narrative}
+        rateLimitMessage={insight.rateLimited ? insight.error : ""}
+      />
 
       <ZakatWidget householdId={household.id} />
 
