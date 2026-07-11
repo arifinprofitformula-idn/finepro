@@ -59,7 +59,21 @@
       <div class="auth-card">
         <div class="auth-logo">KK</div>
         <h1>Selamat Datang!</h1>
-        <div class="sub">Anda mendaftar sebagai apa? Ini menentukan kategori keuangan yang paling relevan untuk Anda.</div>
+
+        <div class="invite-banner" x-show="pendingInvites.length > 0" x-cloak>
+          <h3>Anda diundang bergabung ke household</h3>
+          <template x-for="inv in pendingInvites" :key="inv.id">
+            <div class="invite-item">
+              <div>
+                <div class="invite-email" x-text="inv.household_name"></div>
+                <div class="invite-house">Diundang untuk bergabung sebagai anggota</div>
+              </div>
+              <button class="btn-accept" @click="acceptInvite(inv.id)" :disabled="acceptingInviteId === inv.id">Terima</button>
+            </div>
+          </template>
+        </div>
+
+        <div class="sub">Atau, Anda mendaftar sebagai apa? Ini menentukan kategori keuangan yang paling relevan untuk Anda.</div>
 
         <div class="persona-list">
           <button class="persona-card" @click="createHousehold('family')" :disabled="onboardLoading">
@@ -99,6 +113,11 @@
     </div>
 
     <div class="page" x-show="page === 'dashboard'">
+      <div class="reminder-banner" x-show="household && household.household_type === 'student' && daysUntilIncome !== null && daysUntilIncome <= 3" x-cloak>
+        <span x-show="daysUntilIncome === 0">Uang bulanan biasanya cair hari ini. Yuk susun rencana pengeluaran.</span>
+        <span x-show="daysUntilIncome > 0" x-text="'Uang bulanan biasanya cair ' + daysUntilIncome + ' hari lagi. Yuk susun rencana pengeluaran.'"></span>
+      </div>
+
       <div class="kpi-scroll">
         <div class="kpi-card income"><div class="label">Pemasukan</div><div class="value" x-text="fmtRp(kpi.income)"></div></div>
         <div class="kpi-card expense"><div class="label">Pengeluaran</div><div class="value" x-text="fmtRp(kpi.expense)"></div></div>
@@ -110,6 +129,25 @@
         <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
       </div>
 
+      <div class="card" x-show="budgetProgress.length > 0" x-cloak>
+        <h2>Budget vs Realisasi</h2>
+        <template x-for="b in budgetProgress" :key="b.category">
+          <div class="budget-item">
+            <div class="budget-row">
+              <div class="budget-cat" x-text="b.category"></div>
+              <div class="budget-amounts" x-text="fmtRp(b.spent) + ' / ' + fmtRp(b.budget)"></div>
+            </div>
+            <div class="progress-track" x-show="b.budget > 0">
+              <div class="progress-fill" :class="b.pct < 80 ? 'ok' : (b.pct <= 100 ? 'warn' : 'over')" :style="'width:' + Math.min(b.pct, 100) + '%'"></div>
+            </div>
+            <div class="budget-edit">
+              <input type="number" x-model="budgetInputs[b.category]" min="0" step="1000" placeholder="Set budget">
+              <button type="button" class="btn-secondary" style="flex:0;padding:8px 14px;" @click="saveBudget(b.category)" :disabled="budgetSavingCategory === b.category">Simpan</button>
+            </div>
+          </div>
+        </template>
+      </div>
+
       <div class="card">
         <h2>Transaksi Terbaru</h2>
         <div id="txList">
@@ -118,6 +156,7 @@
               <div class="tx-left">
                 <div class="tx-cat" x-text="t.category"></div>
                 <div class="tx-meta" x-text="t.date + (t.note ? ' · ' + t.note : '')"></div>
+                <div class="tx-creator" x-show="t.creator_name || t.creator_email" x-text="'Dicatat oleh ' + (t.creator_name || t.creator_email)"></div>
               </div>
               <div class="tx-amount" :class="t.type" x-text="(t.type === 'income' ? '+' : '-') + fmtRp(t.amount)"></div>
             </div>
@@ -132,7 +171,52 @@
         <h2>Akun & Langganan</h2>
         <p class="sub" x-text="'Plan saat ini: ' + planLabel"></p>
         <p class="sub" x-text="'Tipe: ' + householdTypeLabel"></p>
-        <p class="sub" style="margin-top:12px;">Undang anggota keluarga & upgrade paket akan tersedia di fase pengembangan berikutnya.</p>
+        <p class="sub" style="margin-top:12px;">Upgrade paket akan tersedia di fase pengembangan berikutnya.</p>
+      </div>
+
+      <div class="card">
+        <h2>Export Data</h2>
+        <p class="sub">Unduh transaksi bulan berjalan dalam format CSV.</p>
+        <button type="button" class="btn-primary" @click="exportCSV()" :disabled="exportLoading">Export CSV Bulan Ini</button>
+      </div>
+
+      <div class="card" x-show="household && household.household_type === 'student'" x-cloak>
+        <h2>Tanggal Uang Bulanan</h2>
+        <p class="sub">Atur tanggal biasanya uang kiriman/bulanan cair, supaya dapat pengingat lembut di beranda.</p>
+        <form @submit.prevent="saveMonthlyIncomeDay()">
+          <div class="field">
+            <label>Tanggal (1-31)</label>
+            <input type="number" x-model="monthlyIncomeDayInput" min="1" max="31" placeholder="mis. 25">
+          </div>
+          <button type="submit" class="btn-primary" :disabled="incomeDaySaving">Simpan</button>
+          <div class="auth-msg" :class="incomeDayMsgType" x-show="incomeDayMsg" x-text="incomeDayMsg"></div>
+        </form>
+      </div>
+
+      <div class="card" x-show="household && household.role === 'owner'" x-cloak>
+        <h2>Undang Anggota Keluarga</h2>
+        <form @submit.prevent="sendInvite()">
+          <div class="field">
+            <label>Email anggota yang diundang</label>
+            <input type="email" x-model="inviteEmail" required placeholder="pasangan@email.com">
+          </div>
+          <button type="submit" class="btn-primary" :disabled="inviteLoading">Kirim Undangan</button>
+          <div class="auth-msg" :class="inviteMsgType" x-show="inviteMsg" x-text="inviteMsg"></div>
+        </form>
+        <p class="sub" style="margin-top:12px;">Undangan berlaku 7 hari. Anggota yang diundang bisa menerima lewat halaman ini setelah login/daftar dengan email yang sama.</p>
+      </div>
+
+      <div class="card" x-show="pendingInvites.length > 0" x-cloak>
+        <h2>Undangan Menunggu</h2>
+        <template x-for="inv in pendingInvites" :key="inv.id">
+          <div class="invite-item">
+            <div>
+              <div class="invite-email" x-text="inv.household_name"></div>
+              <div class="invite-house">Diundang untuk bergabung sebagai anggota</div>
+            </div>
+            <button class="btn-accept" @click="acceptInvite(inv.id)" :disabled="acceptingInviteId === inv.id">Terima</button>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -164,6 +248,12 @@
           <label>Tanggal</label>
           <input type="date" x-model="txDate" required>
         </div>
+        <div class="quick-add" x-show="txType === 'expense' && household && household.household_type === 'student'" x-cloak>
+          <template x-for="c in studentQuickCategories" :key="c">
+            <button type="button" class="quick-chip" :class="txCategory === c && 'active'" @click="quickSetCategory(c)" x-text="c"></button>
+          </template>
+        </div>
+
         <div class="field">
           <label>Kategori</label>
           <select x-model="txCategory">

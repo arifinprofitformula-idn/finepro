@@ -1,19 +1,34 @@
 # Keuangan Keluarga — Coach Arifin
 
-PWA pencatatan keuangan untuk keluarga (suami-istri), mahasiswa, dan individu. Ringan (Vite + Vanilla JS + Alpine.js), auth & database via Supabase, bisa "Add to Home Screen" tanpa Play Store.
+PWA pencatatan keuangan untuk keluarga (suami-istri), mahasiswa, dan individu. Ringan (Vite + Vanilla JS + Alpine.js), auth & database via Express.js + PostgreSQL lokal, bisa "Add to Home Screen" tanpa Play Store.
 
-## Menjalankan di Lokal (VS Code)
+## Menjalankan di Lokal sebagai Development
+
+Aplikasi ini dipakai dalam mode development lokal dengan dua proses:
+
+- Frontend Vite: `http://localhost:5173`
+- Backend Express API: `http://127.0.0.1:3001`
+
+Saat development, frontend memanggil endpoint relatif `/api`, lalu Vite meneruskan request ke backend lokal lewat proxy. Jangan gunakan `npm run build` untuk kerja harian; itu hanya untuk final/produksi.
 
 ```bash
 npm install
-cp .env.example .env    # lalu isi VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY
 npm run dev
 ```
-Buka `http://localhost:5173`.
 
-## Setup Database (sekali saja, project Supabase baru)
+Di terminal kedua:
 
-Di Supabase SQL Editor, jalankan berurutan:
+```bash
+cd api
+npm install
+npm run dev
+```
+
+Isi `.env` di root project dengan kredensial PostgreSQL lokal. Buka `http://localhost:5173`.
+
+## Setup Database Lokal
+
+Jalankan script SQL berikut ke PostgreSQL lokal:
 1. `supabase/schema.sql`
 2. `supabase/migrations/002_add_persona_categories.sql`
 
@@ -33,7 +48,7 @@ Lihat `docs/PANDUAN-DEPLOY-VPS.md` (VPS sendiri, Ubuntu + Nginx + Let's Encrypt)
 ```
 src/
 ├── main.js              # entry point, state Alpine.js, menyambungkan lib <-> UI
-├── lib/                  # logika data & Supabase (auth, households, categories, transactions, budgets, subscriptions)
+├── lib/                  # client API dan logika data (auth, households, categories, transactions, budgets, subscriptions)
 ├── pages/                # controller per layar (mengambil & menyiapkan data untuk ditampilkan)
 ├── components/           # unit UI yang bisa dipakai ulang (mis. chart kategori)
 ├── utils/                # helper murni (format angka, tanggal)
@@ -53,5 +68,5 @@ Detail tiap fase ada di `RENCANA-MIGRASI-ROADMAP.md` (folder induk, di luar proj
 
 ## Keamanan
 
-- `VITE_SUPABASE_ANON_KEY` aman ditaruh di frontend — perlindungan data sesungguhnya ada di Row Level Security (RLS) pada database, sudah diatur di `supabase/schema.sql` dan `supabase/migrations/002_add_persona_categories.sql`.
-- Jangan pernah menaruh `service_role key` Supabase di kode frontend.
+- `.env` hanya untuk development lokal dan sudah diabaikan Git.
+- Jangan menaruh secret produksi di kode frontend.

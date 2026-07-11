@@ -1,7 +1,7 @@
 // src/lib/transactions.js
 // CRUD transaksi via API lokal
 
-import { apiFetch } from "./apiClient.js";
+import { apiFetch, getToken } from "./apiClient.js";
 
 export async function getMonthTransactions(householdId, monthKey) {
   const [year, month] = monthKey.split('-');
@@ -19,6 +19,30 @@ export async function addTransaction({ householdId, userId, date, type, category
 
 export async function deleteTransaction(id) {
   await apiFetch(`/transactions/${id}`, { method: 'DELETE' });
+}
+
+// Export CSV bukan lewat apiFetch karena responsnya file, bukan JSON —
+// fetch manual supaya tetap bisa kirim header Authorization (bukan link biasa).
+export async function exportMonthCSV(monthKey) {
+  const token = getToken();
+  const res = await fetch(`/api/transactions/export?month=${monthKey}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Gagal export data');
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `transaksi-${monthKey}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function summarize(transactions) {

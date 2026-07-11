@@ -9,12 +9,14 @@ import Alpine from "alpinejs";
 import { registerSW } from "virtual:pwa-register";
 
 import { signUp, signIn, signOut, getSession, translateAuthError } from "./lib/auth.js";
-import { getMyHousehold, createHousehold, HOUSEHOLD_TYPE_LABELS } from "./lib/households.js";
+import { getMyHousehold, createHousehold, updateMonthlyIncomeDay, HOUSEHOLD_TYPE_LABELS } from "./lib/households.js";
 import { getCategories } from "./lib/categories.js";
-import { addTransaction } from "./lib/transactions.js";
+import { addTransaction, exportMonthCSV } from "./lib/transactions.js";
+import { setBudget } from "./lib/budgets.js";
 import { getSubscription, planLabel } from "./lib/subscriptions.js";
+import { createInvite, getMyPendingInvites, acceptInvite } from "./lib/invites.js";
 import { loadDashboardData } from "./pages/dashboard.js";
-import { fmtRp, todayStr } from "./utils/format.js";
+import { fmtRp, todayStr, monthKey, daysUntilMonthlyDay } from "./utils/format.js";
 import { getToken } from "./lib/apiClient.js";
 
 // Registrasi service worker otomatis (vite-plugin-pwa)
@@ -38,15 +40,51 @@ function appState() {
     // ---- onboarding ----
     onboardLoading: false,
 
+    // ---- undangan household ----
+    pendingInvites: [],
+    acceptingInviteId: null,
+    inviteEmail: "",
+    inviteLoading: false,
+    inviteMsg: "",
+    inviteMsgType: "",
+
     // ---- household/state utama ----
     currentUser: null,
     household: null,
     householdTypeLabel: "",
     planLabel: "Trial",
 
+    // ---- fitur mahasiswa: tanggal uang bulanan ----
+    monthlyIncomeDayInput: "",
+    incomeDaySaving: false,
+    incomeDayMsg: "",
+    incomeDayMsgType: "",
+    studentQuickCategories: ["Uang Makan", "Kuota & Internet", "Transportasi (Ojol/Motor)", "Nongkrong & Hiburan"],
+
+    get daysUntilIncome() {
+      if (!this.household || this.household.household_type !== "student") return null;
+      return daysUntilMonthlyDay(this.household.monthly_income_day);
+    },
+
     // ---- dashboard ----
     kpi: { income: 0, expense: 0 },
     transactions: [],
+
+    // ---- budget vs realisasi ----
+    budgets: {},
+    byCategoryExpense: {},
+    budgetInputs: {},
+    budgetSavingCategory: null,
+    exportLoading: false,
+
+    get budgetProgress() {
+      return this.categoriesExpense.map(c => {
+        const budget = this.budgets[c.name] || 0;
+        const spent = this.byCategoryExpense[c.name] || 0;
+        const pct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+        return { category: c.name, budget, spent, pct };
+      });
+    },
 
     // ---- modal tambah transaksi ----
     modalOpen: false,
@@ -113,6 +151,7 @@ function appState() {
 
       const household = await getMyHousehold(user.id);
       if (!household) {
+        await this.refreshPendingInvites();
         this.view = "onboarding";
         return;
       }
@@ -138,6 +177,7 @@ function appState() {
 
     async afterHouseholdReady() {
       this.householdTypeLabel = HOUSEHOLD_TYPE_LABELS[this.household.household_type] || this.household.household_type;
+      this.monthlyIncomeDayInput = this.household.monthly_income_day || "";
 
       const [sub, catExpense, catIncome] = await Promise.all([
         getSubscription(this.household.id),
@@ -151,15 +191,115 @@ function appState() {
 
       this.view = "app";
       await this.refreshDashboard();
+      await this.refreshPendingInvites();
+    },
+
+    // =========================================================
+    // UNDANGAN HOUSEHOLD
+    // =========================================================
+    async refreshPendingInvites() {
+      try {
+        this.pendingInvites = await getMyPendingInvites();
+      } catch {
+        this.pendingInvites = [];
+      }
+    },
+
+    async sendInvite() {
+      this.inviteLoading = true;
+      this.inviteMsg = "";
+      try {
+        await createInvite(this.inviteEmail);
+        this.inviteEmail = "";
+        this.inviteMsg = "Undangan terkirim. Anggota bisa menerimanya setelah login/daftar dengan email tersebut.";
+        this.inviteMsgType = "success";
+      } catch (err) {
+        this.inviteMsg = err.message;
+        this.inviteMsgType = "error";
+      } finally {
+        this.inviteLoading = false;
+      }
+    },
+
+    async acceptInvite(inviteId) {
+      this.acceptingInviteId = inviteId;
+      try {
+        await acceptInvite(inviteId);
+        await this.enterAppFor(this.currentUser);
+      } catch (err) {
+        alert("Gagal menerima undangan: " + err.message);
+      } finally {
+        this.acceptingInviteId = null;
+      }
+    },
+
+    // =========================================================
+    // FITUR MAHASISWA: TANGGAL UANG BULANAN
+    // =========================================================
+    async saveMonthlyIncomeDay() {
+      const day = this.monthlyIncomeDayInput ? parseInt(this.monthlyIncomeDayInput, 10) : null;
+      if (day !== null && (!Number.isInteger(day) || day < 1 || day > 31)) {
+        this.incomeDayMsg = "Tanggal harus 1-31.";
+        this.incomeDayMsgType = "error";
+        return;
+      }
+
+      this.incomeDaySaving = true;
+      this.incomeDayMsg = "";
+      try {
+        this.household = await updateMonthlyIncomeDay(day);
+        this.incomeDayMsg = "Tersimpan.";
+        this.incomeDayMsgType = "success";
+      } catch (err) {
+        this.incomeDayMsg = err.message;
+        this.incomeDayMsgType = "error";
+      } finally {
+        this.incomeDaySaving = false;
+      }
     },
 
     // =========================================================
     // DASHBOARD
     // =========================================================
     async refreshDashboard() {
-      const { transactions, kpi } = await loadDashboardData(this.household.id);
+      const { transactions, kpi, budgets, byCategory } = await loadDashboardData(this.household.id);
       this.transactions = transactions;
       this.kpi = kpi;
+      this.budgets = budgets;
+      this.byCategoryExpense = byCategory;
+      const inputs = {};
+      Object.keys(budgets).forEach(cat => { inputs[cat] = budgets[cat]; });
+      this.budgetInputs = inputs;
+    },
+
+    // =========================================================
+    // BUDGET VS REALISASI
+    // =========================================================
+    async saveBudget(category) {
+      const amount = parseFloat(this.budgetInputs[category]) || 0;
+      this.budgetSavingCategory = category;
+      try {
+        await setBudget(this.household.id, category, amount);
+        this.budgets = { ...this.budgets, [category]: amount };
+      } catch (err) {
+        alert("Gagal menyimpan budget: " + err.message);
+      } finally {
+        this.budgetSavingCategory = null;
+      }
+    },
+
+    // =========================================================
+    // EXPORT CSV
+    // =========================================================
+    async exportCSV() {
+      this.exportLoading = true;
+      try {
+        await exportMonthCSV(monthKey(todayStr()));
+      } catch (err) {
+        alert("Gagal export data: " + err.message);
+      } finally {
+        this.exportLoading = false;
+      }
     },
 
     // =========================================================
@@ -176,6 +316,10 @@ function appState() {
     setTxType(type) {
       this.txType = type;
       this.txCategory = this.currentCategories[0]?.name || "";
+    },
+
+    quickSetCategory(name) {
+      this.txCategory = name;
     },
 
     async submitTransaction() {

@@ -47,4 +47,41 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PATCH /api/households/me — update pengaturan household milik user yang login
+// (saat ini hanya monthly_income_day, khusus household bertipe mahasiswa)
+router.patch('/me', async (req, res) => {
+  try {
+    const { monthly_income_day } = req.body;
+
+    if (monthly_income_day !== null && monthly_income_day !== undefined) {
+      const day = Number(monthly_income_day);
+      if (!Number.isInteger(day) || day < 1 || day > 31) {
+        return res.status(400).json({ error: 'monthly_income_day harus berupa angka 1-31' });
+      }
+    }
+
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) {
+      return res.status(404).json({ error: 'Household tidak ditemukan' });
+    }
+
+    const householdResult = await pool.query(
+      'SELECT household_type FROM households WHERE id = $1',
+      [householdId]
+    );
+    if (householdResult.rows[0]?.household_type !== 'student') {
+      return res.status(400).json({ error: 'Fitur ini hanya untuk household bertipe mahasiswa' });
+    }
+
+    const result = await pool.query(
+      'UPDATE households SET monthly_income_day = $1 WHERE id = $2 RETURNING *',
+      [monthly_income_day ?? null, householdId]
+    );
+    res.json({ household: result.rows[0] });
+  } catch (err) {
+    console.error('Update household error:', err);
+    res.status(500).json({ error: 'Gagal memperbarui household' });
+  }
+});
+
 export default router;

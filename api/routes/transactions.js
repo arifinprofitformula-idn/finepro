@@ -29,10 +29,12 @@ router.get('/', async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, date, type, category, amount, note, created_at, created_by
-       FROM transactions
-       WHERE household_id = $1 ${dateFilter}
-       ORDER BY date DESC, created_at DESC
+      `SELECT t.id, to_char(t.date, 'YYYY-MM-DD') as date, t.type, t.category, t.amount, t.note, t.created_at, t.created_by,
+              u.name as creator_name, u.email as creator_email
+       FROM transactions t
+       JOIN users u ON u.id = t.created_by
+       WHERE t.household_id = $1 ${dateFilter}
+       ORDER BY t.date DESC, t.created_at DESC
        LIMIT 100`,
       params
     );
@@ -80,6 +82,57 @@ router.delete('/:id', async (req, res) => {
     res.json({ deleted: true });
   } catch (err) {
     res.status(500).json({ error: 'Gagal menghapus transaksi' });
+  }
+});
+
+// GET /api/transactions/export?month=YYYY-MM — export transaksi bulan tertentu sebagai file CSV
+// CSV dibuat di backend (bukan JSON mentah ke frontend) supaya escaping/format
+// hanya hidup di satu tempat dan frontend tinggal trigger download file, tanpa
+// perlu library CSV di bundle.
+router.get('/export', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
+
+    const { month } = req.query;
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ error: 'Parameter month wajib format YYYY-MM' });
+    }
+    const [year, mm] = month.split('-');
+
+    const result = await pool.query(
+      `SELECT to_char(t.date, 'YYYY-MM-DD') as date, t.type, t.category, t.amount, t.note, u.name as creator_name, u.email as creator_email
+       FROM transactions t
+       JOIN users u ON u.id = t.created_by
+       WHERE t.household_id = $1
+         AND EXTRACT(MONTH FROM t.date) = $2 AND EXTRACT(YEAR FROM t.date) = $3
+       ORDER BY t.date, t.created_at`,
+      [householdId, mm, year]
+    );
+
+    const escapeCsv = (v) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const header = ['Tanggal', 'Tipe', 'Kategori', 'Nominal', 'Catatan', 'Dicatat Oleh'];
+    const rows = result.rows.map(r => [
+      r.date,
+      r.type === 'income' ? 'Pemasukan' : 'Pengeluaran',
+      r.category,
+      r.amount,
+      r.note || '',
+      r.creator_name || r.creator_email
+    ].map(escapeCsv).join(','));
+
+    const csv = [header.join(','), ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="transaksi-${month}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    console.error('Export transactions error:', err);
+    res.status(500).json({ error: 'Gagal export data' });
   }
 });
 

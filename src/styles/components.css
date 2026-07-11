@@ -107,3 +107,34 @@ input, select{
 .btn-secondary{flex:1;background:#fff;color:var(--navy);border:1px solid var(--navy);border-radius:8px;padding:11px 0;font-weight:600;font-size:14px;cursor:pointer;}
 
 .badge-plan{display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;background:rgba(255,255,255,.15);color:#fff;margin-left:6px;}
+
+/* ---------- Undangan household ---------- */
+.invite-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
+.invite-item:last-child{border-bottom:none;}
+.invite-email{font-size:13px;font-weight:600;color:var(--text);}
+.invite-house{font-size:11px;color:var(--muted);}
+.btn-accept{background:var(--green);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.btn-accept:disabled{opacity:.6;cursor:default;}
+.invite-banner{background:#e3f6ec;border:1px solid var(--green);border-radius:12px;padding:14px;margin-bottom:16px;}
+.invite-banner h3{font-size:13px;margin:0 0 10px 0;color:var(--navy);}
+.tx-creator{font-size:10px;color:var(--muted);margin-top:2px;}
+
+/* ---------- Fitur mahasiswa ---------- */
+.reminder-banner{background:#fdf3e3;border:1px solid var(--gold);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--navy);}
+.quick-add{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.quick-chip{padding:6px 12px;border-radius:16px;border:1px solid var(--border);background:#fff;font-size:12px;color:var(--navy);cursor:pointer;}
+.quick-chip.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+
+/* ---------- Budget vs Realisasi ---------- */
+.budget-item{padding:12px 0;border-bottom:1px solid var(--border);}
+.budget-item:last-child{border-bottom:none;}
+.budget-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.budget-cat{font-size:13px;font-weight:600;color:var(--text);}
+.budget-amounts{font-size:11px;color:var(--muted);}
+.progress-track{height:6px;border-radius:3px;background:#f1efe9;overflow:hidden;margin-bottom:8px;}
+.progress-fill{height:100%;border-radius:3px;}
+.progress-fill.ok{background:var(--green);}
+.progress-fill.warn{background:var(--gold);}
+.progress-fill.over{background:var(--red);}
+.budget-edit{display:flex;gap:8px;}
+.budget-edit input{flex:1;}

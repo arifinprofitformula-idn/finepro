@@ -20,6 +20,14 @@ export async function createHousehold(ownerId, householdType, name) {
   return data.household;
 }
 
+export async function updateMonthlyIncomeDay(day) {
+  const data = await apiFetch('/households/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ monthly_income_day: day }),
+  });
+  return data.household;
+}
+
 function defaultNameForType(type) {
   if (type === "family") return "Keluarga Saya";
   if (type === "student") return "Keuangan Kuliah";
