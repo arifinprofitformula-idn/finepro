@@ -267,7 +267,7 @@ CREATE TABLE IF NOT EXISTS savings_goal_contributions (
 
 -- 16. Cache harga logam dari APE-EPI
 CREATE TABLE IF NOT EXISTS metal_price_cache (
-  asset_type TEXT PRIMARY KEY CHECK (asset_type IN ('gold','silver')),
+  asset_type TEXT PRIMARY KEY CHECK (asset_type IN ('gold','silver','gold_buyback','silver_buyback')),
   brand TEXT NOT NULL,
   level_code TEXT,
   size TEXT NOT NULL DEFAULT '1',

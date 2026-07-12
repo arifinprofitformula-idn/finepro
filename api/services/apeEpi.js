@@ -4,6 +4,8 @@ import { getSetting } from './appSettings.js';
 const ASSET_CONFIG = {
   gold: { category: 'gold', brandField: 'gold_brand' },
   silver: { category: 'silver', brandField: 'silver_brand' },
+  gold_buyback: { category: 'gold', brandField: 'gold_brand', level: 'buyback' },
+  silver_buyback: { category: 'silver', brandField: 'silver_brand', level: 'buyback' },
 };
 
 function normalizeBaseUrl(url) {
@@ -81,7 +83,7 @@ function appendSearchParam(url, key, value) {
 async function fetchApeRows(settings, assetType, variant) {
   const config = ASSET_CONFIG[assetType];
   const brand = settings[config.brandField];
-  const level = settings.level || 'konsumen';
+  const level = config.level || settings.level || 'konsumen';
   const url = new URL(`${normalizeBaseUrl(settings.base_url)}/prices`);
   const params = {
     page: '1',
@@ -117,17 +119,20 @@ async function fetchApeRows(settings, assetType, variant) {
 }
 
 async function fetchAssetPrice(settings, assetType) {
+  const config = ASSET_CONFIG[assetType];
   const attempts = [
     { label: 'brand+level+size+category', useSort: true, useLevel: true, useSize: true, useCategory: true },
     { label: 'brand+level+size', useSort: true, useLevel: true, useSize: true, useCategory: false },
     { label: 'brand+level', useSort: true, useLevel: true, useSize: false, useCategory: false },
     { label: 'brand+level-no-sort', useSort: false, useLevel: true, useSize: false, useCategory: false },
-    { label: 'brand-only', useSort: true, useLevel: false, useSize: false, useCategory: false },
+    // A required level (e.g. buyback) must never be dropped, or the fallback would
+    // silently return a regular price mislabeled as that level.
+    ...(config.level ? [] : [{ label: 'brand-only', useSort: true, useLevel: false, useSize: false, useCategory: false }]),
   ];
 
   const failures = [];
-  let lastBrand = settings[ASSET_CONFIG[assetType].brandField];
-  let lastLevel = settings.level || 'konsumen';
+  let lastBrand = settings[config.brandField];
+  let lastLevel = config.level || settings.level || 'konsumen';
 
   for (const attempt of attempts) {
     try {
@@ -251,7 +256,14 @@ export async function getCurrentMetalPrices({ forceRefresh = false, bypassDailyL
   if (!forceRefresh) {
     const cached = await readCachedPrices(ttlMinutes);
     if (cached.gold && cached.silver) {
-      return { enabled: true, gold: cached.gold, silver: cached.silver, cached: true };
+      return {
+        enabled: true,
+        gold: cached.gold,
+        silver: cached.silver,
+        gold_buyback: cached.gold_buyback || null,
+        silver_buyback: cached.silver_buyback || null,
+        cached: true,
+      };
     }
   }
 
@@ -276,6 +288,8 @@ export async function getCurrentMetalPrices({ forceRefresh = false, bypassDailyL
       enabled: true,
       gold: latest.gold || null,
       silver: latest.silver || null,
+      gold_buyback: latest.gold_buyback || null,
+      silver_buyback: latest.silver_buyback || null,
       cached: true,
       refresh_limited: true,
       daily_request_count: reservation.count,
@@ -287,12 +301,20 @@ export async function getCurrentMetalPrices({ forceRefresh = false, bypassDailyL
     fetchAssetPrice(settings, 'gold'),
     fetchAssetPrice(settings, 'silver'),
   ]);
+  // Buyback prices are supplementary (used for savings-goal value estimation only);
+  // a failure here must not break the regular gold/silver prices shown on the cards.
+  const [goldBuyback, silverBuyback] = await Promise.all([
+    fetchAssetPrice(settings, 'gold_buyback').catch(() => null),
+    fetchAssetPrice(settings, 'silver_buyback').catch(() => null),
+  ]);
 
-  await Promise.all([writeCachedPrice(gold), writeCachedPrice(silver)]);
+  await Promise.all([gold, silver, goldBuyback, silverBuyback].filter(Boolean).map(writeCachedPrice));
   return {
     enabled: true,
     gold,
     silver,
+    gold_buyback: goldBuyback,
+    silver_buyback: silverBuyback,
     cached: false,
     daily_request_count: reservation.count,
     daily_request_limit: reservation.max,

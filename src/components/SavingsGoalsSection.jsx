@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSavingsGoals } from "../hooks/useSavingsGoals.js";
 import { useMetalPrices } from "../hooks/useMetalPrices.js";
 import { fmtRp, formatNumberIdInput, parseNumberId, todayStr } from "../utils/format.js";
@@ -50,9 +50,47 @@ function formatDisplayDate(value, emptyLabel) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
+function formatShortDate(value) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatPriceUpdateDate(goldFetchedAt, silverFetchedAt) {
+  const latest = [goldFetchedAt, silverFetchedAt].filter(Boolean).sort().pop();
+  if (!latest) return "Update harga terakhir belum tersedia";
+  return `Update harga terakhir: ${new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(latest))}`;
+}
+
 function DateField({ label, value, onChange, emptyLabel = "Pilih tanggal" }) {
+  const inputRef = useRef(null);
+
+  function openPicker() {
+    const input = inputRef.current;
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        // fall through to focus below
+      }
+    }
+    input.focus();
+  }
+
   return (
-    <label className="group relative flex min-h-[48px] cursor-pointer items-center gap-3 rounded-2xl border border-neutral-border bg-white px-3 shadow-[inset_0_1px_2px_rgba(15,31,61,0.04)] transition focus-within:border-violet focus-within:shadow-[0_0_0_4px_rgba(111,85,242,0.10),inset_0_1px_2px_rgba(15,31,61,0.04)]">
+    <label
+      onClick={openPicker}
+      className="group relative flex min-h-[48px] cursor-pointer items-center gap-3 rounded-2xl border border-neutral-border bg-white px-3 shadow-[inset_0_1px_2px_rgba(15,31,61,0.04)] transition focus-within:border-violet focus-within:shadow-[0_0_0_4px_rgba(111,85,242,0.10),inset_0_1px_2px_rgba(15,31,61,0.04)]"
+    >
       <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-violet-light text-violet">
         <CalendarDays size={16} />
       </span>
@@ -64,6 +102,7 @@ function DateField({ label, value, onChange, emptyLabel = "Pilih tanggal" }) {
       </span>
       <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-bold text-violet">Ubah</span>
       <input
+        ref={inputRef}
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -151,9 +190,11 @@ export default function SavingsGoalsSection({ householdId }) {
   if (loading) return null;
 
   const metalPricesEnabled = Boolean(prices?.enabled && prices.gold && prices.silver);
-  const priceByType = {
-    gold: prices?.gold,
-    silver: prices?.silver,
+  // Estimasi nilai tabungan memakai harga buyback (harga jika dijual balik),
+  // dengan fallback ke harga jual biasa jika buyback belum tersedia di cache.
+  const valuationPriceByType = {
+    gold: prices?.gold_buyback || prices?.gold,
+    silver: prices?.silver_buyback || prices?.silver,
   };
 
   return (
@@ -185,22 +226,39 @@ export default function SavingsGoalsSection({ householdId }) {
 
       {metalPricesEnabled && (
         <div className="mb-3 grid gap-2 sm:grid-cols-2">
-          <div className="rounded-2xl bg-gold-light/70 px-3 py-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gold">
+          <div className="relative overflow-hidden rounded-2xl bg-gold-light/70 px-3 py-2">
+            <img
+              src="/images/goldgram-logo.png"
+              alt=""
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-1 -top-1 h-10 w-auto max-w-[110px] object-contain opacity-30"
+              loading="lazy"
+            />
+            <div className="relative z-10 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gold">
               <Gem size={12} />
-              GOLDGRAM
+              Emas
             </div>
-            <div className="mt-0.5 text-sm font-extrabold text-navy">{fmtRp(Number(prices.gold.price_per_gram || 0))} / gram</div>
-            <div className="text-[11px] font-semibold text-neutral-500">{prices.gold.date || "Harga terbaru"}</div>
+            <div className="relative z-10 mt-0.5 text-sm font-extrabold text-navy">{fmtRp(Number(prices.gold.price_per_gram || 0))} / gram</div>
           </div>
-          <div className="rounded-2xl bg-violet-light/60 px-3 py-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-violet">
+          <div className="relative overflow-hidden rounded-2xl bg-violet-light/60 px-3 py-2">
+            <img
+              src="/images/silvergram-logo.png"
+              alt=""
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-1 -top-1 h-10 w-auto max-w-[110px] object-contain opacity-30"
+              loading="lazy"
+            />
+            <div className="relative z-10 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-violet">
               <Coins size={12} />
-              SILVERGRAM
+              Perak
             </div>
-            <div className="mt-0.5 text-sm font-extrabold text-navy">{fmtRp(Number(prices.silver.price_per_gram || 0))} / gram</div>
-            <div className="text-[11px] font-semibold text-neutral-500">{prices.silver.date || "Harga terbaru"}</div>
+            <div className="relative z-10 mt-0.5 text-sm font-extrabold text-navy">{fmtRp(Number(prices.silver.price_per_gram || 0))} / gram</div>
           </div>
+        </div>
+      )}
+      {metalPricesEnabled && (
+        <div className="mb-3 text-center text-[11px] font-semibold text-neutral-500">
+          {formatPriceUpdateDate(prices.gold.fetched_at, prices.silver.fetched_at)}
         </div>
       )}
 
@@ -276,7 +334,7 @@ export default function SavingsGoalsSection({ householdId }) {
             const Icon = meta.icon;
             const progress = Number(goal.progress_percent || 0);
             const contributionOpen = openContributionId === goal.id;
-            const metalPrice = priceByType[goal.goal_type];
+            const metalPrice = valuationPriceByType[goal.goal_type];
             const assetValue = metalPricesEnabled && metalPrice ? Number(goal.total_weight || 0) * Number(metalPrice.price_per_gram || 0) : 0;
 
             return (
@@ -295,9 +353,14 @@ export default function SavingsGoalsSection({ householdId }) {
                         </div>
                       )}
                       {goal.goal_type !== "money" && assetValue > 0 && (
-                        <div className="text-[11px] font-bold text-mint">
-                          Estimasi nilai {fmtRp(assetValue)}
-                        </div>
+                        <>
+                          <div className="text-[11px] font-bold text-mint">Estimasi nilai {fmtRp(assetValue)}</div>
+                          {formatShortDate(metalPrice?.fetched_at) && (
+                            <div className="text-[10px] font-semibold text-neutral-400">
+                              Harga buyback {goal.goal_type === "gold" ? "emas" : "perak"} terupdate {formatShortDate(metalPrice.fetched_at)}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
