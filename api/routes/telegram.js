@@ -65,6 +65,10 @@ function generateLinkCode() {
   return String(crypto.randomInt(100000, 1000000));
 }
 
+function normalizeBotUsername(value) {
+  return String(value || '').trim().replace(/^@+/, '');
+}
+
 // POST /api/telegram/link/start — user login web minta kode untuk
 // menghubungkan akun Telegram-nya.
 router.post('/link/start', authMiddleware, async (req, res) => {
@@ -77,11 +81,13 @@ router.post('/link/start', authMiddleware, async (req, res) => {
       [code, req.user.userId, expiresAt]
     );
 
-    const { bot_username } = await getSetting('telegram');
+    const telegramSetting = await getSetting('telegram');
+    const botUsername = normalizeBotUsername(telegramSetting.bot_username);
     res.json({
       code,
       expires_at: expiresAt.toISOString(),
-      deep_link: bot_username ? `https://t.me/${bot_username}?start=${code}` : null,
+      bot_username: botUsername || null,
+      deep_link: botUsername ? `https://t.me/${botUsername}?start=${encodeURIComponent(code)}` : null,
     });
   } catch (err) {
     console.error('Telegram link start error:', err);
