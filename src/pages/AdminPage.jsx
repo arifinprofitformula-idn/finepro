@@ -303,14 +303,17 @@ export default function AdminPage({ user }) {
     setApeTestStatus(null);
     try {
       const prices = await testApeEpiConnection();
-      setApePreview(prices);
+      const hasValidPrices = prices?.enabled
+        && Number(prices.gold?.price_per_gram || 0) > 0
+        && Number(prices.silver?.price_per_gram || 0) > 0;
+      setApePreview(hasValidPrices ? prices : null);
       setApeTestStatus({
-        tone: prices?.enabled ? "success" : "warning",
-        text: prices?.enabled
+        tone: hasValidPrices ? "success" : "warning",
+        text: hasValidPrices
           ? "Koneksi APE-EPI berhasil. Harga terbaru berhasil dibaca."
-          : prices?.error || "Integrasi APE-EPI belum aktif atau API key belum tersimpan.",
+          : prices?.error || "Koneksi berhasil, tetapi harga GOLDGRAM/SILVERGRAM 1 gram belum terbaca valid.",
       });
-      setMessage("Koneksi APE-EPI berhasil.");
+      setMessage(hasValidPrices ? "Koneksi APE-EPI berhasil." : "Harga APE-EPI belum terbaca valid.");
     } catch (err) {
       setApePreview(null);
       setApeTestStatus({
@@ -673,7 +676,7 @@ export default function AdminPage({ user }) {
                 {apeTestStatus.text}
               </div>
             )}
-            {apePreview?.enabled && (
+            {apePreview?.enabled && Number(apePreview.gold?.price_per_gram || 0) > 0 && Number(apePreview.silver?.price_per_gram || 0) > 0 && (
               <div className="grid gap-2 rounded-2xl border border-gold/20 bg-gold-light/60 p-3 sm:grid-cols-2">
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-wide text-gold">GOLDGRAM</div>

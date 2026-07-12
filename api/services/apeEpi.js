@@ -18,7 +18,7 @@ function toPositiveInt(value, fallback) {
 function normalizePriceRow(assetType, row, fallbackBrand, level) {
   if (!row || typeof row !== 'object') return null;
   const price = Number(row.price);
-  if (!Number.isFinite(price) || price < 0) return null;
+  if (!Number.isFinite(price) || price <= 0) return null;
 
   return {
     asset_type: assetType,
@@ -33,20 +33,33 @@ function normalizePriceRow(assetType, row, fallbackBrand, level) {
   };
 }
 
-async function fetchAssetPrice(settings, assetType) {
+function parseGramasi(value) {
+  const normalized = String(value || '').replace(',', '.').match(/\d+(\.\d+)?/)?.[0];
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
+}
+
+function pickOneGramRow(payload) {
+  const rows = Array.isArray(payload?.data) ? payload.data : payload?.data ? [payload.data] : [];
+  return rows.find((row) => parseGramasi(row?.gramasi ?? row?.size) === 1) || rows[0] || null;
+}
+
+async function fetchApeRows(settings, assetType, { includeCategory = true } = {}) {
   const config = ASSET_CONFIG[assetType];
   const brand = settings[config.brandField];
   const level = settings.level || 'konsumen';
   const url = new URL(`${normalizeBaseUrl(settings.base_url)}/prices`);
   url.searchParams.set('page', '1');
-  url.searchParams.set('limit', '1');
+  url.searchParams.set('limit', '10');
   url.searchParams.set('sort_by', 'date');
   url.searchParams.set('order', 'DESC');
   url.searchParams.set('currency', 'IDR');
   url.searchParams.set('brand_name', brand);
   url.searchParams.set('level', level);
   url.searchParams.set('size', '1');
-  url.searchParams.set('product_category', config.category);
+  if (includeCategory) {
+    url.searchParams.set('product_category', config.category);
+  }
 
   const response = await fetch(url, {
     method: 'GET',
@@ -64,10 +77,22 @@ async function fetchAssetPrice(settings, assetType) {
     throw error;
   }
 
-  const row = Array.isArray(payload?.data) ? payload.data[0] : payload?.data;
-  const normalized = normalizePriceRow(assetType, row, brand, level);
+  return { payload, brand, level };
+}
+
+async function fetchAssetPrice(settings, assetType) {
+  let fetched = await fetchApeRows(settings, assetType, { includeCategory: true });
+  let row = pickOneGramRow(fetched.payload);
+  let normalized = normalizePriceRow(assetType, row, fetched.brand, fetched.level);
+
   if (!normalized) {
-    throw new Error(`Harga ${brand} tidak ditemukan dari APE-EPI`);
+    fetched = await fetchApeRows(settings, assetType, { includeCategory: false });
+    row = pickOneGramRow(fetched.payload);
+    normalized = normalizePriceRow(assetType, row, fetched.brand, fetched.level);
+  }
+
+  if (!normalized) {
+    throw new Error(`Harga ${fetched.brand} 1 gram tidak ditemukan atau bernilai 0 dari APE-EPI`);
   }
   return normalized;
 }
@@ -157,7 +182,7 @@ async function reserveDailyRefresh(maxDailyRequests) {
   }
 }
 
-export async function getCurrentMetalPrices({ forceRefresh = false } = {}) {
+export async function getCurrentMetalPrices({ forceRefresh = false, bypassDailyLimit = false } = {}) {
   const settings = await getSetting('ape_epi');
   const ttlMinutes = toPositiveInt(settings.cache_ttl_minutes, 30);
   const maxDailyRequests = toPositiveInt(settings.max_daily_requests, 3);
@@ -176,9 +201,23 @@ export async function getCurrentMetalPrices({ forceRefresh = false } = {}) {
     }
   }
 
-  const reservation = await reserveDailyRefresh(maxDailyRequests);
+  const reservation = bypassDailyLimit
+    ? { allowed: true, count: null, max: maxDailyRequests }
+    : await reserveDailyRefresh(maxDailyRequests);
   if (!reservation.allowed) {
     const latest = await readLatestCachedPrices();
+    if (!latest.gold || !latest.silver) {
+      return {
+        enabled: false,
+        gold: null,
+        silver: null,
+        cached: false,
+        refresh_limited: true,
+        daily_request_count: reservation.count,
+        daily_request_limit: reservation.max,
+        error: 'Batas refresh harga harian APE-EPI sudah tercapai dan cache harga belum tersedia.',
+      };
+    }
     return {
       enabled: true,
       gold: latest.gold || null,
