@@ -57,6 +57,6 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint tidak ditemukan' });
 });
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`Keuangan API running on http://127.0.0.1:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Keuangan API running on http://0.0.0.0:${PORT}`);
 });
