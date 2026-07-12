@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from "react";
 import { getMyPendingInvites, acceptInvite } from "../api/invites.js";
-import { BriefcaseBusiness, GraduationCap, HeartHandshake, Home, Sparkles, Users } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, CheckCircle2, GraduationCap, HeartHandshake, Home, Sparkles, Users } from "lucide-react";
 
 const PERSONAS = [
   {
@@ -44,15 +44,17 @@ export default function OnboardingPage({ onCreateHousehold, onInviteAccepted }) 
   const [loading, setLoading] = useState(false);
   const [invites, setInvites] = useState([]);
   const [acceptingId, setAcceptingId] = useState(null);
+  const [selectedType, setSelectedType] = useState("");
 
   useEffect(() => {
     getMyPendingInvites().then(setInvites).catch(() => setInvites([]));
   }, []);
 
-  async function handlePick(type) {
+  async function handleContinue() {
+    if (!selectedType) return;
     setLoading(true);
     try {
-      await onCreateHousehold(type);
+      await onCreateHousehold(selectedType);
     } catch (err) {
       alert("Gagal membuat akun household: " + err.message);
     } finally {
@@ -153,13 +155,16 @@ export default function OnboardingPage({ onCreateHousehold, onInviteAccepted }) 
             <div className="grid gap-2.5">
               {PERSONAS.map((p, index) => {
                 const Icon = p.icon;
+                const selected = selectedType === p.type;
                 return (
                   <button
                     key={p.type}
                     type="button"
                     disabled={loading}
-                    onClick={() => handlePick(p.type)}
-                    className="group flex min-h-[86px] items-start gap-3 rounded-2xl border border-white/75 bg-white/60 p-3 text-left transition duration-300 hover:-translate-y-0.5 hover:border-violet/30 hover:bg-white/80 hover:shadow-soft disabled:opacity-60"
+                    onClick={() => setSelectedType(p.type)}
+                    className={`group flex min-h-[86px] items-start gap-3 rounded-2xl border p-3 text-left transition duration-300 hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-soft disabled:opacity-60 ${
+                      selected ? "border-violet bg-white shadow-soft" : "border-white/75 bg-white/60 hover:border-violet/30"
+                    }`}
                     style={{ animationDelay: `${index * 70}ms` }}
                   >
                     <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border ${TONE[p.tone]}`}>
@@ -168,7 +173,11 @@ export default function OnboardingPage({ onCreateHousehold, onInviteAccepted }) 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-sm font-bold text-navy">{p.title}</div>
-                        <span className="h-2 w-2 flex-shrink-0 rounded-full bg-violet opacity-0 transition group-hover:opacity-100" />
+                        {selected ? (
+                          <CheckCircle2 size={17} className="flex-shrink-0 text-violet" />
+                        ) : (
+                          <span className="h-2 w-2 flex-shrink-0 rounded-full bg-violet opacity-0 transition group-hover:opacity-100" />
+                        )}
                       </div>
                       <div className="mt-0.5 text-xs font-semibold text-neutral-700">{p.short}</div>
                       <div className="mt-1 text-xs font-medium leading-relaxed text-neutral-500">{p.desc}</div>
@@ -178,11 +187,22 @@ export default function OnboardingPage({ onCreateHousehold, onInviteAccepted }) 
               })}
             </div>
 
-            {loading && (
-              <div className="mt-3 rounded-2xl bg-violet-light px-3 py-2 text-center text-xs font-bold text-violet">
-                Menyiapkan ruang keuanganmu...
-              </div>
-            )}
+            <div className="mt-4 rounded-2xl border border-neutral-border/70 bg-white/60 p-3">
+              <p className="mb-3 text-xs font-medium leading-relaxed text-neutral-500">
+                {selectedType
+                  ? "Pilihan ini akan menyiapkan kategori awal yang paling relevan. Tenang, semuanya masih bisa diubah nanti."
+                  : "Pilih salah satu ruang keuangan dulu, lalu lanjutkan saat sudah yakin."}
+              </p>
+              <button
+                type="button"
+                disabled={!selectedType || loading}
+                onClick={handleContinue}
+                className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-full bg-violet px-4 text-sm font-bold text-white shadow-[0_16px_32px_rgba(111,85,242,0.28)] transition active:scale-[0.98] disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none"
+              >
+                {loading ? "Menyiapkan ruang keuanganmu..." : "Lanjutkan dengan pilihan ini"}
+                {!loading && <ArrowRight size={16} />}
+              </button>
+            </div>
           </div>
         </div>
       </div>

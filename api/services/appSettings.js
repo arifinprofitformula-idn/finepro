@@ -5,7 +5,7 @@ const DEFAULTS = {
     enabled: false,
     api_token: '',
     from_email: '',
-    from_name: 'Admin Finepro',
+    from_name: 'Finepro',
   },
   midtrans: {
     enabled: false,

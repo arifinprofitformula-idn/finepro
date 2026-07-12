@@ -29,6 +29,76 @@ function hashResetToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function appBaseUrl(req) {
+  const configured = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+  if (configured) return configured;
+
+  const host = req.get('host');
+  if (!host) return '';
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+  return `${proto}://${host}`.replace(/\/$/, '');
+}
+
+function resetPasswordEmailTemplate({ name, resetLink }) {
+  const safeName = escapeHtml(name || 'Sahabat Finepro');
+  const safeResetLink = escapeHtml(resetLink);
+
+  return `
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Reset Password Finepro</title>
+  </head>
+  <body style="margin:0;background:#f6fbff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1c2230;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6fbff;padding:28px 14px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #dfe8f1;border-radius:24px;overflow:hidden;box-shadow:0 20px 55px rgba(49,77,119,0.14);">
+            <tr>
+              <td style="padding:26px 24px;background:linear-gradient(135deg,#0f1f3d 0%,#6f55f2 100%);">
+                <div style="display:inline-block;background:rgba(255,255,255,0.16);border:1px solid rgba(255,255,255,0.28);border-radius:16px;padding:10px 12px;color:#ffffff;font-weight:800;font-size:18px;letter-spacing:0.3px;">FP</div>
+                <h1 style="margin:18px 0 0;color:#ffffff;font-size:24px;line-height:1.25;">Atur ulang password Finepro</h1>
+                <p style="margin:8px 0 0;color:rgba(255,255,255,0.82);font-size:14px;line-height:1.6;">Kami bantu kamu masuk kembali dengan aman.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 24px;">
+                <p style="margin:0 0 14px;font-size:15px;line-height:1.7;">Halo <strong>${safeName}</strong>,</p>
+                <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#3f4657;">Kami menerima permintaan untuk membuat password baru. Klik tombol di bawah ini untuk melanjutkan. Tautan berlaku selama <strong>1 jam</strong>.</p>
+                <p style="margin:26px 0;text-align:center;">
+                  <a href="${safeResetLink}" style="display:inline-block;background:#6f55f2;color:#ffffff;text-decoration:none;border-radius:999px;padding:14px 22px;font-size:14px;font-weight:800;box-shadow:0 14px 28px rgba(111,85,242,0.26);">Buat Password Baru</a>
+                </p>
+                <div style="background:#efeaff;border:1px solid rgba(111,85,242,0.18);border-radius:16px;padding:14px 16px;margin:0 0 18px;">
+                  <p style="margin:0;font-size:13px;line-height:1.65;color:#3f2ca8;">Jika tombol tidak bisa dibuka, salin tautan ini ke browser:</p>
+                  <p style="margin:8px 0 0;font-size:12px;line-height:1.6;word-break:break-all;color:#0f1f3d;">${safeResetLink}</p>
+                </div>
+                <p style="margin:0;font-size:13px;line-height:1.7;color:#6b7280;">Jika kamu tidak meminta reset password, abaikan email ini. Password lama tetap berlaku selama tautan ini tidak digunakan.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 24px;background:#f9f9f8;border-top:1px solid #dfe8f1;">
+                <p style="margin:0;font-size:12px;line-height:1.6;color:#6b7280;">Finepro menjaga data keuanganmu tetap rapi, tenang, dan mudah dipahami.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AVATAR_DIR = path.join(__dirname, '..', 'uploads', 'avatars');
 mkdirSync(AVATAR_DIR, { recursive: true });
@@ -214,19 +284,16 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
       [user.id, tokenHash, expiresAt]
     );
 
-    const baseUrl = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+    const baseUrl = appBaseUrl(req);
+    if (!baseUrl) {
+      throw new Error('APP_BASE_URL belum diisi dan host request tidak tersedia untuk membuat tautan reset password');
+    }
     const resetLink = `${baseUrl}/?reset_token=${rawToken}`;
 
     await sendMail({
       to: email,
-      subject: 'Reset Password — Keuangan Keluarga',
-      html: `
-        <p>Halo ${user.name || ''},</p>
-        <p>Kami menerima permintaan reset password untuk akun Anda. Klik tautan berikut untuk membuat password baru. Tautan ini berlaku 1 jam:</p>
-        <p><a href="${resetLink}">${resetLink}</a></p>
-        <p>Jika tautan sudah kedaluwarsa, ulangi proses Lupa Password dari halaman masuk.</p>
-        <p>Jika Anda tidak meminta reset password, abaikan email ini.</p>
-      `,
+      subject: 'Atur Ulang Password Finepro',
+      html: resetPasswordEmailTemplate({ name: user.name, resetLink }),
     });
 
     res.json(genericResponse);
