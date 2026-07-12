@@ -105,10 +105,11 @@ export async function downloadBackup() {
 // puppeteer di server VPS), dan jsPDF di-load lazy (dynamic import) supaya
 // tidak menambah bobot bundle awal — baru diunduh saat tombol Export PDF ditekan.
 export async function exportMonthPDF(householdId, monthKey) {
-  const [{ default: jsPDF }] = await Promise.all([
+  const [{ default: jsPDF }, autoTableModule] = await Promise.all([
     import('jspdf'),
     import('jspdf-autotable')
   ]);
+  const autoTable = autoTableModule.default || autoTableModule.autoTable;
 
   const transactions = await getMonthTransactions(householdId, monthKey);
   const { income, expense } = summarize(transactions);
@@ -121,7 +122,7 @@ export async function exportMonthPDF(householdId, monthKey) {
   doc.text(`Pengeluaran: Rp ${expense.toLocaleString('id-ID')}`, 14, 30);
   doc.text(`Saldo: Rp ${(income - expense).toLocaleString('id-ID')}`, 14, 36);
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: 42,
     head: [['Tanggal', 'Tipe', 'Kategori', 'Nominal', 'Catatan', 'Dicatat Oleh']],
     body: transactions.map(t => [
@@ -188,6 +189,16 @@ export function groupByDay(transactions, monthKey) {
 
   const labels = Array.from({ length: lastDay }, (_, i) => String(i + 1).padStart(2, '0'));
   return { labels, masuk, keluar, saldo };
+}
+
+export function getDailySummaryRows(transactions, monthKey) {
+  const { labels, masuk, keluar, saldo } = groupByDay(transactions, monthKey);
+  return labels.map((label, index) => ({
+    day: label,
+    income: masuk[index],
+    expense: keluar[index],
+    balance: saldo[index],
+  })).filter((row) => row.income > 0 || row.expense > 0);
 }
 
 export async function getMonthlySummary(year) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
-import { todayStr } from "../utils/format.js";
+import { formatNumberIdInput, parseNumberId, todayStr } from "../utils/format.js";
 import { getWallets } from "../api/wallets.js";
 import { scanReceipt, getScanQuota } from "../api/receipts.js";
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, Camera, NotebookPen, Tags, Wallet } from "lucide-react";
@@ -35,7 +35,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
     try {
       const result = await scanReceipt(file);
       if (result.date) setDate(result.date);
-      if (result.amount) setAmount(String(result.amount));
+      if (result.amount) setAmount(formatNumberIdInput(result.amount));
       if (result.note) setNote(result.note);
       if (result.suggested_category) {
         const match = categoriesExpense.find(
@@ -80,7 +80,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const amt = parseFloat(amount);
+    const amt = parseNumberId(amount);
     if (!date || !amt || amt <= 0) return;
     setSubmitting(true);
     try {
@@ -219,13 +219,12 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
               </label>
               <input
                 id="tx-amount"
-                type="number"
-                min="0"
-                step="1000"
+                type="text"
+                inputMode="decimal"
                 required
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0"
+                onChange={(e) => setAmount(formatNumberIdInput(e.target.value))}
+                placeholder="1.500.000"
                 className="w-full rounded-2xl border border-white/80 bg-white/70 px-3 py-3 text-sm font-medium text-navy outline-none"
               />
             </div>

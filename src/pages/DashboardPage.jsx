@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import KpiCard from "../components/KpiCard.jsx";
 import CategoryChart from "../components/CategoryChart.jsx";
 import DailyChart from "../components/DailyChart.jsx";
+import DailySummaryCard from "../components/DailySummaryCard.jsx";
 import MonthlyChart from "../components/MonthlyChart.jsx";
 import TransactionItem from "../components/TransactionItem.jsx";
 import BudgetRow from "../components/BudgetRow.jsx";
@@ -17,7 +18,7 @@ import InsightButton from "../components/InsightButton.jsx";
 import InsightCard from "../components/InsightCard.jsx";
 import { useAiInsight } from "../hooks/useAiInsight.js";
 import { setBudget } from "../api/budgets.js";
-import { getContributions, groupByDay, getMonthlySummary } from "../api/transactions.js";
+import { getContributions, getDailySummaryRows, groupByDay, getMonthlySummary } from "../api/transactions.js";
 import { fmtRp, daysUntilMonthlyDay, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
 import { ArrowRight, BarChart3, CalendarDays, ChevronUp, Eye, EyeOff, PieChart, Sparkles, Users } from "lucide-react";
 
@@ -42,6 +43,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
   const insight = useAiInsight();
 
   const dailyData = useMemo(() => groupByDay(transactions, monthKey(todayStr())), [transactions]);
+  const dailySummaryRows = useMemo(() => getDailySummaryRows(transactions, monthKey(todayStr())), [transactions]);
 
   useEffect(() => {
     if (chartMode !== "monthly" || monthlyData) return;
@@ -129,6 +131,8 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         <KpiCard label="Pengeluaran" value={fmtRp(kpi.expense)} tone="expense" />
         <KpiCard label="Saldo" value={fmtRp(kpi.income - kpi.expense)} tone="balance" />
       </div>
+
+      <DailySummaryCard rows={dailySummaryRows} />
 
       <InsightButton onClick={insight.generate} loading={insight.loading} />
       {insight.error && !insight.rateLimited && (
