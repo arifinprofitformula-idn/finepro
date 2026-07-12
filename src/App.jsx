@@ -27,8 +27,12 @@ import TransactionModal from "./components/TransactionModal.jsx";
 function SplashScreen() {
   return (
     <div className="app-glow-bg min-h-screen flex flex-col items-center justify-center gap-3">
-      <div className="gloss-panel w-16 h-16 rounded-3xl bg-violet text-white flex items-center justify-center font-semibold text-2xl">
-        KK
+      <div className="gloss-panel flex h-20 w-20 items-center justify-center overflow-hidden rounded-[28px] bg-white p-2 shadow-float animate-auth-float">
+        <img
+          src="/icon-192.png"
+          alt="FinePro"
+          className="h-full w-full rounded-2xl object-cover"
+        />
       </div>
       <div className="text-sm font-medium text-neutral-500">Memuat...</div>
     </div>
