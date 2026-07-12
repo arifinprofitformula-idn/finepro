@@ -230,6 +230,7 @@ export default function AdminPage({ user }) {
   const [webPush, setWebPush] = useFormState(settings?.web_push);
   const [telegram, setTelegram] = useFormState(settings?.telegram);
   const [apePreview, setApePreview] = useState(null);
+  const [apeTestStatus, setApeTestStatus] = useState(null);
 
   const canManageRoles = user?.role === "super_admin";
 
@@ -299,11 +300,23 @@ export default function AdminPage({ user }) {
   async function testApeEpi() {
     setSavingKey("ape_epi_test");
     setMessage("");
+    setApeTestStatus(null);
     try {
       const prices = await testApeEpiConnection();
       setApePreview(prices);
+      setApeTestStatus({
+        tone: prices?.enabled ? "success" : "warning",
+        text: prices?.enabled
+          ? "Koneksi APE-EPI berhasil. Harga terbaru berhasil dibaca."
+          : prices?.error || "Integrasi APE-EPI belum aktif atau API key belum tersimpan.",
+      });
       setMessage("Koneksi APE-EPI berhasil.");
     } catch (err) {
+      setApePreview(null);
+      setApeTestStatus({
+        tone: "error",
+        text: err.message || "Koneksi APE-EPI gagal. Periksa API key, base URL, dan akses jaringan server.",
+      });
       setMessage(err.message);
     } finally {
       setSavingKey("");
@@ -647,6 +660,19 @@ export default function AdminPage({ user }) {
                 Rekomendasi FinePro: 3x per hari karena harga EPI biasanya update setelah jam 09:00.
               </div>
             </div>
+            {apeTestStatus && (
+              <div
+                className={`rounded-2xl border px-3 py-2 text-xs font-bold leading-relaxed ${
+                  apeTestStatus.tone === "success"
+                    ? "border-mint/20 bg-mint-light/80 text-mint"
+                    : apeTestStatus.tone === "warning"
+                    ? "border-gold/20 bg-gold-light/80 text-gold"
+                    : "border-coral/20 bg-coral-light/80 text-coral"
+                }`}
+              >
+                {apeTestStatus.text}
+              </div>
+            )}
             {apePreview?.enabled && (
               <div className="grid gap-2 rounded-2xl border border-gold/20 bg-gold-light/60 p-3 sm:grid-cols-2">
                 <div>

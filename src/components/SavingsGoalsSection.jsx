@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSavingsGoals } from "../hooks/useSavingsGoals.js";
 import { useMetalPrices } from "../hooks/useMetalPrices.js";
 import { fmtRp, formatNumberIdInput, parseNumberId, todayStr } from "../utils/format.js";
-import { Coins, Gem, PiggyBank, Plus, Save, Target, X } from "lucide-react";
+import { CalendarDays, Coins, Gem, PiggyBank, Plus, Save, Target, X } from "lucide-react";
 
 const GOAL_OPTIONS = [
   { value: "money", label: "Rupiah", icon: PiggyBank, tone: "bg-mint-light text-mint" },
@@ -39,6 +39,38 @@ function goalProgressLabel(goal) {
     return `${fmtRp(Number(goal.total_amount_paid || 0))} dari ${fmtRp(Number(goal.target_amount || 0))}`;
   }
   return `${formatGram(goal.total_weight)} dari ${formatGram(goal.target_weight)}`;
+}
+
+function formatDisplayDate(value, emptyLabel) {
+  if (!value) return emptyLabel;
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function DateField({ label, value, onChange, emptyLabel = "Pilih tanggal" }) {
+  return (
+    <label className="group relative flex min-h-[48px] cursor-pointer items-center gap-3 rounded-2xl border border-neutral-border bg-white px-3 shadow-[inset_0_1px_2px_rgba(15,31,61,0.04)] transition focus-within:border-violet focus-within:shadow-[0_0_0_4px_rgba(111,85,242,0.10),inset_0_1px_2px_rgba(15,31,61,0.04)]">
+      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-violet-light text-violet">
+        <CalendarDays size={16} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-bold uppercase tracking-wide text-neutral-400">{label}</span>
+        <span className={`block truncate text-sm font-bold ${value ? "text-navy" : "text-neutral-500"}`}>
+          {formatDisplayDate(value, emptyLabel)}
+        </span>
+      </span>
+      <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-bold text-violet">Ubah</span>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+      />
+    </label>
+  );
 }
 
 export default function SavingsGoalsSection({ householdId }) {
@@ -216,11 +248,11 @@ export default function SavingsGoalsSection({ householdId }) {
               className="min-h-[42px] rounded-xl border border-neutral-border bg-white px-3 text-sm font-semibold text-navy outline-none focus:border-violet"
             />
           )}
-          <input
-            type="date"
+          <DateField
+            label="Target selesai"
             value={goalForm.target_date}
-            onChange={(e) => updateGoalForm("target_date", e.target.value)}
-            className="min-h-[42px] rounded-xl border border-neutral-border bg-white px-3 text-sm font-semibold text-navy outline-none focus:border-violet"
+            onChange={(value) => updateGoalForm("target_date", value)}
+            emptyLabel="Opsional"
           />
           <button
             type="submit"
@@ -294,11 +326,10 @@ export default function SavingsGoalsSection({ householdId }) {
 
                 {contributionOpen && (
                   <form onSubmit={(e) => handleAddContribution(e, goal)} className="mt-3 grid gap-2 border-t border-neutral-border/70 pt-3">
-                    <input
-                      type="date"
+                    <DateField
+                      label="Tanggal setoran"
                       value={contributionForm.date}
-                      onChange={(e) => updateContributionForm("date", e.target.value)}
-                      className="min-h-[40px] rounded-xl border border-neutral-border bg-white px-3 text-sm font-semibold text-navy outline-none focus:border-violet"
+                      onChange={(value) => updateContributionForm("date", value)}
                     />
                     {goal.goal_type !== "money" && (
                       <input
