@@ -31,6 +31,14 @@ export async function addTransaction({ householdId, userId, date, type, category
   return data.transaction;
 }
 
+export async function updateTransaction(id, { date, type, category, amount, note, wallet_id }) {
+  const data = await apiFetch(`/transactions/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ date, type, category, amount, note, wallet_id }),
+  });
+  return data.transaction;
+}
+
 export async function deleteTransaction(id) {
   await apiFetch(`/transactions/${id}`, { method: 'DELETE' });
 }

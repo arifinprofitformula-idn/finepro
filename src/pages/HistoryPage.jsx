@@ -6,17 +6,19 @@
 
 import { useEffect, useState } from "react";
 import TransactionItem from "../components/TransactionItem.jsx";
+import TransactionModal from "../components/TransactionModal.jsx";
 import { useTransactionHistory } from "../hooks/useTransactionHistory.js";
-import { exportTransactionsCsv, downloadBackup } from "../api/transactions.js";
+import { deleteTransaction, downloadBackup, exportTransactionsCsv, updateTransaction } from "../api/transactions.js";
 import { getWallets } from "../api/wallets.js";
 import { Archive, Download, Loader2, Search } from "lucide-react";
 
-export default function HistoryPage({ household, categoriesExpense, categoriesIncome }) {
-  const { filters, transactions, hasMore, loading, loadingMore, applyFilters, loadMore, defaultFilters } = useTransactionHistory();
+export default function HistoryPage({ household, categoriesExpense, categoriesIncome, onDataChanged }) {
+  const { filters, transactions, hasMore, loading, loadingMore, applyFilters, loadMore, refresh, defaultFilters } = useTransactionHistory();
   const [searchInput, setSearchInput] = useState("");
   const [wallets, setWallets] = useState([]);
   const [exporting, setExporting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [editingTx, setEditingTx] = useState(null);
 
   useEffect(() => {
     getWallets().then(setWallets).catch(() => setWallets([]));
@@ -59,6 +61,27 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
       alert("Gagal membuat cadangan: " + err.message);
     } finally {
       setBackingUp(false);
+    }
+  }
+
+  async function handleUpdateTransaction(payload) {
+    if (!editingTx?.id) return;
+    await updateTransaction(editingTx.id, payload);
+    setEditingTx(null);
+    await refresh();
+    await onDataChanged?.();
+  }
+
+  async function handleDeleteTransaction(tx) {
+    if (!confirm(`Hapus transaksi ${tx.category} senilai ${Number(tx.amount).toLocaleString("id-ID")} ?`)) {
+      return;
+    }
+    try {
+      await deleteTransaction(tx.id);
+      await refresh();
+      await onDataChanged?.();
+    } catch (err) {
+      alert("Gagal menghapus transaksi: " + err.message);
     }
   }
 
@@ -174,7 +197,12 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
         ) : (
           <>
             {transactions.map((tx) => (
-              <TransactionItem key={tx.id} tx={tx} />
+              <TransactionItem
+                key={tx.id}
+                tx={tx}
+                onEdit={setEditingTx}
+                onDelete={handleDeleteTransaction}
+              />
             ))}
             {hasMore && (
               <button
@@ -190,6 +218,16 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
           </>
         )}
       </div>
+
+      <TransactionModal
+        open={Boolean(editingTx)}
+        onClose={() => setEditingTx(null)}
+        onSubmit={handleUpdateTransaction}
+        categoriesExpense={categoriesExpense}
+        categoriesIncome={categoriesIncome}
+        isStudent={household.household_type === "student"}
+        initialTransaction={editingTx}
+      />
     </div>
   );
 }

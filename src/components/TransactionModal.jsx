@@ -12,7 +12,7 @@ const STUDENT_QUICK_CATEGORIES = [
   "Nongkrong & Hiburan"
 ];
 
-export default function TransactionModal({ open, onClose, onSubmit, categoriesExpense, categoriesIncome, isStudent }) {
+export default function TransactionModal({ open, onClose, onSubmit, categoriesExpense, categoriesIncome, isStudent, initialTransaction = null }) {
   const [type, setType] = useState("expense");
   const [date, setDate] = useState(todayStr());
   const [category, setCategory] = useState("");
@@ -25,6 +25,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
   const [scanMsg, setScanMsg] = useState("");
   const [scanQuota, setScanQuota] = useState(null);
 
+  const isEdit = Boolean(initialTransaction?.id);
   const currentCategories = type === "income" ? categoriesIncome : categoriesExpense;
 
   async function handleScanReceipt(e) {
@@ -56,21 +57,28 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
 
   useEffect(() => {
     if (open) {
-      setType("expense");
-      setDate(todayStr());
-      setAmount("");
-      setNote("");
-      setCategory(categoriesExpense[0]?.name || "");
+      const nextType = initialTransaction?.type || "expense";
+      const nextCategoryList = nextType === "income" ? categoriesIncome : categoriesExpense;
+      setType(nextType);
+      setDate(initialTransaction?.date || todayStr());
+      setAmount(initialTransaction?.amount ? formatNumberIdInput(initialTransaction.amount) : "");
+      setNote(initialTransaction?.note || "");
+      setCategory(initialTransaction?.category || nextCategoryList[0]?.name || "");
       getWallets()
         .then((w) => {
           setWallets(w);
-          setWalletId(w.find((x) => x.is_default)?.id || w[0]?.id || "");
+          setWalletId(initialTransaction?.wallet_id || w.find((x) => x.is_default)?.id || w[0]?.id || "");
         })
         .catch(() => setWallets([]));
-      getScanQuota().then(setScanQuota).catch(() => setScanQuota(null));
+      if (initialTransaction?.id) {
+        setScanQuota(null);
+        setScanMsg("");
+      } else {
+        getScanQuota().then(setScanQuota).catch(() => setScanQuota(null));
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, initialTransaction?.id]);
 
   function handleTypeChange(next) {
     setType(next);
@@ -98,7 +106,9 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
       <div className="fixed inset-0 bg-navy/35 backdrop-blur-sm" aria-hidden="true" />
       <div className="fixed inset-0 flex items-end justify-center">
         <DialogPanel className="gloss-panel w-full max-w-md rounded-t-[30px] p-5 max-h-[85vh] overflow-y-auto">
-          <DialogTitle className="mb-4 text-xl font-semibold text-navy">Tambah Transaksi</DialogTitle>
+          <DialogTitle className="mb-4 text-xl font-semibold text-navy">
+            {isEdit ? "Edit Transaksi" : "Tambah Transaksi"}
+          </DialogTitle>
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <div className="flex gap-2">
               <button
@@ -123,7 +133,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
               </button>
             </div>
 
-            {type === "expense" && (
+            {!isEdit && type === "expense" && (
               <div>
                 <div className="relative">
                   <label
@@ -278,7 +288,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                 disabled={submitting}
                 className="flex-1 min-h-[48px] bg-violet text-white rounded-full text-sm font-semibold shadow-soft disabled:opacity-60"
               >
-                Simpan
+                {submitting ? "Menyimpan..." : isEdit ? "Simpan Perubahan" : "Simpan"}
               </button>
             </div>
           </form>

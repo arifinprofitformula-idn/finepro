@@ -124,7 +124,12 @@ export default function App() {
       )}
 
       {page === "history" && (
-        <HistoryPage household={household} categoriesExpense={categoriesExpense} categoriesIncome={categoriesIncome} />
+        <HistoryPage
+          household={household}
+          categoriesExpense={categoriesExpense}
+          categoriesIncome={categoriesIncome}
+          onDataChanged={dashboard.refresh}
+        />
       )}
 
       {page === "payment-status" && (

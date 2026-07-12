@@ -171,6 +171,69 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PATCH /api/transactions/:id — edit transaksi milik household user.
+router.patch('/:id', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
+
+    const { date, type, category, amount, note, wallet_id } = req.body;
+    if (!date || !type || !category || amount == null) {
+      return res.status(400).json({ error: 'date, type, category, amount wajib diisi' });
+    }
+    if (!['income', 'expense'].includes(type)) {
+      return res.status(400).json({ error: 'Tipe transaksi tidak valid' });
+    }
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({ error: 'Nominal harus lebih dari 0' });
+    }
+
+    let walletId = wallet_id || null;
+    if (walletId) {
+      const walletCheck = await pool.query(
+        'SELECT id FROM wallets WHERE id = $1 AND household_id = $2',
+        [walletId, householdId]
+      );
+      if (walletCheck.rows.length === 0) {
+        return res.status(400).json({ error: 'Dompet tidak ditemukan' });
+      }
+    } else {
+      const defaultWallet = await pool.query(
+        'SELECT id FROM wallets WHERE household_id = $1 AND is_default = true LIMIT 1',
+        [householdId]
+      );
+      walletId = defaultWallet.rows[0]?.id || null;
+    }
+
+    const result = await pool.query(
+      `UPDATE transactions t
+       SET date = $1,
+           type = $2,
+           category = $3,
+           amount = $4,
+           note = $5,
+           wallet_id = $6
+       FROM users u
+       WHERE t.id = $7
+         AND t.household_id = $8
+         AND u.id = t.created_by
+       RETURNING t.id, to_char(t.date, 'YYYY-MM-DD') as date, t.type, t.category, t.amount, t.note,
+                 t.created_at, t.created_by, t.wallet_id, u.name as creator_name, u.email as creator_email`,
+      [date, type, category, numericAmount, note || null, walletId, req.params.id, householdId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+    }
+
+    res.json({ transaction: result.rows[0] });
+  } catch (err) {
+    console.error('Update transaction error:', err);
+    res.status(500).json({ error: 'Gagal mengubah transaksi' });
+  }
+});
+
 async function checkBudgetThreshold(householdId, category, date, newAmount) {
   const now = new Date();
   const txDate = new Date(date + 'T00:00:00');

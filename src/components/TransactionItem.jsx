@@ -1,5 +1,5 @@
 import { fmtRp } from "../utils/format.js";
-import { ArrowDownLeft, ArrowUpRight, Car, FileText, Gift, ShoppingCart, Utensils } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Car, FileText, Gift, Pencil, ShoppingCart, Trash2, Utensils } from "lucide-react";
 
 function iconFor(tx) {
   if (tx.type === "income") return Gift;
@@ -10,10 +10,11 @@ function iconFor(tx) {
   return FileText;
 }
 
-export default function TransactionItem({ tx }) {
+export default function TransactionItem({ tx, onEdit, onDelete }) {
   const isIncome = tx.type === "income";
   const Icon = iconFor(tx);
   const recorder = tx.creator_name || (tx.creator_email ? "Pengguna" : "");
+  const hasActions = Boolean(onEdit || onDelete);
 
   return (
     <div className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-neutral-border/60 py-2.5 last:border-0">
@@ -34,8 +35,36 @@ export default function TransactionItem({ tx }) {
         </div>
       </div>
       <div className={`whitespace-nowrap pl-2 text-sm font-semibold ${isIncome ? "text-mint" : "text-coral"}`}>
-        {isIncome ? "+" : "-"}
-        {fmtRp(tx.amount)}
+        <div className="text-right">
+          {isIncome ? "+" : "-"}
+          {fmtRp(tx.amount)}
+        </div>
+        {hasActions && (
+          <div className="mt-1 flex justify-end gap-1">
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(tx)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-light text-violet"
+                title="Edit transaksi"
+                aria-label="Edit transaksi"
+              >
+                <Pencil size={14} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(tx)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-coral-light text-coral"
+                title="Hapus transaksi"
+                aria-label="Hapus transaksi"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

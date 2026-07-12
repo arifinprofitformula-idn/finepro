@@ -43,5 +43,9 @@ export function useTransactionHistory() {
     }
   }
 
-  return { filters, transactions, hasMore, loading, loadingMore, applyFilters, loadMore, defaultFilters: DEFAULT_FILTERS };
+  async function refresh() {
+    await applyFilters(filters);
+  }
+
+  return { filters, transactions, hasMore, loading, loadingMore, applyFilters, loadMore, refresh, defaultFilters: DEFAULT_FILTERS };
 }
