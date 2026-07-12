@@ -68,6 +68,19 @@ export async function computeFinancialStats(householdId) {
   const totalExpenseThisMonth = Number(currentMonthExpenseResult.rows[0]?.total_expense || 0);
   const givingExpenseThisMonth = Number(currentMonthExpenseResult.rows[0]?.giving_expense || 0);
 
+  const currentMonthTotals = await pool.query(
+    `SELECT
+       COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
+       COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense
+     FROM transactions
+     WHERE household_id = $1
+       AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE)
+       AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE)`,
+    [householdId]
+  );
+  const totalIncome = Number(currentMonthTotals.rows[0]?.total_income || 0);
+  const totalExpense = Number(currentMonthTotals.rows[0]?.total_expense || 0);
+
   const savingsResult = await pool.query(
     `SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month,
        SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
@@ -141,6 +154,8 @@ export async function computeFinancialStats(householdId) {
   return {
     insufficientData: false,
     monthsWithData,
+    totalIncome,
+    totalExpense,
     trend3Months: trendResult.rows.map((r) => ({
       month: r.month,
       type: r.type,
