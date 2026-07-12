@@ -79,16 +79,28 @@ function Toggle({ checked, onChange }) {
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className={`relative h-7 w-12 flex-shrink-0 rounded-full border transition-colors ${
-        checked ? "border-mint bg-mint" : "border-neutral-border bg-white"
+      className={`group relative flex h-9 w-[74px] flex-shrink-0 items-center rounded-full border px-1 outline-none transition-all duration-300 ease-out focus:shadow-[0_0_0_4px_rgba(111,85,242,0.14)] active:scale-[0.98] ${
+        checked
+          ? "border-mint bg-mint shadow-[0_12px_24px_rgba(24,197,148,0.22)]"
+          : "border-neutral-border bg-white/90 shadow-[inset_0_1px_2px_rgba(15,31,61,0.08)] hover:border-violet/40"
       }`}
       aria-pressed={checked}
+      aria-label={checked ? "Status aktif" : "Status nonaktif"}
     >
       <span
-        className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-soft transition-transform ${
-          checked ? "translate-x-6" : "translate-x-1"
+        className={`absolute text-[9px] font-black uppercase tracking-wide transition-all duration-300 ${
+          checked ? "left-2.5 text-white opacity-100" : "left-3 text-neutral-400 opacity-100"
         }`}
-      />
+      >
+        {checked ? "ON" : "OFF"}
+      </span>
+      <span
+        className={`absolute top-1 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-soft transition-all duration-300 ease-out ${
+          checked ? "translate-x-[39px]" : "translate-x-0"
+        }`}
+      >
+        <span className={`h-2.5 w-2.5 rounded-full transition-colors duration-300 ${checked ? "bg-mint" : "bg-neutral-300"}`} />
+      </span>
     </button>
   );
 }

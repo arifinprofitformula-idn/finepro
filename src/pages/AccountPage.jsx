@@ -22,8 +22,10 @@ import {
   ArrowUpRight,
   Bell,
   CalendarClock,
+  Copy,
   Crown,
   Download,
+  ExternalLink,
   Home,
   KeyRound,
   LogOut,
@@ -51,6 +53,11 @@ const TONE_CLASS = {
   mint: "bg-mint-light text-mint",
   coral: "bg-coral-light text-coral"
 };
+
+function openTelegramLink(url) {
+  if (!url) return;
+  window.location.assign(url);
+}
 
 function SectionHeader({ icon: Icon, tone, title }) {
   return (
@@ -196,11 +203,32 @@ export default function AccountPage({
     try {
       const data = await startTelegramLink();
       setTelegramLink(data);
+      if (data.deep_link) {
+        setTelegramLinkMsg("Telegram dibuka. Jika belum berpindah otomatis, gunakan tombol Buka Telegram di bawah.");
+        setTelegramLinkMsgType("success");
+        openTelegramLink(data.deep_link);
+      } else {
+        setTelegramLinkMsg("Username bot Telegram belum dikonfigurasi. Gunakan kode manual atau hubungi admin.");
+        setTelegramLinkMsgType("error");
+      }
     } catch (err) {
       setTelegramLinkMsg(err.message);
       setTelegramLinkMsgType("error");
     } finally {
       setTelegramLinkLoading(false);
+    }
+  }
+
+  async function handleCopyTelegramCode() {
+    if (!telegramLink?.code) return;
+    const text = `/start ${telegramLink.code}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setTelegramLinkMsg("Kode Telegram berhasil disalin.");
+      setTelegramLinkMsgType("success");
+    } catch {
+      setTelegramLinkMsg(`Salin manual: ${text}`);
+      setTelegramLinkMsgType("error");
     }
   }
 
@@ -559,7 +587,7 @@ export default function AccountPage({
         ) : (
           <>
             <p className="text-xs text-neutral-500">
-              Hubungkan akun Telegram untuk mencatat transaksi otomatis dari foto struk belanja atau bukti transfer.
+              Tekan tombol di bawah. Telegram akan terbuka otomatis dengan kode hubung yang sudah disiapkan.
             </p>
             {!telegramLink ? (
               <button
@@ -569,23 +597,51 @@ export default function AccountPage({
                 className={`${primaryBtnClass} mt-3 w-full`}
               >
                 <MessageCircle size={15} />
-                {telegramLinkLoading ? "Membuat kode..." : "Hubungkan Telegram"}
+                {telegramLinkLoading ? "Membuka Telegram..." : "Hubungkan Telegram"}
               </button>
             ) : (
-              <div className="mt-3 rounded-xl bg-mint-light px-3 py-2 text-xs text-navy">
-                <p className="font-semibold">Kode: {telegramLink.code}</p>
-                <p className="mt-1 text-neutral-600">
-                  Kirim <span className="font-mono">/start {telegramLink.code}</span> ke bot Telegram finepro
-                  {telegramLink.deep_link ? (
-                    <>
-                      {" "}atau{" "}
-                      <a href={telegramLink.deep_link} target="_blank" rel="noreferrer" className="font-semibold text-violet underline">
-                        buka di Telegram
-                      </a>
-                    </>
-                  ) : null}
-                  . Kode berlaku 10 menit.
+              <div className="mt-3 rounded-2xl border border-mint/25 bg-mint-light px-3 py-3 text-xs text-navy">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-mint">Kode siap dikirim</p>
+                    <p className="mt-1 font-mono text-base font-bold tracking-widest text-navy">{telegramLink.code}</p>
+                  </div>
+                  {telegramLink.deep_link && (
+                    <button
+                      type="button"
+                      onClick={() => openTelegramLink(telegramLink.deep_link)}
+                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-violet text-white"
+                      title="Buka Telegram"
+                    >
+                      <ExternalLink size={16} />
+                    </button>
+                  )}
+                </div>
+                <p className="mt-2 leading-relaxed text-neutral-600">
+                  Jika Telegram tidak terbuka otomatis, buka bot
+                  {telegramLink.bot_username ? <span className="font-semibold text-navy"> @{telegramLink.bot_username}</span> : " Telegram Finepro"}
+                  lalu kirim <span className="font-mono font-semibold">/start {telegramLink.code}</span>. Kode berlaku 10 menit.
                 </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {telegramLink.deep_link && (
+                    <button
+                      type="button"
+                      onClick={() => openTelegramLink(telegramLink.deep_link)}
+                      className={`${primaryBtnClass} w-full`}
+                    >
+                      <MessageCircle size={15} />
+                      Buka Telegram
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleCopyTelegramCode}
+                    className={`${outlineBtnClass} w-full`}
+                  >
+                    <Copy size={15} />
+                    Salin Kode
+                  </button>
+                </div>
               </div>
             )}
             <StatusMsg msg={telegramLinkMsg} type={telegramLinkMsgType} />
