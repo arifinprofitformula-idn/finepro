@@ -9,7 +9,7 @@ import WalletCard from "../components/WalletCard.jsx";
 import CategoryRow from "../components/CategoryRow.jsx";
 import { useWallets } from "../hooks/useWallets.js";
 import { useArisan } from "../hooks/useArisan.js";
-import { uploadAvatar, changePassword, translateAuthError } from "../api/auth.js";
+import { uploadAvatar, changePassword, updateProfile, translateAuthError } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
 import { disconnectTelegramLink, startTelegramLink } from "../api/telegram.js";
@@ -79,11 +79,16 @@ export default function AccountPage({
   onRenameCategory,
   onDeleteCategory,
   onUserUpdated,
+  onDataChanged,
   onHouseholdUpdated,
   onInvitesChanged,
   onLogout
 }) {
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [profileName, setProfileName] = useState(user.name || "");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState("");
+  const [profileMsgType, setProfileMsgType] = useState("");
   const [monthlyIncomeDayInput, setMonthlyIncomeDayInput] = useState(household.monthly_income_day || "");
   const [incomeDaySaving, setIncomeDaySaving] = useState(false);
   const [incomeDayMsg, setIncomeDayMsg] = useState("");
@@ -139,6 +144,10 @@ export default function AccountPage({
     getPushPermissionState().then(setPushPermission);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setProfileName(user.name || "");
+  }, [user.name]);
 
   useEffect(() => {
     if (wallets.length >= 2) {
@@ -283,6 +292,25 @@ export default function AccountPage({
     }
   }
 
+  async function handleSaveProfile(e) {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileMsg("");
+    setProfileMsgType("");
+    try {
+      const updated = await updateProfile({ name: profileName });
+      onUserUpdated(updated);
+      await onDataChanged?.();
+      setProfileMsg("Nama pengguna tersimpan.");
+      setProfileMsgType("success");
+    } catch (err) {
+      setProfileMsg(err.message);
+      setProfileMsgType("error");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   async function handleChangePassword(e) {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
@@ -396,27 +424,48 @@ export default function AccountPage({
   return (
     <div className="max-w-lg mx-auto px-5 pb-28">
       {/* Profil */}
-      <div className="gloss-panel mb-4 flex items-center gap-3 rounded-2xl p-4">
-        <label className="h-14 w-14 flex-shrink-0 cursor-pointer overflow-hidden rounded-full border-2 border-white bg-violet text-white shadow-soft flex items-center justify-center text-lg font-semibold">
-          {user.avatar_url ? (
-            <img src={mediaUrl(user.avatar_url)} alt="" className="h-full w-full object-cover" />
-          ) : (
-            (user.name || user.email).charAt(0).toUpperCase()
-          )}
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={handleAvatarChange}
-          />
-        </label>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-navy">{user.name || user.email}</div>
-          <div className="truncate text-xs text-neutral-500">{user.email}</div>
-          <div className="mt-0.5 text-xs font-medium text-violet">
-            {avatarUploading ? "Mengunggah..." : "Ketuk foto untuk mengganti"}
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <div className="flex items-center gap-3">
+          <label className="h-14 w-14 flex-shrink-0 cursor-pointer overflow-hidden rounded-full border-2 border-white bg-violet text-white shadow-soft flex items-center justify-center text-lg font-semibold">
+            {user.avatar_url ? (
+              <img src={mediaUrl(user.avatar_url)} alt="" className="h-full w-full object-cover" />
+            ) : (
+              (user.name || user.email).charAt(0).toUpperCase()
+            )}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
+          </label>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-navy">{user.name || user.email}</div>
+            <div className="truncate text-xs text-neutral-500">{user.email}</div>
+            <div className="mt-0.5 text-xs font-medium text-violet">
+              {avatarUploading ? "Mengunggah..." : "Ketuk foto untuk mengganti"}
+            </div>
           </div>
         </div>
+        <form onSubmit={handleSaveProfile} className="mt-4 flex flex-col gap-2 border-t border-neutral-border/60 pt-3">
+          <label htmlFor="profile-name" className="text-xs font-medium text-neutral-500">Nama Pengguna</label>
+          <div className="flex gap-2">
+            <input
+              id="profile-name"
+              type="text"
+              required
+              maxLength={80}
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              placeholder="Nama yang tampil di aplikasi"
+              className={`${inputClass} flex-1`}
+            />
+            <button type="submit" disabled={profileSaving} className={primaryBtnClass}>
+              {profileSaving ? "..." : "Simpan"}
+            </button>
+          </div>
+          <StatusMsg msg={profileMsg} type={profileMsgType} />
+        </form>
       </div>
 
       {/* Akun & Langganan */}

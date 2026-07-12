@@ -285,6 +285,31 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// PUT /api/auth/profile — update profil dasar user login
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const displayName = String(name || '').trim();
+    if (!displayName) {
+      return res.status(400).json({ error: 'Nama pengguna wajib diisi' });
+    }
+    if (displayName.length > 80) {
+      return res.status(400).json({ error: 'Nama pengguna maksimal 80 karakter' });
+    }
+
+    const result = await pool.query(
+      `UPDATE users SET name = $1 WHERE id = $2
+       RETURNING id, email, name, avatar_url, role, created_at, telegram_id, telegram_username, (password_hash IS NOT NULL) AS has_password`,
+      [displayName, req.user.userId]
+    );
+    const user = result.rows[0];
+    res.json({ user: { ...user, role: adminRoleForEmail(user.email, user.role) } });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ error: 'Gagal menyimpan profil' });
+  }
+});
+
 // PUT /api/auth/change-password — ganti password (atau buat password baru untuk akun Google-only)
 router.put('/change-password', authLimiter, authMiddleware, async (req, res) => {
   try {

@@ -132,6 +132,7 @@ export default function App() {
           onRenameCategory={categories.renameCategory}
           onDeleteCategory={categories.deleteCategory}
           onUserUpdated={updateUser}
+          onDataChanged={dashboard.refresh}
           onHouseholdUpdated={setHousehold}
           onInvitesChanged={refreshInvites}
           onLogout={logout}

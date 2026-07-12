@@ -20,7 +20,7 @@ import { useAiInsight } from "../hooks/useAiInsight.js";
 import { setBudget } from "../api/budgets.js";
 import { getContributions, getDailySummaryRows, groupByDay, getMonthlySummary } from "../api/transactions.js";
 import { fmtRp, daysUntilMonthlyDay, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
-import { ArrowRight, BarChart3, CalendarDays, ChevronUp, Eye, EyeOff, PieChart, Sparkles, Users } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarDays, ChevronUp, Eye, EyeOff, PieChart, ReceiptText, Sparkles, Users } from "lucide-react";
 
 const DEFAULT_TX_SHOWN = 20;
 const SHOW_CONTRIBUTIONS_KEY = "finepro-show-contributions";
@@ -249,7 +249,12 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
 
       <div className="gloss-panel rounded-2xl p-4">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-navy">Transaksi Terbaru</h2>
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-light text-violet">
+              <ReceiptText size={16} />
+            </div>
+            <h2 className="truncate text-base font-semibold text-navy">Transaksi Terbaru</h2>
+          </div>
           {!showAll && transactions.length > DEFAULT_TX_SHOWN && (
             <button
               type="button"

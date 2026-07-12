@@ -55,6 +55,14 @@ export async function changePassword(oldPassword, newPassword) {
   });
 }
 
+export async function updateProfile({ name }) {
+  const data = await apiFetch('/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify({ name }),
+  });
+  return data.user;
+}
+
 export async function getCurrentUser() {
   const token = getToken();
   if (!token) return null;
