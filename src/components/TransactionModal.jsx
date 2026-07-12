@@ -107,7 +107,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
   const isEdit = Boolean(initialTransaction?.id);
   const currentCategories = type === "income" ? categoriesIncome : categoriesExpense;
   const scanSourceLabel = type === "income" ? "bukti transfer" : "struk";
-  const scanButtonLabel = type === "income" ? "Scan Bukti Transfer" : "Scan Struk (Otomatis Isi)";
+  const scanButtonLabel = type === "income" ? "Pilih Bukti Transfer" : "Scan Struk (Otomatis Isi)";
   const scanningLabel = type === "income" ? "Memindai bukti transfer..." : "Memindai struk...";
 
   async function handleScanReceipt(e) {
@@ -264,7 +264,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                   id="tx-scan-receipt"
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
-                  capture="environment"
+                  capture={type === "expense" ? "environment" : undefined}
                   className="hidden"
                   disabled={scanning || scanQuota?.remaining === 0}
                   onChange={handleScanReceipt}
