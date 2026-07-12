@@ -2,6 +2,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../hooks/useAuth.js";
 import { translateAuthError, forgotPassword, resetPassword } from "../api/auth.js";
+import {
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  LockKeyhole,
+  Mail,
+  ReceiptText,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  WalletCards
+} from "lucide-react";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
@@ -25,6 +37,7 @@ function GoogleSignInButton({ onCredential }) {
         size: "large",
         width: 320,
         text: "continue_with",
+        shape: "pill",
       });
     }
 
@@ -51,9 +64,125 @@ function GoogleSignInButton({ onCredential }) {
   return <div ref={containerRef} className="flex justify-center" />;
 }
 
+function BrandMark() {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-navy text-base font-bold text-white shadow-soft">
+        FP
+      </div>
+      <div>
+        <div className="text-sm font-bold leading-tight text-navy">Finepro</div>
+        <div className="text-[11px] font-medium text-neutral-500">Keuangan yang lebih tenang</div>
+      </div>
+    </div>
+  );
+}
+
+function ModeTabs({ mode, switchMode }) {
+  return (
+    <div className="grid grid-cols-2 gap-1 rounded-full bg-neutral-100 p-1">
+      <button
+        type="button"
+        className={`min-h-[40px] rounded-full text-sm font-semibold transition-all duration-300 ${
+          mode === "login" ? "bg-mint text-white shadow-[0_10px_22px_rgba(24,197,148,0.24)]" : "text-neutral-500"
+        }`}
+        onClick={() => switchMode("login")}
+      >
+        Masuk
+      </button>
+      <button
+        type="button"
+        className={`min-h-[40px] rounded-full text-sm font-semibold transition-all duration-300 ${
+          mode === "signup" ? "bg-violet text-white shadow-[0_10px_22px_rgba(111,85,242,0.26)]" : "text-neutral-500"
+        }`}
+        onClick={() => switchMode("signup")}
+      >
+        Daftar
+      </button>
+    </div>
+  );
+}
+
+function InputShell({ icon: Icon, label, children }) {
+  return (
+    <div>
+      <label className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-navy">
+        <Icon size={14} />
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function StatusMessage({ msg, type }) {
+  if (!msg) return null;
+  return (
+    <div
+      className={`rounded-2xl px-3 py-2 text-xs font-semibold ${
+        type === "error" ? "bg-coral-light text-coral" : "bg-mint-light text-mint"
+      }`}
+    >
+      {msg}
+    </div>
+  );
+}
+
+function LoginPreview() {
+  return (
+    <div className="mt-5 rounded-2xl border border-white/70 bg-white/45 p-3 animate-auth-fade-up">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-xs font-semibold text-neutral-500">Ringkasan hari ini</div>
+        <div className="rounded-full bg-mint-light px-2 py-1 text-[10px] font-bold text-mint">Aktif</div>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: "Masuk", value: "3,2jt", tone: "text-mint" },
+          { label: "Keluar", value: "1,4jt", tone: "text-coral" },
+          { label: "Saldo", value: "1,8jt", tone: "text-violet" },
+        ].map((item) => (
+          <div key={item.label} className="rounded-xl bg-white/65 p-2">
+            <div className="text-[10px] font-medium text-neutral-500">{item.label}</div>
+            <div className={`mt-1 text-xs font-bold ${item.tone}`}>{item.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SignupBenefits() {
+  const items = [
+    { icon: ReceiptText, title: "Transaksi rapi", text: "Catatan harian langsung terbaca." },
+    { icon: WalletCards, title: "Budget terarah", text: "Pantau batas tiap pos." },
+    { icon: BarChart3, title: "Insight ringan", text: "Lihat pola tanpa ribet." },
+  ];
+
+  return (
+    <div className="grid gap-2">
+      {items.map(({ icon: Icon, title, text }, index) => (
+        <div
+          key={title}
+          className="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/45 p-3 animate-auth-fade-up"
+          style={{ animationDelay: `${index * 80}ms` }}
+        >
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-violet-light text-violet">
+            <Icon size={16} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-navy">{title}</div>
+            <div className="text-xs font-medium text-neutral-500">{text}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function AuthPage() {
   const { login, signup, loginWithGoogle } = useAuth();
   const [mode, setMode] = useState("login"); // login | signup | forgot | reset
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [resetToken, setResetToken] = useState("");
@@ -74,6 +203,7 @@ export default function AuthPage() {
   function switchMode(next) {
     setMode(next);
     setMsg("");
+    setMsgType("");
     setPassword("");
   }
 
@@ -83,7 +213,7 @@ export default function AuthPage() {
     setMsg("");
     try {
       if (mode === "signup") {
-        await signup(email, password);
+        await signup(email, password, name);
       } else if (mode === "forgot") {
         const data = await forgotPassword(email);
         setMsg(data.message);
@@ -118,144 +248,185 @@ export default function AuthPage() {
   }
 
   const isPasswordMode = mode === "login" || mode === "signup";
+  const isSignup = mode === "signup";
+  const isUtilityMode = mode === "forgot" || mode === "reset";
+  const inputClass =
+    "w-full rounded-2xl border border-neutral-border bg-white px-3 py-3 text-sm font-semibold text-navy shadow-[inset_0_1px_2px_rgba(15,31,61,0.06)] outline-none transition placeholder:text-neutral-400 focus:border-violet focus:bg-white focus:shadow-[0_0_0_4px_rgba(111,85,242,0.12),inset_0_1px_2px_rgba(15,31,61,0.04)]";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-neutral-bg px-6">
-      <div className="w-full max-w-sm rounded-2xl bg-white border border-neutral-border p-6 shadow-sm">
-        <div className="w-12 h-12 rounded-xl bg-navy text-white flex items-center justify-center font-bold text-lg mb-4">
-          KK
+    <div className="app-glow-bg min-h-screen px-5 py-7">
+      <div className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-lg flex-col justify-center">
+        <div className={`grid gap-4 transition-all duration-500 ${isSignup ? "md:gap-5" : ""}`}>
+          <div className={`gloss-panel rounded-[28px] p-4 ${isSignup ? "animate-auth-fade-up" : "animate-auth-float"}`}>
+            <div className="flex items-start justify-between gap-3">
+              <BrandMark />
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-mint-light text-mint">
+                <ShieldCheck size={17} />
+              </div>
+            </div>
+
+            {!isUtilityMode && (
+              <div className="mt-5">
+                <ModeTabs mode={mode} switchMode={switchMode} />
+              </div>
+            )}
+
+            {mode === "login" && (
+              <div className="mt-5 animate-auth-fade-up">
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-violet-light px-3 py-1 text-[11px] font-bold text-violet">
+                  <Sparkles size={13} />
+                  Selamat datang kembali
+                </div>
+                <h1 className="mt-3 text-2xl font-bold leading-tight text-navy">Masuk dan lanjutkan catatanmu.</h1>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
+                  Dashboard, budget, tagihan, dan transaksi terakhir siap dilanjutkan dari satu tempat.
+                </p>
+                <LoginPreview />
+              </div>
+            )}
+
+            {mode === "signup" && (
+              <div className="mt-5 animate-auth-fade-up">
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-gold-light/70 px-3 py-1 text-[11px] font-bold text-gold">
+                  <CheckCircle2 size={13} />
+                  Mulai ruang keuangan baru
+                </div>
+                <h1 className="mt-3 text-2xl font-bold leading-tight text-navy">Buat akun, rapikan alur uang sejak hari pertama.</h1>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
+                  Nama pengguna akan tampil di header dan label pencatat transaksi.
+                </p>
+                <div className="mt-4">
+                  <SignupBenefits />
+                </div>
+              </div>
+            )}
+
+            {mode === "forgot" && (
+              <div className="mt-5 animate-auth-fade-up">
+                <h1 className="text-2xl font-bold leading-tight text-navy">Lupa password?</h1>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
+                  Masukkan email akunmu, kami kirim tautan reset password.
+                </p>
+              </div>
+            )}
+
+            {mode === "reset" && (
+              <div className="mt-5 animate-auth-fade-up">
+                <h1 className="text-2xl font-bold leading-tight text-navy">Buat password baru.</h1>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
+                  Gunakan minimal 6 karakter agar akunmu kembali bisa diakses.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div key={mode} className="gloss-panel rounded-[28px] p-4 animate-auth-slide-up">
+            <div className="mb-3 rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2 text-xs font-semibold text-neutral-500">
+              Isi data akun pada kolom di bawah.
+            </div>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+              {mode === "signup" && (
+                <InputShell icon={UserRound} label="Nama Pengguna">
+                  <input
+                    id="auth-name"
+                    type="text"
+                    required
+                    maxLength={80}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Nama yang tampil di aplikasi"
+                    className={inputClass}
+                  />
+                </InputShell>
+              )}
+
+              {(mode === "login" || mode === "signup" || mode === "forgot") && (
+                <InputShell icon={Mail} label="Email">
+                  <input
+                    id="auth-email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="nama@email.com"
+                    className={inputClass}
+                  />
+                </InputShell>
+              )}
+
+              {(isPasswordMode || mode === "reset") && (
+                <InputShell icon={LockKeyhole} label={mode === "reset" ? "Password Baru" : "Kata Sandi"}>
+                  <input
+                    id="auth-password"
+                    type="password"
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Minimal 6 karakter"
+                    className={inputClass}
+                  />
+                </InputShell>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={`mt-1 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full text-sm font-bold text-white shadow-float transition active:scale-[0.98] disabled:opacity-60 ${
+                  isSignup
+                    ? "bg-violet shadow-[0_18px_34px_rgba(111,85,242,0.32)]"
+                    : "bg-navy shadow-[0_18px_34px_rgba(15,31,61,0.26)]"
+                }`}
+              >
+                {loading ? "Memproses..." : null}
+                {!loading && mode === "signup" && "Daftar"}
+                {!loading && mode === "login" && "Masuk"}
+                {!loading && mode === "forgot" && "Kirim Tautan Reset"}
+                {!loading && mode === "reset" && "Simpan Password Baru"}
+                {!loading && <ArrowRight size={16} />}
+              </button>
+
+              <StatusMessage msg={msg} type={msgType} />
+            </form>
+
+            {mode === "login" && (
+              <button
+                type="button"
+                onClick={() => switchMode("forgot")}
+                className="mt-3 w-full text-center text-xs font-semibold text-neutral-500 transition hover:text-violet"
+              >
+                Lupa password?
+              </button>
+            )}
+
+            {(mode === "forgot" || mode === "reset") && (
+              <button
+                type="button"
+                onClick={() => switchMode("login")}
+                className="mt-3 w-full text-center text-xs font-semibold text-neutral-500 transition hover:text-violet"
+              >
+                Kembali ke halaman Masuk
+              </button>
+            )}
+
+            {isPasswordMode && (
+              <>
+                <div className="my-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-neutral-border" />
+                  <span className="text-[11px] font-semibold text-neutral-400">atau</span>
+                  <div className="h-px flex-1 bg-neutral-border" />
+                </div>
+                <GoogleSignInButton onCredential={handleGoogleCredential} />
+              </>
+            )}
+
+            {mode === "login" && (
+              <p className="mt-4 text-center text-[11px] font-medium text-neutral-500">
+                Akun baru otomatis mendapat masa coba 14 hari gratis.
+              </p>
+            )}
+          </div>
         </div>
-        <h1 className="text-lg font-bold text-neutral-900 mb-1">Keuangan Keluarga</h1>
-        <p className="text-sm text-neutral-500 mb-5">Untuk keluarga, pasangan, maupun mahasiswa.</p>
-
-        {(mode === "login" || mode === "signup") && (
-          <div className="flex gap-1.5 mb-4 bg-neutral-100 rounded-lg p-1">
-            <button
-              type="button"
-              className={`flex-1 text-center min-h-[40px] rounded-md text-sm font-semibold transition-colors ${
-                mode === "login" ? "bg-white text-navy shadow-sm" : "text-neutral-500"
-              }`}
-              onClick={() => switchMode("login")}
-            >
-              Masuk
-            </button>
-            <button
-              type="button"
-              className={`flex-1 text-center min-h-[40px] rounded-md text-sm font-semibold transition-colors ${
-                mode === "signup" ? "bg-white text-navy shadow-sm" : "text-neutral-500"
-              }`}
-              onClick={() => switchMode("signup")}
-            >
-              Daftar
-            </button>
-          </div>
-        )}
-
-        {mode === "forgot" && (
-          <div className="mb-4">
-            <h2 className="text-sm font-bold text-neutral-900">Lupa Password</h2>
-            <p className="text-xs text-neutral-500 mt-0.5">Masukkan email, kami kirim tautan reset password.</p>
-          </div>
-        )}
-
-        {mode === "reset" && (
-          <div className="mb-4">
-            <h2 className="text-sm font-bold text-neutral-900">Buat Password Baru</h2>
-            <p className="text-xs text-neutral-500 mt-0.5">Masukkan password baru untuk akun Anda.</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          {(mode === "login" || mode === "signup" || mode === "forgot") && (
-            <div>
-              <label htmlFor="auth-email" className="block text-xs text-neutral-500 mb-1">
-                Email
-              </label>
-              <input
-                id="auth-email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nama@email.com"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border bg-white text-neutral-900 focus:outline-none focus:ring-1 focus:ring-navy"
-              />
-            </div>
-          )}
-          {(isPasswordMode || mode === "reset") && (
-            <div>
-              <label htmlFor="auth-password" className="block text-xs text-neutral-500 mb-1">
-                {mode === "reset" ? "Password Baru" : "Kata Sandi"}
-              </label>
-              <input
-                id="auth-password"
-                type="password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minimal 6 karakter"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-border bg-white text-neutral-900 focus:outline-none focus:ring-1 focus:ring-navy"
-              />
-            </div>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full min-h-[44px] bg-navy text-white rounded-lg py-2.5 text-sm font-bold disabled:opacity-60 mt-1"
-          >
-            {mode === "signup" && "Daftar"}
-            {mode === "login" && "Masuk"}
-            {mode === "forgot" && "Kirim Tautan Reset"}
-            {mode === "reset" && "Simpan Password Baru"}
-          </button>
-          {msg && (
-            <div
-              className={`text-xs rounded-md px-3 py-2 ${
-                msgType === "error" ? "bg-danger/10 text-danger" : "bg-success/10 text-success"
-              }`}
-            >
-              {msg}
-            </div>
-          )}
-        </form>
-
-        {mode === "login" && (
-          <button
-            type="button"
-            onClick={() => switchMode("forgot")}
-            className="w-full text-center text-xs text-neutral-500 mt-3 hover:text-navy"
-          >
-            Lupa password?
-          </button>
-        )}
-
-        {(mode === "forgot" || mode === "reset") && (
-          <button
-            type="button"
-            onClick={() => switchMode("login")}
-            className="w-full text-center text-xs text-neutral-500 mt-3 hover:text-navy"
-          >
-            Kembali ke halaman Masuk
-          </button>
-        )}
-
-        {isPasswordMode && (
-          <>
-            <div className="flex items-center gap-3 my-4">
-              <div className="h-px flex-1 bg-neutral-border" />
-              <span className="text-[11px] text-neutral-400">atau</span>
-              <div className="h-px flex-1 bg-neutral-border" />
-            </div>
-            <GoogleSignInButton onCredential={handleGoogleCredential} />
-          </>
-        )}
-
-        {mode === "login" && (
-          <p className="text-[11px] text-neutral-500 text-center mt-4">
-            Akun baru otomatis mendapat masa coba 14 hari gratis.
-          </p>
-        )}
       </div>
     </div>
   );

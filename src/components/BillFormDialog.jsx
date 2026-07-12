@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
-import { todayStr } from "../utils/format.js";
+import { formatNumberIdInput, parseNumberId, todayStr } from "../utils/format.js";
 import { CalendarDays, NotebookPen, Repeat, Wallet } from "lucide-react";
 
 export default function BillFormDialog({ open, onClose, onSubmit, bill }) {
@@ -18,7 +18,7 @@ export default function BillFormDialog({ open, onClose, onSubmit, bill }) {
   useEffect(() => {
     if (!open) return;
     setName(bill?.name || "");
-    setAmount(bill ? String(bill.amount) : "");
+    setAmount(bill ? formatNumberIdInput(bill.amount) : "");
     setDueDate(bill?.due_date || todayStr());
     setIsRecurring(bill ? bill.is_recurring : true);
     setCategory(bill?.category || "");
@@ -26,7 +26,7 @@ export default function BillFormDialog({ open, onClose, onSubmit, bill }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const amt = parseFloat(amount);
+    const amt = parseNumberId(amount);
     if (!name.trim() || !dueDate || !amt || amt < 0) return;
     setSubmitting(true);
     try {
@@ -86,13 +86,12 @@ export default function BillFormDialog({ open, onClose, onSubmit, bill }) {
               </label>
               <input
                 id="bill-amount"
-                type="number"
-                min="0"
-                step="1000"
+                type="text"
+                inputMode="decimal"
                 required
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0"
+                onChange={(e) => setAmount(formatNumberIdInput(e.target.value))}
+                placeholder="1.500.000"
                 className="w-full rounded-2xl border border-white/80 bg-white/70 px-3 py-3 text-sm font-medium text-navy outline-none"
               />
             </div>

@@ -20,7 +20,7 @@ import { useAiInsight } from "../hooks/useAiInsight.js";
 import { setBudget } from "../api/budgets.js";
 import { getContributions, getDailySummaryRows, groupByDay, getMonthlySummary } from "../api/transactions.js";
 import { fmtRp, daysUntilMonthlyDay, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
-import { ArrowRight, BarChart3, CalendarDays, ChevronUp, Eye, EyeOff, PieChart, ReceiptText, Sparkles, Users } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarDays, ChevronUp, Eye, EyeOff, PieChart, ReceiptText, Sparkles, Target, Users } from "lucide-react";
 
 const DEFAULT_TX_SHOWN = 20;
 const SHOW_CONTRIBUTIONS_KEY = "finepro-show-contributions";
@@ -188,7 +188,12 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
       {budgetProgress.length > 0 && (
         <div className="gloss-panel mb-4 rounded-2xl p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-navy">Budget vs Realisasi</h2>
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gold-light text-gold">
+                <Target size={16} />
+              </div>
+              <h2 className="truncate text-base font-semibold text-navy">Budget vs Realisasi</h2>
+            </div>
             <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400" title="Ciutkan">
               <ChevronUp size={22} strokeWidth={2.5} />
             </button>

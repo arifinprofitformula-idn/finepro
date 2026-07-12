@@ -3,10 +3,10 @@
 
 import { API_BASE, apiFetch, setToken, getToken } from "./apiClient.js";
 
-export async function signUp(email, password) {
+export async function signUp(email, password, name) {
   const data = await apiFetch('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, name }),
   });
   setToken(data.token);
   return data;
