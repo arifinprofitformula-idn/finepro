@@ -19,6 +19,11 @@ import {
 } from "lucide-react";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function isValidEmail(value) {
+  return EMAIL_PATTERN.test(String(value || "").trim());
+}
 
 function GoogleSignInButton({ onCredential }) {
   const containerRef = useRef(null);
@@ -216,15 +221,47 @@ export default function AuthPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setLoading(true);
     setMsg("");
+    setMsgType("");
+
+    const trimmedEmail = email.trim();
+    const trimmedName = name.trim();
+
+    if ((mode === "login" || mode === "signup" || mode === "forgot") && !trimmedEmail) {
+      setMsg("Email wajib diisi.");
+      setMsgType("error");
+      setForgotSubmitted(false);
+      return;
+    }
+
+    if ((mode === "login" || mode === "signup" || mode === "forgot") && !isValidEmail(trimmedEmail)) {
+      setMsg("Format email belum benar. Gunakan format seperti nama@email.com.");
+      setMsgType("error");
+      setForgotSubmitted(false);
+      return;
+    }
+
+    if (mode === "signup" && !trimmedName) {
+      setMsg("Nama pengguna wajib diisi.");
+      setMsgType("error");
+      return;
+    }
+
+    if ((mode === "login" || mode === "signup" || mode === "reset") && password.length < 6) {
+      setMsg(mode === "reset" ? "Password baru minimal 6 karakter." : "Kata sandi minimal 6 karakter.");
+      setMsgType("error");
+      return;
+    }
+
+    setLoading(true);
     try {
       if (mode === "signup") {
-        await signup(email, password, name);
+        await signup(trimmedEmail, password, trimmedName);
       } else if (mode === "forgot") {
-        const data = await forgotPassword(email);
-        setMsg(data.message);
-        setMsgType("success");
+        await forgotPassword(trimmedEmail);
+        setEmail(trimmedEmail);
+        setMsg("");
+        setMsgType("");
         setForgotSubmitted(true);
       } else if (mode === "reset") {
         const data = await resetPassword(resetToken, password);
@@ -232,7 +269,7 @@ export default function AuthPage() {
         setMsgType("success");
         setTimeout(() => switchMode("login"), 1500);
       } else {
-        await login(email, password);
+        await login(trimmedEmail, password);
       }
     } catch (err) {
       setMsg(translateAuthError(err.message));
@@ -345,14 +382,16 @@ export default function AuthPage() {
           </div>
 
           <div key={mode} className="gloss-panel rounded-[28px] p-4 animate-auth-slide-up">
-            <div className="mb-3 rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2 text-xs font-semibold text-neutral-500">
-              {mode === "forgot" ? "Kami akan memproses permintaan tanpa membocorkan status email." : "Isi data akun pada kolom di bawah."}
-            </div>
+            {!(mode === "forgot" && forgotSubmitted) && (
+              <div className="mb-3 rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2 text-xs font-semibold text-neutral-500">
+                {mode === "forgot" ? "Kami akan memproses permintaan tanpa membocorkan status email." : "Isi data akun pada kolom di bawah."}
+              </div>
+            )}
             {mode === "forgot" && forgotSubmitted && (
               <div className="mb-3 rounded-2xl border border-mint/25 bg-mint-light px-3 py-3 text-xs font-semibold text-neutral-700">
                 <div className="mb-2 flex items-center gap-2 text-mint">
                   <Inbox size={15} />
-                  Langkah berikutnya
+                  Cek email kamu
                 </div>
                 <p className="leading-relaxed">
                   Jika email <span className="font-bold text-navy">{email || "yang dimasukkan"}</span> terdaftar,
@@ -361,7 +400,7 @@ export default function AuthPage() {
                 </p>
               </div>
             )}
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3" noValidate>
               {mode === "signup" && (
                 <InputShell icon={UserRound} label="Nama Pengguna">
                   <input
@@ -384,7 +423,10 @@ export default function AuthPage() {
                     type="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (mode === "forgot") setForgotSubmitted(false);
+                    }}
                     placeholder="nama@email.com"
                     className={inputClass}
                   />
@@ -434,7 +476,7 @@ export default function AuthPage() {
                 {!loading && <ArrowRight size={16} />}
               </button>
 
-              <StatusMessage msg={msg} type={msgType} />
+              <StatusMessage msg={mode === "forgot" && msgType === "success" ? "" : msg} type={msgType} />
             </form>
 
             {mode === "login" && (

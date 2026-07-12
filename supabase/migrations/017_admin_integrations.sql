@@ -38,7 +38,7 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_admin_user ON admin_audit_logs(a
 
 INSERT INTO app_settings (key, value, is_secret)
 VALUES
-  ('mailketing', '{"enabled": false, "api_token": "", "from_email": "", "from_name": "Admin Finepro"}', true),
+  ('mailketing', '{"enabled": false, "api_token": "", "from_email": "", "from_name": "Finepro"}', true),
   ('midtrans', '{"enabled": false, "is_production": false, "server_key": "", "client_key": ""}', true),
   ('manual_payment', '{"enabled": false, "bank_name": "", "account_number": "", "account_name": "", "instructions": ""}', false),
   ('ai', '{"enabled": false, "provider": "sumopod", "sumopod_api_key": "", "sumopod_base_url": "https://ai.sumopod.com/v1", "sumopod_model": "gpt-4o-mini", "anthropic_api_key": "", "anthropic_model": "claude-sonnet-4-5", "insights_daily_limit": 3, "receipt_scan_monthly_limit": 30}', true),

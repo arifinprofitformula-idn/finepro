@@ -73,6 +73,10 @@ const ALLOWED_FIELDS = {
   telegram: ['enabled', 'bot_token', 'bot_username', 'n8n_shared_secret'],
 };
 
+const STORED_SETTING_SIGNALS = {
+  mailketing: ['enabled', 'api_token', 'from_email'],
+};
+
 function envFallback(key) {
   if (key === 'mailketing') {
     return {
@@ -129,6 +133,14 @@ function envFallback(key) {
 
 function hasUsefulValue(key, value) {
   if (!value || typeof value !== 'object') return false;
+  const signalFields = STORED_SETTING_SIGNALS[key];
+  if (signalFields) {
+    return signalFields.some((field) => {
+      const current = value[field];
+      return field === 'enabled' ? current === true : Boolean(current);
+    });
+  }
+
   const secrets = SECRET_FIELDS[key] || [];
   return Object.entries(value).some(([field, current]) => {
     if (field === 'enabled') return current === true;

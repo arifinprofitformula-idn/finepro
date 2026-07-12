@@ -7,6 +7,16 @@ import { getSetting } from './appSettings.js';
 
 const MAILKETING_API_URL = 'https://api.mailketing.co.id/api/v1/send';
 
+function redactEmail(email = '') {
+  const [name, domain] = String(email).split('@');
+  if (!name || !domain) return email ? '***' : '';
+  return `${name.slice(0, 2)}***@${domain}`;
+}
+
+function mailketingStatus(data) {
+  return String(data?.status || '').toLowerCase();
+}
+
 export async function sendMail({ to, subject, html }) {
   const mailketing = await getSetting('mailketing');
   const apiToken = mailketing.api_token;
@@ -32,8 +42,28 @@ export async function sendMail({ to, subject, html }) {
     body,
   });
 
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data || data.status !== 'success') {
-    throw new Error(`Mailketing gagal: ${data?.response || res.statusText}`);
+  const responseText = await res.text();
+  let data = null;
+  try {
+    data = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    data = null;
   }
+
+  if (!res.ok || !data || mailketingStatus(data) !== 'success') {
+    const reason = data?.response || responseText || res.statusText || `HTTP ${res.status}`;
+    console.error('[mailer] Mailketing failed', {
+      statusCode: res.status,
+      to: redactEmail(to),
+      subject,
+      reason,
+    });
+    throw new Error(`Mailketing gagal: ${reason}`);
+  }
+
+  console.info('[mailer] Mailketing sent', {
+    to: redactEmail(to),
+    subject,
+    response: data.response || 'Mail Sent',
+  });
 }

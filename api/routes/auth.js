@@ -24,6 +24,15 @@ const authLimiter = rateLimit({
 });
 
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 jam
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isValidEmail(value) {
+  return EMAIL_PATTERN.test(normalizeEmail(value));
+}
 
 function hashResetToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -123,17 +132,21 @@ const avatarUpload = multer({
 // POST /api/auth/register
 router.post('/register', authLimiter, async (req, res) => {
   try {
-    const { email, password, name } = req.body;
+    const { password, name } = req.body;
+    const email = normalizeEmail(req.body.email);
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email dan password wajib diisi' });
+    }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Format email tidak valid' });
     }
     if (password.length < 6) {
       return res.status(400).json({ error: 'Password minimal 6 karakter' });
     }
 
     // Cek apakah email sudah terdaftar
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: 'Email sudah terdaftar' });
     }
@@ -157,14 +170,18 @@ router.post('/register', authLimiter, async (req, res) => {
 // POST /api/auth/login
 router.post('/login', authLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = normalizeEmail(req.body.email);
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email dan password wajib diisi' });
     }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Format email tidak valid' });
+    }
 
     const result = await pool.query(
-      'SELECT id, email, password_hash, name, avatar_url, role, created_at FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, name, avatar_url, role, created_at FROM users WHERE LOWER(email) = LOWER($1)',
       [email]
     );
 
@@ -218,7 +235,8 @@ router.post('/google', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Token Google tidak valid' });
     }
 
-    const { sub: googleId, email, name, email_verified: emailVerified } = payload;
+    const { sub: googleId, email: googleEmail, name, email_verified: emailVerified } = payload;
+    const email = normalizeEmail(googleEmail);
     if (!email || !emailVerified) {
       return res.status(401).json({ error: 'Email Google belum terverifikasi' });
     }
@@ -230,7 +248,7 @@ router.post('/google', authLimiter, async (req, res) => {
 
     if (result.rows.length === 0) {
       // Belum ada akun dengan google_id ini — cek apakah email sudah terdaftar (akun lokal), kalau ada tautkan.
-      const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+      const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
       if (existing.rows.length > 0) {
         result = await pool.query(
           `UPDATE users SET google_id = $1, provider = CASE WHEN password_hash IS NULL THEN 'google' ELSE provider END
@@ -263,12 +281,15 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
     message: 'Permintaan reset diproses. Jika email tersebut terdaftar, tautan reset password sudah dikirim. Cek inbox dan folder spam.'
   };
   try {
-    const { email } = req.body;
+    const email = normalizeEmail(req.body.email);
     if (!email) {
       return res.status(400).json({ error: 'Email wajib diisi' });
     }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Format email tidak valid' });
+    }
 
-    const result = await pool.query('SELECT id, name FROM users WHERE email = $1', [email]);
+    const result = await pool.query('SELECT id, name FROM users WHERE LOWER(email) = LOWER($1)', [email]);
     if (result.rows.length === 0) {
       // Jangan bocorkan apakah email terdaftar atau tidak.
       return res.json(genericResponse);
