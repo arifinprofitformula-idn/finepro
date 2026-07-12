@@ -5,10 +5,11 @@
 import { apiFetch, getToken } from "./apiClient.js";
 
 // FormData, bukan JSON, jadi tidak lewat apiFetch — sama pola dengan uploadAvatar.
-export async function scanReceipt(file) {
+export async function scanReceipt(file, intentType = "expense") {
   const token = getToken();
   const formData = new FormData();
   formData.append('receipt', file);
+  formData.append('intent_type', intentType === "income" ? "income" : "expense");
 
   const res = await fetch('/api/receipts/scan', {
     method: 'POST',

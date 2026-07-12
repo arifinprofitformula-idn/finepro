@@ -118,7 +118,8 @@ router.post('/scan', (req, res) => {
         [householdId, req.user.userId]
       );
 
-      const type = parsed.type === 'income' ? 'income' : 'expense';
+      const intentType = req.body?.intent_type === 'income' ? 'income' : 'expense';
+      const type = intentType === 'income' ? 'income' : parsed.type === 'income' ? 'income' : 'expense';
       const category = await normalizeTransactionCategory(
         householdId,
         type,

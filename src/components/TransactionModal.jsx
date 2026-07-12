@@ -3,7 +3,7 @@ import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import { formatNumberIdInput, parseNumberId, todayStr } from "../utils/format.js";
 import { getWallets } from "../api/wallets.js";
 import { scanReceipt, getScanQuota } from "../api/receipts.js";
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, Camera, NotebookPen, Tags, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, Camera, NotebookPen, Sparkles, Tags, Wallet } from "lucide-react";
 
 const STUDENT_QUICK_CATEGORIES = [
   "Uang Makan",
@@ -11,6 +11,84 @@ const STUDENT_QUICK_CATEGORIES = [
   "Transportasi (Ojol/Motor)",
   "Nongkrong & Hiburan"
 ];
+
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " dan ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function scoreCategory(inputText, categoryName) {
+  const input = normalizeText(inputText);
+  const categoryText = normalizeText(categoryName);
+  if (!input || !categoryText) return 0;
+  if (input === categoryText) return 100;
+  if (input.includes(categoryText) || categoryText.includes(input)) return 82;
+
+  const inputTokens = new Set(input.split(" ").filter((token) => token.length > 2));
+  const categoryTokens = categoryText.split(" ").filter((token) => token.length > 2);
+  if (categoryTokens.length === 0) return 0;
+  const hits = categoryTokens.filter((token) => inputTokens.has(token)).length;
+  return hits > 0 ? Math.round((hits / categoryTokens.length) * 60) : 0;
+}
+
+function receiptCategoryHints(type, text) {
+  const normalized = normalizeText(text);
+  if (type === "income") {
+    if (/\b(gaji|salary|upah|usaha|bisnis)\b/.test(normalized)) return ["gaji", "usaha"];
+    if (/\b(beasiswa)\b/.test(normalized)) return ["beasiswa"];
+    if (/\b(freelance|part time|parttime|kerja)\b/.test(normalized)) return ["freelance", "part", "kerja"];
+    return ["transfer", "lainnya"];
+  }
+
+  if (/\b(makan|minum|food|resto|warung|cafe|kopi|dapur)\b/.test(normalized)) return ["uang makan", "kebutuhan pokok", "rumah tangga"];
+  if (/\b(transport|ojol|gojek|grab|bensin|parkir|tol|motor|mobil)\b/.test(normalized)) return ["transportasi"];
+  if (/\b(kuota|internet|pulsa|wifi|data)\b/.test(normalized)) return ["kuota", "internet"];
+  if (/\b(kesehatan|obat|dokter|apotek|klinik)\b/.test(normalized)) return ["kesehatan"];
+  if (/\b(sekolah|kuliah|buku|pendidikan)\b/.test(normalized)) return ["pendidikan", "kuliah", "buku"];
+  if (/\b(zakat|sedekah|infaq|infak|donasi)\b/.test(normalized)) return ["zakat", "sedekah"];
+  if (/\b(hiburan|nonton|game|nongkrong)\b/.test(normalized)) return ["hiburan", "nongkrong"];
+  if (/\b(tabungan|investasi|saham|reksa|emas)\b/.test(normalized)) return ["tabungan", "investasi"];
+  return ["lainnya"];
+}
+
+function buildScanCategoryOptions({ type, categories, suggestedCategory, note }) {
+  const names = categories.map((item) => item.name).filter(Boolean);
+  const unique = [];
+  const add = (name) => {
+    if (name && !unique.some((item) => normalizeText(item) === normalizeText(name))) unique.push(name);
+  };
+
+  const scanText = `${suggestedCategory || ""} ${note || ""}`.trim();
+  const exactSuggested = names.find((name) => normalizeText(name) === normalizeText(suggestedCategory));
+  const closeSuggested = names
+    .map((name) => ({ name, score: scoreCategory(suggestedCategory, name) }))
+    .sort((a, b) => b.score - a.score)[0];
+
+  add(exactSuggested || (closeSuggested?.score >= 45 ? closeSuggested.name : suggestedCategory));
+
+  receiptCategoryHints(type, scanText).forEach((hint) => {
+    const match = names.find((name) => normalizeText(name).includes(normalizeText(hint)));
+    add(match);
+  });
+
+  names
+    .map((name) => ({ name, score: scoreCategory(scanText, name) }))
+    .filter((item) => item.score >= 30)
+    .sort((a, b) => b.score - a.score)
+    .forEach((item) => add(item.name));
+
+  if (unique.length < 2) {
+    names.slice(0, 3).forEach(add);
+  }
+
+  return unique.filter((name) => names.includes(name)).slice(0, 5);
+}
 
 export default function TransactionModal({ open, onClose, onSubmit, categoriesExpense, categoriesIncome, isStudent, initialTransaction = null }) {
   const [type, setType] = useState("expense");
@@ -24,18 +102,23 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
   const [scanQuota, setScanQuota] = useState(null);
+  const [scanCategoryOptions, setScanCategoryOptions] = useState([]);
 
   const isEdit = Boolean(initialTransaction?.id);
   const currentCategories = type === "income" ? categoriesIncome : categoriesExpense;
+  const scanSourceLabel = type === "income" ? "bukti transfer" : "struk";
+  const scanButtonLabel = type === "income" ? "Scan Bukti Transfer" : "Scan Struk (Otomatis Isi)";
+  const scanningLabel = type === "income" ? "Memindai bukti transfer..." : "Memindai struk...";
 
   async function handleScanReceipt(e) {
     const file = e.target.files[0];
     if (!file) return;
+    const intentType = type === "income" ? "income" : "expense";
     setScanning(true);
     setScanMsg("");
     try {
-      const result = await scanReceipt(file);
-      const nextType = result.type === "income" ? "income" : "expense";
+      const result = await scanReceipt(file, intentType);
+      const nextType = intentType === "income" ? "income" : result.type === "income" ? "income" : "expense";
       const nextCategories = nextType === "income" ? categoriesIncome : categoriesExpense;
       setType(nextType);
       if (result.date) setDate(result.date);
@@ -50,7 +133,17 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
       } else {
         setCategory(nextCategories[0]?.name || "");
       }
-      setScanMsg("Terisi otomatis dari struk — cek dulu sebelum simpan.");
+      setScanCategoryOptions(buildScanCategoryOptions({
+        type: nextType,
+        categories: nextCategories,
+        suggestedCategory: result.suggested_category,
+        note: result.note
+      }));
+      setScanMsg(
+        nextType === "income"
+          ? "Terisi otomatis dari bukti transfer — cek dulu sebelum simpan."
+          : "Terisi otomatis dari struk — cek dulu sebelum simpan."
+      );
       setScanQuota((prev) => (prev ? { ...prev, used: prev.used + 1, remaining: Math.max(0, prev.remaining - 1) } : prev));
     } catch (err) {
       setScanMsg(err.message);
@@ -78,8 +171,11 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
       if (initialTransaction?.id) {
         setScanQuota(null);
         setScanMsg("");
+        setScanCategoryOptions([]);
       } else {
         getScanQuota().then(setScanQuota).catch(() => setScanQuota(null));
+        setScanMsg("");
+        setScanCategoryOptions([]);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,6 +185,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
     setType(next);
     const list = next === "income" ? categoriesIncome : categoriesExpense;
     setCategory(list[0]?.name || "");
+    setScanCategoryOptions([]);
   }
 
   async function handleSubmit(e) {
@@ -138,7 +235,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
               </button>
             </div>
 
-            {!isEdit && type === "expense" && (
+            {!isEdit && (
               <div>
                 <div className="relative">
                   <label
@@ -151,7 +248,7 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                     }`}
                   >
                     <Camera size={18} />
-                    {scanning ? "Memindai struk..." : "Scan Struk (Otomatis Isi)"}
+                    {scanning ? scanningLabel : scanButtonLabel}
                   </label>
                   {scanQuota && (
                     <span
@@ -173,6 +270,39 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
                   onChange={handleScanReceipt}
                 />
                 {scanMsg && <p className="mt-1 text-xs text-neutral-500">{scanMsg}</p>}
+              </div>
+            )}
+
+            {!isEdit && scanCategoryOptions.length > 0 && (
+              <div className="rounded-2xl border border-violet/15 bg-violet-light/70 p-3">
+                <div className="mb-2 flex items-start gap-2">
+                  <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-white text-violet">
+                    <Sparkles size={14} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-navy">Kategori yang mungkin sesuai</div>
+                    <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-neutral-500">
+                      Kami pilih dari hasil baca {scanSourceLabel}. Ketuk kategori lain jika kurang pas.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {scanCategoryOptions.map((option, index) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setCategory(option)}
+                      className={`min-h-[34px] rounded-full border px-3 text-xs font-bold transition active:scale-[0.98] ${
+                        category === option
+                          ? "border-violet bg-violet text-white shadow-soft"
+                          : "border-white/80 bg-white/75 text-navy hover:border-violet/30"
+                      }`}
+                    >
+                      {option}
+                      {index === 0 && category === option ? " · default" : ""}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
