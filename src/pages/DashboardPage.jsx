@@ -150,7 +150,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         rateLimitMessage={insight.rateLimited ? insight.error : ""}
       />
 
-      <ZakatWidget householdId={household.id} />
+      <ZakatWidget householdId={household.id} totalExpense={kpi.expense} />
 
       <BillsSection householdId={household.id} />
 

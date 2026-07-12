@@ -5,6 +5,7 @@
 // hilang diam-diam saat migrasi.
 
 import { Bell, LogOut, ShieldCheck } from "lucide-react";
+import { mediaUrl } from "../utils/media.js";
 
 export default function AppHeader({ user, planLabel, pendingInviteCount, onNavigateAccount, onNavigateAdmin, onLogout }) {
   const name = user?.name || user?.email?.split("@")[0] || "";
@@ -18,7 +19,7 @@ export default function AppHeader({ user, planLabel, pendingInviteCount, onNavig
         <button type="button" onClick={onNavigateAccount} className="flex min-h-11 min-w-0 items-center gap-2.5 text-left">
           <div className="h-11 w-11 rounded-full border-2 border-white bg-violet text-white shadow-soft flex items-center justify-center overflow-hidden text-base font-semibold flex-shrink-0">
             {user?.avatar_url ? (
-              <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+              <img src={mediaUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
             ) : (
               initial
             )}

@@ -2,7 +2,7 @@
 // API client pengganti Supabase — semua request ke Express.js backend via fetch.
 // Token JWT disimpan di localStorage, otomatis disertakan di setiap request.
 
-const API_BASE = '/api';
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
 let _token = localStorage.getItem('keuangan_token');
 

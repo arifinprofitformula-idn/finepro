@@ -74,6 +74,10 @@ function buildTransactionFilters(req, householdId) {
   return { where, params };
 }
 
+function monthKeyFromDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
 // GET /api/transactions — riwayat transaksi, dengan filter opsional (type,
 // category, wallet_id, search di kolom note, date_from/date_to, atau
 // month+year untuk kompatibilitas lama) dan cursor pagination (lihat
@@ -420,7 +424,7 @@ router.get('/summary-by-category', async (req, res) => {
   }
 });
 
-// GET /api/transactions/zakat-summary — total Zakat & Sedekah bulan ini + streak bulan berturut-turut
+// GET /api/transactions/zakat-summary — total pos sistem zakat/sedekah bulan ini + streak bulan berturut-turut
 router.get('/zakat-summary', async (req, res) => {
   try {
     const householdId = await getUserHouseholdId(req.user.userId);
@@ -428,15 +432,24 @@ router.get('/zakat-summary', async (req, res) => {
 
     const result = await pool.query(
       `SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month, SUM(amount) as total
-       FROM transactions
-       WHERE household_id = $1 AND type = 'expense' AND category = 'Zakat & Sedekah'
+       FROM transactions t
+       LEFT JOIN categories c
+         ON c.household_id = t.household_id
+        AND c.type = t.type
+        AND c.name = t.category
+       WHERE t.household_id = $1
+         AND t.type = 'expense'
+         AND (
+           c.system_key = 'zakat_sedekah'
+           OR t.category IN ('Zakat & Sedekah', 'Ibadah & Sedekah')
+         )
        GROUP BY 1
        ORDER BY 1 DESC`,
       [householdId]
     );
 
     const monthsWithEntries = new Set(result.rows.map((r) => r.month));
-    const thisMonthKey = new Date().toISOString().slice(0, 7);
+    const thisMonthKey = monthKeyFromDate(new Date());
     const thisMonth = parseFloat(
       result.rows.find((r) => r.month === thisMonthKey)?.total || 0
     );
@@ -444,7 +457,7 @@ router.get('/zakat-summary', async (req, res) => {
     let streakMonths = 0;
     const cursor = new Date();
     while (true) {
-      const key = cursor.toISOString().slice(0, 7);
+      const key = monthKeyFromDate(cursor);
       if (!monthsWithEntries.has(key)) break;
       streakMonths += 1;
       cursor.setMonth(cursor.getMonth() - 1);

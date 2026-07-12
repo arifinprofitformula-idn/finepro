@@ -341,7 +341,7 @@ router.post('/avatar', authMiddleware, (req, res) => {
     }
 
     try {
-      const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+      const avatarUrl = `/api/uploads/avatars/${req.file.filename}`;
       const result = await pool.query(
         'UPDATE users SET avatar_url = $1 WHERE id = $2 RETURNING id, email, name, avatar_url, role, created_at, (password_hash IS NOT NULL) AS has_password',
         [avatarUrl, req.user.userId]

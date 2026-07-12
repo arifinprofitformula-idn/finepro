@@ -70,11 +70,15 @@ CREATE TABLE IF NOT EXISTS categories (
   household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('income','expense')),
   name TEXT NOT NULL,
+  system_key TEXT,
   sort_order INT DEFAULT 0,
   is_default BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE (household_id, type, name)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_household_system_key
+  ON categories (household_id, system_key)
+  WHERE system_key IS NOT NULL;
 
 -- ============================================================
 -- Fungsi & Trigger
@@ -85,47 +89,49 @@ CREATE OR REPLACE FUNCTION seed_default_categories(p_household_id UUID, p_type T
 RETURNS void AS $$
 BEGIN
   IF p_type = 'family' THEN
-    INSERT INTO categories (household_id, type, name, is_default, sort_order) VALUES
-      (p_household_id, 'expense', 'Rumah Tangga', true, 1),
-      (p_household_id, 'expense', 'Cicilan/Utang', true, 2),
-      (p_household_id, 'expense', 'Pendidikan Anak', true, 3),
-      (p_household_id, 'expense', 'Transportasi', true, 4),
-      (p_household_id, 'expense', 'Kesehatan', true, 5),
-      (p_household_id, 'expense', 'Tabungan & Investasi', true, 6),
-      (p_household_id, 'expense', 'Ibadah & Sedekah', true, 7),
-      (p_household_id, 'expense', 'Hiburan', true, 8),
-      (p_household_id, 'expense', 'Lainnya', true, 9),
-      (p_household_id, 'income', 'Gaji/Usaha', true, 1),
-      (p_household_id, 'income', 'Coaching & Mentoring', true, 2),
-      (p_household_id, 'income', 'Produk Digital', true, 3),
-      (p_household_id, 'income', 'Investasi', true, 4),
-      (p_household_id, 'income', 'Lainnya', true, 5);
+    INSERT INTO categories (household_id, type, name, is_default, sort_order, system_key) VALUES
+      (p_household_id, 'expense', 'Rumah Tangga', true, 1, NULL),
+      (p_household_id, 'expense', 'Cicilan/Utang', true, 2, NULL),
+      (p_household_id, 'expense', 'Pendidikan Anak', true, 3, NULL),
+      (p_household_id, 'expense', 'Transportasi', true, 4, NULL),
+      (p_household_id, 'expense', 'Kesehatan', true, 5, NULL),
+      (p_household_id, 'expense', 'Tabungan & Investasi', true, 6, NULL),
+      (p_household_id, 'expense', 'Zakat & Sedekah', true, 7, 'zakat_sedekah'),
+      (p_household_id, 'expense', 'Hiburan', true, 8, NULL),
+      (p_household_id, 'expense', 'Lainnya', true, 9, NULL),
+      (p_household_id, 'income', 'Gaji/Usaha', true, 1, NULL),
+      (p_household_id, 'income', 'Coaching & Mentoring', true, 2, NULL),
+      (p_household_id, 'income', 'Produk Digital', true, 3, NULL),
+      (p_household_id, 'income', 'Investasi', true, 4, NULL),
+      (p_household_id, 'income', 'Lainnya', true, 5, NULL);
 
   ELSIF p_type = 'student' THEN
-    INSERT INTO categories (household_id, type, name, is_default, sort_order) VALUES
-      (p_household_id, 'expense', 'Kos/Kontrakan', true, 1),
-      (p_household_id, 'expense', 'Uang Makan', true, 2),
-      (p_household_id, 'expense', 'Transportasi (Ojol/Motor)', true, 3),
-      (p_household_id, 'expense', 'Buku & Alat Kuliah', true, 4),
-      (p_household_id, 'expense', 'Kuota & Internet', true, 5),
-      (p_household_id, 'expense', 'Nongkrong & Hiburan', true, 6),
-      (p_household_id, 'expense', 'Tabungan', true, 7),
-      (p_household_id, 'expense', 'Lainnya', true, 8),
-      (p_household_id, 'income', 'Uang Kiriman Ortu', true, 1),
-      (p_household_id, 'income', 'Beasiswa', true, 2),
-      (p_household_id, 'income', 'Kerja Part-time/Freelance', true, 3),
-      (p_household_id, 'income', 'Lainnya', true, 4);
+    INSERT INTO categories (household_id, type, name, is_default, sort_order, system_key) VALUES
+      (p_household_id, 'expense', 'Kos/Kontrakan', true, 1, NULL),
+      (p_household_id, 'expense', 'Uang Makan', true, 2, NULL),
+      (p_household_id, 'expense', 'Transportasi (Ojol/Motor)', true, 3, NULL),
+      (p_household_id, 'expense', 'Buku & Alat Kuliah', true, 4, NULL),
+      (p_household_id, 'expense', 'Kuota & Internet', true, 5, NULL),
+      (p_household_id, 'expense', 'Nongkrong & Hiburan', true, 6, NULL),
+      (p_household_id, 'expense', 'Tabungan', true, 7, NULL),
+      (p_household_id, 'expense', 'Zakat & Sedekah', true, 8, 'zakat_sedekah'),
+      (p_household_id, 'expense', 'Lainnya', true, 9, NULL),
+      (p_household_id, 'income', 'Uang Kiriman Ortu', true, 1, NULL),
+      (p_household_id, 'income', 'Beasiswa', true, 2, NULL),
+      (p_household_id, 'income', 'Kerja Part-time/Freelance', true, 3, NULL),
+      (p_household_id, 'income', 'Lainnya', true, 4, NULL);
 
   ELSE -- individual
-    INSERT INTO categories (household_id, type, name, is_default, sort_order) VALUES
-      (p_household_id, 'expense', 'Kebutuhan Pokok', true, 1),
-      (p_household_id, 'expense', 'Transportasi', true, 2),
-      (p_household_id, 'expense', 'Kesehatan', true, 3),
-      (p_household_id, 'expense', 'Tabungan & Investasi', true, 4),
-      (p_household_id, 'expense', 'Hiburan', true, 5),
-      (p_household_id, 'expense', 'Lainnya', true, 6),
-      (p_household_id, 'income', 'Gaji/Usaha', true, 1),
-      (p_household_id, 'income', 'Lainnya', true, 2);
+    INSERT INTO categories (household_id, type, name, is_default, sort_order, system_key) VALUES
+      (p_household_id, 'expense', 'Kebutuhan Pokok', true, 1, NULL),
+      (p_household_id, 'expense', 'Transportasi', true, 2, NULL),
+      (p_household_id, 'expense', 'Kesehatan', true, 3, NULL),
+      (p_household_id, 'expense', 'Tabungan & Investasi', true, 4, NULL),
+      (p_household_id, 'expense', 'Hiburan', true, 5, NULL),
+      (p_household_id, 'expense', 'Zakat & Sedekah', true, 6, 'zakat_sedekah'),
+      (p_household_id, 'expense', 'Lainnya', true, 7, NULL),
+      (p_household_id, 'income', 'Gaji/Usaha', true, 1, NULL),
+      (p_household_id, 'income', 'Lainnya', true, 2, NULL);
   END IF;
 END;
 $$ LANGUAGE plpgsql;

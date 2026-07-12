@@ -14,6 +14,7 @@ import { planLabel } from "../api/subscriptions.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
 import { startTelegramLink } from "../api/telegram.js";
 import { fmtRp, monthKey, todayStr } from "../utils/format.js";
+import { mediaUrl } from "../utils/media.js";
 import {
   ArrowDownLeft,
   ArrowRightLeft,
@@ -373,7 +374,7 @@ export default function AccountPage({
       <div className="gloss-panel mb-4 flex items-center gap-3 rounded-2xl p-4">
         <label className="h-14 w-14 flex-shrink-0 cursor-pointer overflow-hidden rounded-full border-2 border-white bg-violet text-white shadow-soft flex items-center justify-center text-lg font-semibold">
           {user.avatar_url ? (
-            <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
+            <img src={mediaUrl(user.avatar_url)} alt="" className="h-full w-full object-cover" />
           ) : (
             (user.name || user.email).charAt(0).toUpperCase()
           )}

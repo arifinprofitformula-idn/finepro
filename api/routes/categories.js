@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
     if (!householdId) return res.json({ categories: [] });
 
     const result = await pool.query(
-      'SELECT id, type, name, sort_order, is_default FROM categories WHERE household_id = $1 ORDER BY type, sort_order',
+      'SELECT id, type, name, sort_order, is_default, system_key FROM categories WHERE household_id = $1 ORDER BY type, sort_order',
       [householdId]
     );
     res.json({ categories: result.rows });
@@ -59,7 +59,7 @@ router.post('/', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO categories (household_id, type, name, sort_order, is_default)
        VALUES ($1, $2, $3, $4, false)
-       RETURNING id, type, name, sort_order, is_default`,
+       RETURNING id, type, name, sort_order, is_default, system_key`,
       [householdId, type, name.trim(), Number(maxOrder.rows[0].max) + 1]
     );
     res.status(201).json({ category: result.rows[0] });
@@ -86,7 +86,7 @@ router.patch('/:id', async (req, res) => {
     const newName = name.trim();
 
     const current = await client.query(
-      'SELECT id, type, name FROM categories WHERE id = $1 AND household_id = $2',
+      'SELECT id, type, name, sort_order, is_default, system_key FROM categories WHERE id = $1 AND household_id = $2',
       [req.params.id, householdId]
     );
     if (current.rows.length === 0) {
@@ -109,7 +109,7 @@ router.patch('/:id', async (req, res) => {
 
     await client.query('BEGIN');
     const updated = await client.query(
-      'UPDATE categories SET name = $1 WHERE id = $2 RETURNING id, type, name, sort_order, is_default',
+      'UPDATE categories SET name = $1 WHERE id = $2 RETURNING id, type, name, sort_order, is_default, system_key',
       [newName, req.params.id]
     );
     await client.query(

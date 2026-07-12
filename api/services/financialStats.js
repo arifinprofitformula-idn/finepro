@@ -28,19 +28,45 @@ export async function computeFinancialStats(householdId) {
   );
 
   const budgetResult = await pool.query(
-    `SELECT b.category, b.amount as budget,
+    `SELECT b.category, c.system_key, b.amount as budget,
        COALESCE((
          SELECT SUM(t.amount) FROM transactions t
          WHERE t.household_id = $1 AND t.type = 'expense' AND t.category = b.category
            AND EXTRACT(MONTH FROM t.date) = EXTRACT(MONTH FROM CURRENT_DATE)
            AND EXTRACT(YEAR FROM t.date) = EXTRACT(YEAR FROM CURRENT_DATE)
        ), 0) as spent
-     FROM budgets b WHERE b.household_id = $1`,
+     FROM budgets b
+     LEFT JOIN categories c
+       ON c.household_id = b.household_id
+      AND c.type = 'expense'
+      AND c.name = b.category
+     WHERE b.household_id = $1`,
     [householdId]
   );
   const overBudgetCategories = budgetResult.rows
     .filter((r) => Number(r.budget) > 0 && Number(r.spent) > Number(r.budget))
-    .map((r) => ({ category: r.category, budget: Number(r.budget), spent: Number(r.spent) }));
+    .map((r) => ({ category: r.category, system_key: r.system_key, budget: Number(r.budget), spent: Number(r.spent) }));
+
+  const currentMonthExpenseResult = await pool.query(
+    `SELECT
+       COALESCE(SUM(t.amount), 0) as total_expense,
+       COALESCE(SUM(CASE
+         WHEN c.system_key = 'zakat_sedekah'
+           OR t.category IN ('Zakat & Sedekah', 'Ibadah & Sedekah')
+         THEN t.amount ELSE 0 END), 0) as giving_expense
+     FROM transactions t
+     LEFT JOIN categories c
+       ON c.household_id = t.household_id
+      AND c.type = t.type
+      AND c.name = t.category
+     WHERE t.household_id = $1
+       AND t.type = 'expense'
+       AND EXTRACT(MONTH FROM t.date) = EXTRACT(MONTH FROM CURRENT_DATE)
+       AND EXTRACT(YEAR FROM t.date) = EXTRACT(YEAR FROM CURRENT_DATE)`,
+    [householdId]
+  );
+  const totalExpenseThisMonth = Number(currentMonthExpenseResult.rows[0]?.total_expense || 0);
+  const givingExpenseThisMonth = Number(currentMonthExpenseResult.rows[0]?.giving_expense || 0);
 
   const savingsResult = await pool.query(
     `SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month,
@@ -66,8 +92,17 @@ export async function computeFinancialStats(householdId) {
 
   const zakatResult = await pool.query(
     `SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month
-     FROM transactions
-     WHERE household_id = $1 AND type = 'expense' AND category = 'Zakat & Sedekah'
+     FROM transactions t
+     LEFT JOIN categories c
+       ON c.household_id = t.household_id
+      AND c.type = t.type
+      AND c.name = t.category
+     WHERE t.household_id = $1
+       AND t.type = 'expense'
+       AND (
+         c.system_key = 'zakat_sedekah'
+         OR t.category IN ('Zakat & Sedekah', 'Ibadah & Sedekah')
+       )
      GROUP BY 1
      ORDER BY 1 DESC`,
     [householdId]
@@ -76,7 +111,7 @@ export async function computeFinancialStats(householdId) {
   let zakatStreakMonths = 0;
   const cursor = new Date();
   while (true) {
-    const key = cursor.toISOString().slice(0, 7);
+    const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
     if (!zakatMonths.has(key)) break;
     zakatStreakMonths += 1;
     cursor.setMonth(cursor.getMonth() - 1);
@@ -113,6 +148,12 @@ export async function computeFinancialStats(householdId) {
       total: Number(r.total)
     })),
     overBudgetCategories,
+    expenseBreakdownThisMonth: {
+      totalExpense: totalExpenseThisMonth,
+      givingExpense: givingExpenseThisMonth,
+      operationalExpense: totalExpenseThisMonth - givingExpenseThisMonth,
+      givingSystemKey: 'zakat_sedekah'
+    },
     savingsRatioPercent: savingsRatio,
     zakatStreakMonths,
     upcomingBills: billsResult.rows.map((r) => ({

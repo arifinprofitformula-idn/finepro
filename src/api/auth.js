@@ -1,7 +1,7 @@
 // src/lib/auth.js
 // Autentikasi via API lokal (Express.js + JWT), menggantikan Supabase Auth.
 
-import { apiFetch, setToken, getToken } from "./apiClient.js";
+import { API_BASE, apiFetch, setToken, getToken } from "./apiClient.js";
 
 export async function signUp(email, password) {
   const data = await apiFetch('/auth/register', {
@@ -78,7 +78,7 @@ export async function uploadAvatar(file) {
   const formData = new FormData();
   formData.append('avatar', file);
 
-  const res = await fetch('/api/auth/avatar', {
+  const res = await fetch(`${API_BASE}/auth/avatar`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,

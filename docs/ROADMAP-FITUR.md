@@ -46,9 +46,10 @@ otomatis per tipe.
   `007_bills.sql`. Tandai lunas: kalau `is_recurring`, jatuh tempo otomatis
   maju +1 bulan; kalau bukan, cukup `paid_at`. Banner pengingat di
   dashboard untuk tagihan ≤3 hari lagi (termasuk yang sudah telat).
-- ✅ **Pos Zakat/Sedekah** — widget ringkasan bulan berjalan di dashboard
-  (household `family`), murni derived dari `byCategory["Ibadah & Sedekah"]`
-  yang sudah difetch, tanpa endpoint baru.
+- ✅ **Pos Zakat/Sedekah** — widget ringkasan bulan berjalan di dashboard,
+  tetap masuk pengeluaran/saldo tetapi ditandai `system_key='zakat_sedekah'`
+  supaya aman walau nama kategori diubah, dan dibedakan dari pengeluaran
+  operasional dalam insight AI.
 - ✅ **Arisan & Iuran** — tabel `arisan_groups`/`arisan_participants`/
   `arisan_payments`, migrasi `009_arisan.sql`. Peserta disimpan sebagai
   nama bebas (bukan user terdaftar) karena arisan sering melibatkan
