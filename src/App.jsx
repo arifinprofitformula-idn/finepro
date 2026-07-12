@@ -83,6 +83,15 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [household?.id]);
 
+  // Deteksi reset_token dari URL — langsung buka AuthPage mode reset
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reset_token")) {
+      setAuthMode("reset");
+      setShowAuth(true);
+    }
+  }, []);
+
   if (initializing) return <SplashScreen />;
   if (!user) {
     if (!showAuth) {
