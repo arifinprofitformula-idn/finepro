@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import pool from '../db.js';
 import { authMiddleware, adminMiddleware, superAdminMiddleware, adminRoleForEmail, generateToken } from '../middleware/auth.js';
 import { auditAdminAction, getAllSettings, publicSetting, updateSetting } from '../services/appSettings.js';
+import { getCurrentMetalPrices } from '../services/apeEpi.js';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ const adminLoginLimiter = rateLimit({
   message: { error: 'Terlalu banyak percobaan, coba lagi beberapa menit lagi' },
 });
 
-const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'manual_payment', 'ai', 'ai_quota', 'web_push', 'telegram']);
+const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'manual_payment', 'ai', 'ai_quota', 'ape_epi', 'web_push', 'telegram']);
 
 function toInt(value, fallback) {
   const n = Number(value);
@@ -149,6 +150,21 @@ router.patch('/settings/:key', async (req, res) => {
   } catch (err) {
     console.error('Update admin setting error:', err);
     res.status(500).json({ error: 'Gagal menyimpan pengaturan' });
+  }
+});
+
+router.post('/ape-epi/test', async (req, res) => {
+  try {
+    const prices = await getCurrentMetalPrices({ forceRefresh: true });
+    await auditAdminAction(req.admin.id, 'integrations.ape_epi.test', 'app_settings', 'ape_epi', {
+      enabled: prices.enabled,
+      gold_date: prices.gold?.date || null,
+      silver_date: prices.silver?.date || null,
+    });
+    res.json({ prices });
+  } catch (err) {
+    console.error('APE-EPI test error:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Gagal menguji koneksi APE-EPI' });
   }
 });
 

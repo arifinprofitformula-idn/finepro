@@ -79,6 +79,11 @@ export async function updateAdminSetting(key, patch) {
   return data.setting;
 }
 
+export async function testApeEpiConnection() {
+  const data = await adminFetch("/admin/ape-epi/test", { method: "POST" });
+  return data.prices;
+}
+
 export async function getAdminUsers(q = "") {
   const query = q ? `?q=${encodeURIComponent(q)}` : "";
   const data = await adminFetch(`/admin/users${query}`);

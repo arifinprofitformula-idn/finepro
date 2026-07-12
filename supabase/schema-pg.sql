@@ -234,7 +234,59 @@ CREATE TABLE IF NOT EXISTS ai_usage_events (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 15. Google/local password reset
+-- 15. Target tabungan dan aset
+CREATE TABLE IF NOT EXISTS savings_goals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  goal_type TEXT NOT NULL DEFAULT 'money'
+    CHECK (goal_type IN ('money','gold','silver')),
+  target_amount NUMERIC CHECK (target_amount IS NULL OR target_amount > 0),
+  target_weight NUMERIC CHECK (target_weight IS NULL OR target_weight > 0),
+  target_date DATE,
+  wallet_id UUID REFERENCES wallets(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active','completed','archived')),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS savings_goal_contributions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  goal_id UUID REFERENCES savings_goals(id) ON DELETE CASCADE NOT NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  amount_paid NUMERIC NOT NULL DEFAULT 0 CHECK (amount_paid >= 0),
+  weight NUMERIC NOT NULL DEFAULT 0 CHECK (weight >= 0),
+  price_per_unit NUMERIC CHECK (price_per_unit IS NULL OR price_per_unit >= 0),
+  note TEXT,
+  transaction_id UUID REFERENCES transactions(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 16. Cache harga logam dari APE-EPI
+CREATE TABLE IF NOT EXISTS metal_price_cache (
+  asset_type TEXT PRIMARY KEY CHECK (asset_type IN ('gold','silver')),
+  brand TEXT NOT NULL,
+  level_code TEXT,
+  size TEXT NOT NULL DEFAULT '1',
+  price_per_gram NUMERIC NOT NULL CHECK (price_per_gram >= 0),
+  currency TEXT NOT NULL DEFAULT 'IDR',
+  price_date DATE,
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  raw_payload JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS integration_request_logs (
+  integration_key TEXT NOT NULL,
+  request_date DATE NOT NULL,
+  request_count INTEGER NOT NULL DEFAULT 0 CHECK (request_count >= 0),
+  last_requested_at TIMESTAMPTZ,
+  PRIMARY KEY (integration_key, request_date)
+);
+
+-- 17. Google/local password reset
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) NOT NULL,
@@ -244,7 +296,7 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 16. Telegram integration
+-- 18. Telegram integration
 CREATE TABLE IF NOT EXISTS telegram_link_codes (
   code TEXT PRIMARY KEY,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
@@ -268,7 +320,7 @@ CREATE TABLE IF NOT EXISTS telegram_receipts (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 17. Konfigurasi aplikasi global untuk admin panel
+-- 19. Konfigurasi aplikasi global untuk admin panel
 CREATE TABLE IF NOT EXISTS app_settings (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -395,6 +447,10 @@ CREATE INDEX IF NOT EXISTS idx_ai_insights_household ON ai_insights (household_i
 CREATE INDEX IF NOT EXISTS idx_receipt_scans_household_month ON receipt_scans (household_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_household_feature_created ON ai_usage_events (household_id, feature, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_source_created ON ai_usage_events (source, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_savings_goals_household_status ON savings_goals (household_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_savings_goal_contributions_goal_date ON savings_goal_contributions (goal_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_metal_price_cache_fetched_at ON metal_price_cache (fetched_at DESC);
+CREATE INDEX IF NOT EXISTS idx_integration_request_logs_date ON integration_request_logs (integration_key, request_date DESC);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token_hash ON password_reset_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_telegram_receipts_household ON telegram_receipts (household_id, created_at);
@@ -412,6 +468,7 @@ VALUES
   ('manual_payment', '{"enabled": false, "bank_name": "", "account_number": "", "account_name": "", "instructions": ""}', false),
   ('ai', '{"enabled": false, "provider": "sumopod", "sumopod_api_key": "", "sumopod_base_url": "https://ai.sumopod.com/v1", "sumopod_model": "gpt-4o-mini", "anthropic_api_key": "", "anthropic_model": "claude-sonnet-4-5", "insights_daily_limit": 3, "receipt_scan_monthly_limit": 30}', true),
   ('ai_quota', '{"trial_insight_total": 3, "trial_scan_total": 5, "free_insight_monthly": 1, "free_scan_monthly": 3, "paid_insight_daily": 3, "paid_scan_monthly": 30}', false),
+  ('ape_epi', '{"enabled": false, "base_url": "https://ape.bisnisemasperak.com/api/v1", "api_key": "", "level": "konsumen", "gold_brand": "GOLDGRAM", "silver_brand": "SILVERGRAM", "cache_ttl_minutes": 30, "max_daily_requests": 3}', true),
   ('web_push', '{"enabled": true, "vapid_public_key": "", "vapid_private_key": "", "vapid_subject": "mailto:admin@finepro.my.id"}', true),
   ('telegram', '{"enabled": false, "bot_token": "", "bot_username": "", "n8n_shared_secret": ""}', true)
 ON CONFLICT (key) DO NOTHING;

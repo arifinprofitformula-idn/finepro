@@ -18,6 +18,8 @@ import pushRoutes from './routes/push.js';
 import aiInsightsRoutes from './routes/ai-insights.js';
 import adminRoutes from './routes/admin.js';
 import telegramRoutes from './routes/telegram.js';
+import savingsGoalsRoutes from './routes/savings-goals.js';
+import metalPricesRoutes from './routes/metal-prices.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -51,6 +53,8 @@ app.use('/api/push', pushRoutes);
 app.use('/api/ai', aiInsightsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/telegram', telegramRoutes);
+app.use('/api/savings-goals', savingsGoalsRoutes);
+app.use('/api/metal-prices', metalPricesRoutes);
 
 // 404 handler
 app.use((req, res) => {

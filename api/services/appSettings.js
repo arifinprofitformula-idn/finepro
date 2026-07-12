@@ -39,6 +39,16 @@ const DEFAULTS = {
     paid_insight_daily: 3,
     paid_scan_monthly: 30,
   },
+  ape_epi: {
+    enabled: false,
+    base_url: 'https://ape.bisnisemasperak.com/api/v1',
+    api_key: '',
+    level: 'konsumen',
+    gold_brand: 'GOLDGRAM',
+    silver_brand: 'SILVERGRAM',
+    cache_ttl_minutes: 30,
+    max_daily_requests: 3,
+  },
   web_push: {
     enabled: true,
     vapid_public_key: '',
@@ -57,6 +67,7 @@ const SECRET_FIELDS = {
   mailketing: ['api_token'],
   midtrans: ['server_key', 'client_key'],
   ai: ['sumopod_api_key', 'anthropic_api_key'],
+  ape_epi: ['api_key'],
   web_push: ['vapid_private_key'],
   telegram: ['bot_token', 'n8n_shared_secret'],
 };
@@ -85,6 +96,7 @@ const ALLOWED_FIELDS = {
     'paid_insight_daily',
     'paid_scan_monthly'
   ],
+  ape_epi: ['enabled', 'base_url', 'api_key', 'level', 'gold_brand', 'silver_brand', 'cache_ttl_minutes', 'max_daily_requests'],
   web_push: ['enabled', 'vapid_public_key', 'vapid_private_key', 'vapid_subject'],
   telegram: ['enabled', 'bot_token', 'bot_username', 'n8n_shared_secret'],
 };
@@ -134,6 +146,18 @@ function envFallback(key) {
       vapid_public_key: process.env.VAPID_PUBLIC_KEY || '',
       vapid_private_key: process.env.VAPID_PRIVATE_KEY || '',
       vapid_subject: process.env.VAPID_SUBJECT || DEFAULTS.web_push.vapid_subject,
+    };
+  }
+  if (key === 'ape_epi') {
+    return {
+      enabled: Boolean(process.env.APE_EPI_API_KEY),
+      base_url: process.env.APE_EPI_BASE_URL || DEFAULTS.ape_epi.base_url,
+      api_key: process.env.APE_EPI_API_KEY || '',
+      level: process.env.APE_EPI_LEVEL || DEFAULTS.ape_epi.level,
+      gold_brand: process.env.APE_EPI_GOLD_BRAND || DEFAULTS.ape_epi.gold_brand,
+      silver_brand: process.env.APE_EPI_SILVER_BRAND || DEFAULTS.ape_epi.silver_brand,
+      cache_ttl_minutes: Number(process.env.APE_EPI_CACHE_TTL_MINUTES || DEFAULTS.ape_epi.cache_ttl_minutes),
+      max_daily_requests: Number(process.env.APE_EPI_MAX_DAILY_REQUESTS || DEFAULTS.ape_epi.max_daily_requests),
     };
   }
   if (key === 'telegram') {

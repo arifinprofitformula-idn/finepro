@@ -14,6 +14,7 @@ import TransactionItem from "../components/TransactionItem.jsx";
 import BudgetRow from "../components/BudgetRow.jsx";
 import ZakatWidget from "../components/ZakatWidget.jsx";
 import BillsSection from "../components/BillsSection.jsx";
+import SavingsGoalsSection from "../components/SavingsGoalsSection.jsx";
 import InsightButton from "../components/InsightButton.jsx";
 import InsightCard from "../components/InsightCard.jsx";
 import { useAiInsight } from "../hooks/useAiInsight.js";
@@ -250,6 +251,8 @@ export default function DashboardPage({ household, transactions, kpi, previousKp
       />
 
       <ZakatWidget householdId={household.id} totalExpense={kpi.expense} monthKey={selectedMonthKey} />
+
+      <SavingsGoalsSection householdId={household.id} />
 
       <BillsSection householdId={household.id} />
 

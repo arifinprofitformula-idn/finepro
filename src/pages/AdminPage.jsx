@@ -8,6 +8,7 @@ import {
   ChevronRight,
   CreditCard,
   Database,
+  Gem,
   History,
   KeyRound,
   Landmark,
@@ -29,7 +30,8 @@ import {
   getAdminSettings,
   getAdminUsers,
   updateAdminSetting,
-  updateAdminUserRole
+  updateAdminUserRole,
+  testApeEpiConnection
 } from "../api/admin.js";
 import { fmtRp } from "../utils/format.js";
 
@@ -224,8 +226,10 @@ export default function AdminPage({ user }) {
   const [manualPayment, setManualPayment] = useFormState(settings?.manual_payment);
   const [ai, setAi] = useFormState(settings?.ai);
   const [aiQuota, setAiQuota] = useFormState(settings?.ai_quota);
+  const [apeEpi, setApeEpi] = useFormState(settings?.ape_epi);
   const [webPush, setWebPush] = useFormState(settings?.web_push);
   const [telegram, setTelegram] = useFormState(settings?.telegram);
+  const [apePreview, setApePreview] = useState(null);
 
   const canManageRoles = user?.role === "super_admin";
 
@@ -289,6 +293,20 @@ export default function AdminPage({ user }) {
       setMessage("Role user diperbarui.");
     } catch (err) {
       setMessage(err.message);
+    }
+  }
+
+  async function testApeEpi() {
+    setSavingKey("ape_epi_test");
+    setMessage("");
+    try {
+      const prices = await testApeEpiConnection();
+      setApePreview(prices);
+      setMessage("Koneksi APE-EPI berhasil.");
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setSavingKey("");
     }
   }
 
@@ -570,6 +588,80 @@ export default function AdminPage({ user }) {
               <SaveButton label="Simpan Limit Tier" saving={savingKey === "ai_quota"} onClick={() => saveSetting("ai_quota", aiQuota)} tone="mint" />
             </div>
           </section>
+
+          <IntegrationCard
+            icon={Gem}
+            title="APE-EPI Auto Price Engine"
+            description="Harga per gram GOLDGRAM dan SILVERGRAM untuk valuasi target aset."
+            tone="gold"
+            enabled={apeEpi.enabled}
+            onToggle={(v) => setApeEpi("enabled", v)}
+            footer={
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <SaveButton label="Simpan APE-EPI" saving={savingKey === "ape_epi"} onClick={() => saveSetting("ape_epi", apeEpi)} tone="gold" />
+                <button
+                  type="button"
+                  onClick={testApeEpi}
+                  disabled={savingKey === "ape_epi_test"}
+                  className="flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-full bg-white px-4 text-sm font-bold text-violet shadow-soft transition active:scale-[0.98] disabled:opacity-60 sm:w-auto"
+                >
+                  <RefreshCw size={15} className={savingKey === "ape_epi_test" ? "animate-spin" : ""} />
+                  {savingKey === "ape_epi_test" ? "Menguji..." : "Test Koneksi"}
+                </button>
+              </div>
+            }
+          >
+            <div>
+              <label className={labelClass}>API Key</label>
+              <input className={inputClass} type="password" value={apeEpi.api_key || ""} onChange={(e) => setApeEpi("api_key", e.target.value)} placeholder={apeEpi.api_key_masked || "API key APE-EPI"} />
+              <SecretHint configured={apeEpi.api_key_configured} />
+            </div>
+            <div>
+              <label className={labelClass}>Base URL</label>
+              <input className={inputClass} value={apeEpi.base_url || ""} onChange={(e) => setApeEpi("base_url", e.target.value)} placeholder="https://ape.bisnisemasperak.com/api/v1" />
+            </div>
+            <FormRow>
+              <div>
+                <label className={labelClass}>Brand Emas</label>
+                <input className={inputClass} value={apeEpi.gold_brand || "GOLDGRAM"} onChange={(e) => setApeEpi("gold_brand", e.target.value)} placeholder="GOLDGRAM" />
+              </div>
+              <div>
+                <label className={labelClass}>Brand Perak</label>
+                <input className={inputClass} value={apeEpi.silver_brand || "SILVERGRAM"} onChange={(e) => setApeEpi("silver_brand", e.target.value)} placeholder="SILVERGRAM" />
+              </div>
+            </FormRow>
+            <FormRow>
+              <div>
+                <label className={labelClass}>Level Harga</label>
+                <input className={inputClass} value={apeEpi.level || "konsumen"} onChange={(e) => setApeEpi("level", e.target.value)} placeholder="konsumen" />
+              </div>
+              <div>
+                <label className={labelClass}>Cache TTL Menit</label>
+                <input className={inputClass} type="number" min="1" value={apeEpi.cache_ttl_minutes ?? 30} onChange={(e) => setApeEpi("cache_ttl_minutes", Number(e.target.value))} />
+              </div>
+            </FormRow>
+            <div>
+              <label className={labelClass}>Maksimal Request Harga Baru / Hari</label>
+              <input className={inputClass} type="number" min="1" value={apeEpi.max_daily_requests ?? 3} onChange={(e) => setApeEpi("max_daily_requests", Number(e.target.value))} />
+              <div className="mt-1.5 text-[11px] font-semibold leading-relaxed text-neutral-500">
+                Rekomendasi FinePro: 3x per hari karena harga EPI biasanya update setelah jam 09:00.
+              </div>
+            </div>
+            {apePreview?.enabled && (
+              <div className="grid gap-2 rounded-2xl border border-gold/20 bg-gold-light/60 p-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-gold">GOLDGRAM</div>
+                  <div className="mt-1 text-sm font-bold text-navy">{fmtRp(Number(apePreview.gold?.price_per_gram || 0))} / gram</div>
+                  <div className="text-[11px] font-semibold text-neutral-500">{apePreview.gold?.date || "Tanggal terbaru"}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-violet">SILVERGRAM</div>
+                  <div className="mt-1 text-sm font-bold text-navy">{fmtRp(Number(apePreview.silver?.price_per_gram || 0))} / gram</div>
+                  <div className="text-[11px] font-semibold text-neutral-500">{apePreview.silver?.date || "Tanggal terbaru"}</div>
+                </div>
+              </div>
+            )}
+          </IntegrationCard>
 
           <IntegrationCard
             icon={BellRing}
