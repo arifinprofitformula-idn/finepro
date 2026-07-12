@@ -99,17 +99,23 @@ export function tryRegexExtraction(rawText) {
   if (amount == null || !date) return null;
 
   const note = (rawText.split('\n').find((l) => l.trim().length > 3) || '').trim().slice(0, 80);
-  return { date, amount, suggested_category: '', note, source: 'regex' };
+  // Regex cuma cocok untuk pola TOTAL/GRAND TOTAL struk belanja — bukti
+  // transfer masuk nyaris tidak pernah match pola ini, jadi aman diasumsikan
+  // expense/receipt di jalur ini (transfer akan jatuh ke fallback LLM).
+  return { date, amount, suggested_category: '', note, type: 'expense', document_type: 'receipt', source: 'regex' };
 }
 
 function receiptPrompt(rawText) {
-  return 'Ini hasil OCR dari foto struk belanja (mungkin ada noise/typo dari OCR):\n\n"""\n' +
+  return 'Ini hasil OCR dari foto struk belanja ATAU bukti transfer bank/e-wallet ' +
+    '(mungkin ada noise/typo dari OCR):\n\n"""\n' +
     rawText +
     '\n"""\n\nEkstrak informasinya dan balas HANYA dengan JSON valid (tanpa markdown/teks lain) ' +
-    'persis format ini: {"date":"YYYY-MM-DD","amount":<angka total belanja tanpa titik/koma>,' +
-    '"suggested_category":"<kategori singkat dalam Bahasa Indonesia, mis. Rumah Tangga/Kebutuhan Pokok/Transportasi>",' +
-    '"note":"<nama toko/warung kalau ada>"}. ' +
-    'Kalau tanggal tidak terbaca, pakai null. Kalau total tidak terbaca, pakai 0.';
+    'persis format ini: {"date":"YYYY-MM-DD","amount":<angka nominal tanpa titik/koma>,' +
+    '"suggested_category":"<kategori singkat dalam Bahasa Indonesia, mis. Rumah Tangga/Kebutuhan Pokok/Transportasi/Transfer Masuk>",' +
+    '"note":"<nama toko/warung/pengirim kalau ada>",' +
+    '"type":"<\\"expense\\" kalau struk belanja/pembayaran keluar, \\"income\\" kalau bukti transfer/dana masuk>",' +
+    '"document_type":"<\\"receipt\\" untuk struk belanja, \\"transfer\\" untuk bukti transfer/mutasi masuk>"}. ' +
+    'Kalau tanggal tidak terbaca, pakai null. Kalau nominal tidak terbaca, pakai 0.';
 }
 
 function fallbackConfig(providerName) {

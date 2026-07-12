@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import pool from '../db.js';
+import { getSetting } from '../services/appSettings.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'keuangan-keluarga-secret-change-in-production';
 
@@ -50,6 +51,23 @@ export async function adminMiddleware(req, res, next) {
   } catch (err) {
     console.error('Admin middleware error:', err);
     res.status(500).json({ error: 'Gagal memverifikasi akses admin' });
+  }
+}
+
+// Middleware: verifikasi panggilan machine-to-machine dari n8n (bukan user
+// login) lewat shared secret di header X-N8N-Secret, dibandingkan dengan
+// secret yang dikonfigurasi di Admin Console (app_settings key "telegram").
+export async function telegramServiceMiddleware(req, res, next) {
+  try {
+    const provided = req.headers['x-n8n-secret'];
+    const { n8n_shared_secret: expected } = await getSetting('telegram');
+    if (!expected || !provided || provided !== expected) {
+      return res.status(401).json({ error: 'Akses tidak sah' });
+    }
+    next();
+  } catch (err) {
+    console.error('Telegram service middleware error:', err);
+    res.status(500).json({ error: 'Gagal memverifikasi akses' });
   }
 }
 

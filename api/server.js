@@ -17,6 +17,7 @@ import arisanRoutes from './routes/arisan.js';
 import pushRoutes from './routes/push.js';
 import aiInsightsRoutes from './routes/ai-insights.js';
 import adminRoutes from './routes/admin.js';
+import telegramRoutes from './routes/telegram.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -48,6 +49,7 @@ app.use('/api/arisan', arisanRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/ai', aiInsightsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/telegram', telegramRoutes);
 
 // 404 handler
 app.use((req, res) => {

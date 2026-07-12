@@ -37,6 +37,12 @@ const DEFAULTS = {
     vapid_private_key: '',
     vapid_subject: 'mailto:admin@finepro.my.id',
   },
+  telegram: {
+    enabled: false,
+    bot_token: '',
+    bot_username: '',
+    n8n_shared_secret: '',
+  },
 };
 
 const SECRET_FIELDS = {
@@ -44,6 +50,7 @@ const SECRET_FIELDS = {
   midtrans: ['server_key', 'client_key'],
   ai: ['sumopod_api_key', 'anthropic_api_key'],
   web_push: ['vapid_private_key'],
+  telegram: ['bot_token', 'n8n_shared_secret'],
 };
 
 const ALLOWED_FIELDS = {
@@ -63,6 +70,7 @@ const ALLOWED_FIELDS = {
     'receipt_scan_monthly_limit'
   ],
   web_push: ['enabled', 'vapid_public_key', 'vapid_private_key', 'vapid_subject'],
+  telegram: ['enabled', 'bot_token', 'bot_username', 'n8n_shared_secret'],
 };
 
 function envFallback(key) {
@@ -106,6 +114,14 @@ function envFallback(key) {
       vapid_public_key: process.env.VAPID_PUBLIC_KEY || '',
       vapid_private_key: process.env.VAPID_PRIVATE_KEY || '',
       vapid_subject: process.env.VAPID_SUBJECT || DEFAULTS.web_push.vapid_subject,
+    };
+  }
+  if (key === 'telegram') {
+    return {
+      enabled: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_N8N_SECRET),
+      bot_token: process.env.TELEGRAM_BOT_TOKEN || '',
+      bot_username: process.env.TELEGRAM_BOT_USERNAME || '',
+      n8n_shared_secret: process.env.TELEGRAM_N8N_SECRET || '',
     };
   }
   return {};

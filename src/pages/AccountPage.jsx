@@ -12,6 +12,7 @@ import { useArisan } from "../hooks/useArisan.js";
 import { uploadAvatar, changePassword, translateAuthError } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
+import { startTelegramLink } from "../api/telegram.js";
 import { fmtRp, monthKey, todayStr } from "../utils/format.js";
 import {
   ArrowDownLeft,
@@ -24,6 +25,7 @@ import {
   KeyRound,
   LogOut,
   Mail,
+  MessageCircle,
   Receipt,
   Tag,
   User,
@@ -122,6 +124,9 @@ export default function AccountPage({
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState("");
   const [passwordMsgType, setPasswordMsgType] = useState("");
+  const [telegramLinkLoading, setTelegramLinkLoading] = useState(false);
+  const [telegramLink, setTelegramLink] = useState(null);
+  const [telegramLinkMsg, setTelegramLinkMsg] = useState("");
 
   const isOwner = household.role === "owner";
   const isStudent = household.household_type === "student";
@@ -150,6 +155,19 @@ export default function AccountPage({
       setPushMsg(err.message);
     } finally {
       setPushSubscribing(false);
+    }
+  }
+
+  async function handleStartTelegramLink() {
+    setTelegramLinkLoading(true);
+    setTelegramLinkMsg("");
+    try {
+      const data = await startTelegramLink();
+      setTelegramLink(data);
+    } catch (err) {
+      setTelegramLinkMsg(err.message);
+    } finally {
+      setTelegramLinkLoading(false);
     }
   }
 
@@ -396,6 +414,51 @@ export default function AccountPage({
           <LogOut size={15} />
           Keluar
         </button>
+      </div>
+
+      {/* Telegram — hubungkan akun supaya foto struk/bukti transfer yang
+          dikirim ke bot otomatis jadi transaksi lewat n8n */}
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={MessageCircle} tone="mint" title="Hubungkan Telegram" />
+        {user.telegram_id ? (
+          <p className="text-xs font-medium text-mint">
+            ✓ Terhubung {user.telegram_username ? `sebagai @${user.telegram_username}` : ""}
+          </p>
+        ) : (
+          <>
+            <p className="text-xs text-neutral-500">
+              Hubungkan akun Telegram untuk mencatat transaksi otomatis dari foto struk belanja atau bukti transfer.
+            </p>
+            {!telegramLink ? (
+              <button
+                type="button"
+                onClick={handleStartTelegramLink}
+                disabled={telegramLinkLoading}
+                className={`${primaryBtnClass} mt-3 w-full`}
+              >
+                <MessageCircle size={15} />
+                {telegramLinkLoading ? "Membuat kode..." : "Hubungkan Telegram"}
+              </button>
+            ) : (
+              <div className="mt-3 rounded-xl bg-mint-light px-3 py-2 text-xs text-navy">
+                <p className="font-semibold">Kode: {telegramLink.code}</p>
+                <p className="mt-1 text-neutral-600">
+                  Kirim <span className="font-mono">/start {telegramLink.code}</span> ke bot Telegram finepro
+                  {telegramLink.deep_link ? (
+                    <>
+                      {" "}atau{" "}
+                      <a href={telegramLink.deep_link} target="_blank" rel="noreferrer" className="font-semibold text-violet underline">
+                        buka di Telegram
+                      </a>
+                    </>
+                  ) : null}
+                  . Kode berlaku 10 menit.
+                </p>
+              </div>
+            )}
+            <StatusMsg msg={telegramLinkMsg} type="error" />
+          </>
+        )}
       </div>
 
       {/* Keamanan — ganti password (atau buat password baru untuk akun Google-only) */}
