@@ -65,7 +65,8 @@ WantedBy=multi-user.target
       ```
 - [ ] Retention backup jelas (mis. simpan 30 hari terakhir, hapus yang lebih lama)
 - [ ] **Sudah pernah dites** proses restore dari backup (bukan cuma asumsi backup-nya valid)
-- [ ] Semua migrasi di `supabase/migrations/*.sql` sudah dijalankan berurutan di database production
+- [ ] Database production baru dibuat dari baseline final `supabase/schema-pg.sql`
+- [ ] Untuk database lama, migration baru di `supabase/migrations/*.sql` sudah dijalankan berurutan sesuai versi terakhir yang pernah diterapkan
 
 ## 5. Payment Gateway (Production)
 

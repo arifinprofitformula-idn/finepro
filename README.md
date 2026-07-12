@@ -48,9 +48,15 @@ dari session user biasa.
 
 ## Setup Database Lokal
 
-Jalankan script SQL berikut ke PostgreSQL lokal:
-1. `supabase/schema.sql`
-2. `supabase/migrations/002_add_persona_categories.sql`
+Untuk database baru, jalankan baseline final:
+
+```bash
+psql -U keuangan_app -d keuangan -f supabase/schema-pg.sql
+```
+
+File `supabase/schema-pg.sql` sudah berisi struktur database terbaru, seed kategori,
+trigger household, dan seed `app_settings`. Folder `supabase/migrations/` tetap
+disimpan untuk upgrade database lama yang sudah berjalan, bukan untuk fresh install.
 
 ## Build untuk Produksi
 
