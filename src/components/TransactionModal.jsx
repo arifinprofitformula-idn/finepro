@@ -35,15 +35,20 @@ export default function TransactionModal({ open, onClose, onSubmit, categoriesEx
     setScanMsg("");
     try {
       const result = await scanReceipt(file);
+      const nextType = result.type === "income" ? "income" : "expense";
+      const nextCategories = nextType === "income" ? categoriesIncome : categoriesExpense;
+      setType(nextType);
       if (result.date) setDate(result.date);
       if (result.amount) setAmount(formatNumberIdInput(result.amount));
       if (result.note) setNote(result.note);
       if (result.suggested_category) {
-        const match = categoriesExpense.find(
+        const match = nextCategories.find(
           (c) => c.name.toLowerCase().includes(result.suggested_category.toLowerCase()) ||
                  result.suggested_category.toLowerCase().includes(c.name.toLowerCase())
         );
-        if (match) setCategory(match.name);
+        setCategory(match?.name || nextCategories[0]?.name || "");
+      } else {
+        setCategory(nextCategories[0]?.name || "");
       }
       setScanMsg("Terisi otomatis dari struk — cek dulu sebelum simpan.");
       setScanQuota((prev) => (prev ? { ...prev, used: prev.used + 1, remaining: Math.max(0, prev.remaining - 1) } : prev));

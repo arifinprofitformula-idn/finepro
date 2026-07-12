@@ -15,6 +15,7 @@ import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getSetting } from '../services/appSettings.js';
 import { isAiConfigured } from '../services/aiProvider.js';
+import { normalizeTransactionCategory } from '../services/categoryMatcher.js';
 import { extractText, tryRegexExtraction, parseReceiptText } from '../services/receiptExtraction.js';
 
 const router = Router();
@@ -117,10 +118,18 @@ router.post('/scan', (req, res) => {
         [householdId, req.user.userId]
       );
 
+      const type = parsed.type === 'income' ? 'income' : 'expense';
+      const category = await normalizeTransactionCategory(
+        householdId,
+        type,
+        `${parsed.suggested_category || ''} ${parsed.note || ''}`.trim() || (type === 'income' ? 'Transfer Masuk' : 'Lainnya')
+      );
+
       res.json({
         date: parsed.date || null,
         amount: Number(parsed.amount) || 0,
-        suggested_category: parsed.suggested_category || '',
+        type,
+        suggested_category: category,
         note: parsed.note || ''
       });
     } catch (err) {

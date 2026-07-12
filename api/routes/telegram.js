@@ -16,7 +16,9 @@ import pool from '../db.js';
 import { authMiddleware, telegramServiceMiddleware } from '../middleware/auth.js';
 import { getSetting } from '../services/appSettings.js';
 import { isAiConfigured } from '../services/aiProvider.js';
+import { normalizeTransactionCategory } from '../services/categoryMatcher.js';
 import { extractText, tryRegexExtraction, parseReceiptText } from '../services/receiptExtraction.js';
+import { checkBudgetThreshold } from '../services/transactionEffects.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'telegram');
@@ -275,7 +277,11 @@ async function processReceipt(req, res) {
       const date = parsed.date || new Date().toISOString().slice(0, 10);
       const type = parsed.type === 'income' ? 'income' : 'expense';
       const docType = parsed.document_type === 'transfer' ? 'transfer' : 'receipt';
-      const category = parsed.suggested_category || (type === 'income' ? 'Transfer Masuk' : 'Lainnya');
+      const category = await normalizeTransactionCategory(
+        householdId,
+        type,
+        `${parsed.suggested_category || ''} ${parsed.note || ''}`.trim() || (type === 'income' ? 'Transfer Masuk' : 'Lainnya')
+      );
       const note = parsed.note || null;
 
       if (amount <= 0) {
@@ -305,6 +311,12 @@ async function processReceipt(req, res) {
         [householdId, user.id, date, type, category, amount, note, walletId]
       );
       const transaction = txResult.rows[0];
+
+      if (type === 'expense') {
+        checkBudgetThreshold(householdId, category, date, amount).catch((err) =>
+          console.error('Telegram budget threshold check error:', err)
+        );
+      }
 
       await pool.query(
         'INSERT INTO receipt_scans (household_id, created_by) VALUES ($1, $2)',
