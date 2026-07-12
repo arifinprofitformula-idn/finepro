@@ -313,7 +313,7 @@ export default function AdminPage({ user }) {
     setMessage("");
     setApeTestStatus(null);
     try {
-      const prices = await testApeEpiConnection();
+      const prices = await testApeEpiConnection(apeEpi);
       const hasValidPrices = prices?.enabled
         && Number(prices.gold?.price_per_gram || 0) > 0
         && Number(prices.silver?.price_per_gram || 0) > 0;
@@ -694,12 +694,14 @@ export default function AdminPage({ user }) {
                   <div className="mt-1 text-sm font-bold text-navy">{fmtRp(Number(apePreview.gold?.price_per_gram || 0))} / gram</div>
                   <div className="text-[11px] font-semibold text-neutral-500">Diambil {formatFetchedAt(apePreview.gold?.fetched_at)}</div>
                   {apePreview.gold?.date && <div className="text-[10px] font-semibold text-neutral-400">Tanggal harga {apePreview.gold.date}</div>}
+                  {apePreview.gold?.query_variant && <div className="text-[10px] font-semibold text-neutral-400">Query {apePreview.gold.query_variant}</div>}
                 </div>
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-wide text-violet">SILVERGRAM</div>
                   <div className="mt-1 text-sm font-bold text-navy">{fmtRp(Number(apePreview.silver?.price_per_gram || 0))} / gram</div>
                   <div className="text-[11px] font-semibold text-neutral-500">Diambil {formatFetchedAt(apePreview.silver?.fetched_at)}</div>
                   {apePreview.silver?.date && <div className="text-[10px] font-semibold text-neutral-400">Tanggal harga {apePreview.silver.date}</div>}
+                  {apePreview.silver?.query_variant && <div className="text-[10px] font-semibold text-neutral-400">Query {apePreview.silver.query_variant}</div>}
                 </div>
               </div>
             )}

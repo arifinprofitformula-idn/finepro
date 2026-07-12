@@ -79,8 +79,11 @@ export async function updateAdminSetting(key, patch) {
   return data.setting;
 }
 
-export async function testApeEpiConnection() {
-  const data = await adminFetch("/admin/ape-epi/test", { method: "POST" });
+export async function testApeEpiConnection(patch = {}) {
+  const data = await adminFetch("/admin/ape-epi/test", {
+    method: "POST",
+    body: JSON.stringify(patch),
+  });
   return data.prices;
 }
 

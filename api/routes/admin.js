@@ -155,7 +155,11 @@ router.patch('/settings/:key', async (req, res) => {
 
 router.post('/ape-epi/test', async (req, res) => {
   try {
-    const prices = await getCurrentMetalPrices({ forceRefresh: true, bypassDailyLimit: true });
+    const prices = await getCurrentMetalPrices({
+      forceRefresh: true,
+      bypassDailyLimit: true,
+      settingsOverride: req.body || {},
+    });
     await auditAdminAction(req.admin.id, 'integrations.ape_epi.test', 'app_settings', 'ape_epi', {
       enabled: prices.enabled,
       gold_date: prices.gold?.date || null,
