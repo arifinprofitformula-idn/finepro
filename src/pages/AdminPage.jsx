@@ -7,6 +7,7 @@ import {
   Database,
   History,
   Mail,
+  MessageCircle,
   RefreshCw,
   Save,
   Search,
@@ -112,6 +113,7 @@ export default function AdminPage({ user }) {
   const [manualPayment, setManualPayment] = useFormState(settings?.manual_payment);
   const [ai, setAi] = useFormState(settings?.ai);
   const [webPush, setWebPush] = useFormState(settings?.web_push);
+  const [telegram, setTelegram] = useFormState(settings?.telegram);
 
   const canManageRoles = user?.role === "super_admin";
 
@@ -369,6 +371,28 @@ export default function AdminPage({ user }) {
             <input className={inputClass} value={webPush.vapid_subject || ""} onChange={(e) => setWebPush("vapid_subject", e.target.value)} placeholder="mailto:admin@finepro.my.id" />
             <button type="button" onClick={() => saveSetting("web_push", webPush)} disabled={savingKey === "web_push"} className="mt-3 flex h-10 items-center justify-center gap-1.5 rounded-full bg-violet px-4 text-sm font-semibold text-white disabled:opacity-60">
               <Save size={15} /> Simpan Web Push
+            </button>
+          </IntegrationCard>
+
+          <IntegrationCard icon={MessageCircle} title="Telegram" description="Bot Telegram + n8n untuk catat transaksi otomatis dari foto struk/bukti transfer.">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-navy">Aktifkan Telegram</span>
+              <Toggle checked={Boolean(telegram.enabled)} onChange={(v) => setTelegram("enabled", v)} />
+            </div>
+            <label className={labelClass}>Bot Token (dari @BotFather)</label>
+            <input className={inputClass} type="password" value={telegram.bot_token || ""} onChange={(e) => setTelegram("bot_token", e.target.value)} placeholder={telegram.bot_token_masked || "123456:ABC-DEF..."} />
+            <SecretHint configured={telegram.bot_token_configured} />
+            <label className={`${labelClass} mt-3`}>Username Bot</label>
+            <input className={inputClass} value={telegram.bot_username || ""} onChange={(e) => setTelegram("bot_username", e.target.value)} placeholder="finepro_bot (tanpa @)" />
+            <label className={`${labelClass} mt-3`}>Shared Secret untuk n8n</label>
+            <input className={inputClass} type="password" value={telegram.n8n_shared_secret || ""} onChange={(e) => setTelegram("n8n_shared_secret", e.target.value)} placeholder={telegram.n8n_shared_secret_masked || "Secret acak untuk header X-N8N-Secret"} />
+            <SecretHint configured={telegram.n8n_shared_secret_configured} />
+            <p className="mt-2 text-[11px] text-neutral-500">
+              Isi secret yang sama di workflow n8n (header <span className="font-mono">X-N8N-Secret</span>) saat memanggil
+              <span className="font-mono"> POST /api/telegram/link/confirm</span> dan <span className="font-mono">POST /api/telegram/receipts</span>.
+            </p>
+            <button type="button" onClick={() => saveSetting("telegram", telegram)} disabled={savingKey === "telegram"} className="mt-3 flex h-10 items-center justify-center gap-1.5 rounded-full bg-violet px-4 text-sm font-semibold text-white disabled:opacity-60">
+              <Save size={15} /> Simpan Telegram
             </button>
           </IntegrationCard>
         </div>
