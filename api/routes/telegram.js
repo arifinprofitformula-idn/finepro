@@ -168,15 +168,45 @@ router.delete('/link', authMiddleware, async (req, res) => {
 // transfer masuk dari user yang sudah terhubung. Reuse penuh pipeline OCR
 // dari api/services/receiptExtraction.js, lalu langsung simpan sebagai
 // transaksi (auto-save, tanpa tahap review seperti alur web).
-router.post('/receipts', telegramServiceMiddleware, (req, res) => {
-  receiptUpload.single('photo')(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({ error: err.message || 'Gagal membaca foto', message: 'Foto gagal dibaca, coba kirim ulang.' });
+router.post('/receipts', telegramServiceMiddleware, async (req, res) => {
+  // Jika ada file_id, download foto dari Telegram dulu
+  if (req.body.file_id && req.body.bot_token) {
+    try {
+      const tgUrl = `https://api.telegram.org/bot${req.body.bot_token}/getFile?file_id=${req.body.file_id}`;
+      const tgResp = await fetch(tgUrl).then(r => r.json());
+      if (!tgResp.ok || !tgResp.result?.file_path) {
+        return res.status(400).json({ error: 'Gagal mengambil file dari Telegram', message: 'File tidak ditemukan di server Telegram.' });
+      }
+      const fileUrl = `https://api.telegram.org/file/bot${req.body.bot_token}/${tgResp.result.file_path}`;
+      const fileResp = await fetch(fileUrl);
+      if (!fileResp.ok) {
+        return res.status(400).json({ error: 'Gagal mengunduh foto', message: 'Foto gagal diunduh dari Telegram.' });
+      }
+      const buffer = Buffer.from(await fileResp.arrayBuffer());
+      req.file = { buffer, mimetype: 'image/jpeg', size: buffer.length };
+      req.body = req.body; // keep telegram_id etc
+    } catch (e) {
+      console.error('Telegram file download error:', e);
+      return res.status(400).json({ error: 'Gagal mengunduh foto', message: 'Terjadi kesalahan saat mengunduh foto.' });
     }
-    if (!req.file) {
-      return res.status(400).json({ error: 'File foto wajib diisi' });
-    }
-    const telegramId = req.body.telegram_id;
+  }
+
+  // Fallback: terima upload langsung (binary)
+  if (!req.file) {
+    receiptUpload.single('photo')(req, res, async (err) => {
+      if (err) return res.status(400).json({ error: err.message || 'Gagal membaca foto' });
+      if (!req.file) return res.status(400).json({ error: 'File foto wajib diisi' });
+      await processReceipt(req, res);
+    });
+    return;
+  }
+
+  await processReceipt(req, res);
+});
+
+// Ekstrak ke fungsi terpisah
+async function processReceipt(req, res) {
+  const telegramId = req.body.telegram_id;
     if (!telegramId) {
       return res.status(400).json({ error: 'telegram_id wajib diisi' });
     }
@@ -290,7 +320,6 @@ router.post('/receipts', telegramServiceMiddleware, (req, res) => {
       console.error('Telegram receipt error:', err);
       res.status(500).json({ error: 'Gagal memproses foto', message: 'Terjadi kesalahan, coba lagi beberapa saat.' });
     }
-  });
-});
+}
 
 export default router;
