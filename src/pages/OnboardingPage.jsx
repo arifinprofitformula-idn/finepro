@@ -81,11 +81,15 @@ export default function OnboardingPage({ onCreateHousehold, onInviteAccepted }) 
           <div className="gloss-panel rounded-[30px] p-5 animate-auth-fade-up">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-navy text-base font-bold text-white shadow-soft">
-                  FP
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white p-1.5 shadow-soft">
+                  <img
+                    src="/icon-192.png"
+                    alt="FinePro"
+                    className="h-full w-full rounded-xl object-cover"
+                  />
                 </div>
                 <div>
-                  <div className="text-sm font-bold leading-tight text-navy">Finepro</div>
+                  <div className="text-sm font-bold leading-tight text-navy">FinePro</div>
                   <div className="text-[11px] font-medium text-neutral-500">Langkah pertama yang tenang</div>
                 </div>
               </div>
