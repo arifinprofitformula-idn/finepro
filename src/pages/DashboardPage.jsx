@@ -82,7 +82,47 @@ function PeriodSelector({ monthKey, onChange }) {
   );
 }
 
-export default function DashboardPage({ household, transactions, kpi, budgets, byCategory, categoriesExpense, onDataChanged, selectedMonthKey, onPeriodChange }) {
+function kpiComparison({ current, previous, kind, hasPreviousData }) {
+  if (!hasPreviousData) {
+    return { label: "Belum ada data bulan lalu", direction: "flat", tone: "neutral" };
+  }
+
+  const diff = current - previous;
+  if (diff === 0) {
+    return { label: "Sama dengan bulan lalu", direction: "flat", tone: "neutral" };
+  }
+
+  const isExpense = kind === "expense";
+  const isBalance = kind === "balance";
+  const improves = isExpense ? diff < 0 : diff > 0;
+  const direction = diff > 0 ? "up" : "down";
+  const tone = improves ? "good" : "bad";
+
+  if (isBalance) {
+    return {
+      label: `${improves ? "Lebih baik" : "Lebih rendah"} ${fmtRp(Math.abs(diff))}`,
+      direction,
+      tone,
+    };
+  }
+
+  if (previous === 0) {
+    return {
+      label: `${diff > 0 ? "Naik" : "Turun"} ${fmtRp(Math.abs(diff))}`,
+      direction,
+      tone,
+    };
+  }
+
+  const pct = Math.round((Math.abs(diff) / previous) * 100);
+  return {
+    label: `${diff > 0 ? "Naik" : "Turun"} ${pct}% dari bulan lalu`,
+    direction,
+    tone,
+  };
+}
+
+export default function DashboardPage({ household, transactions, kpi, previousKpi, budgets, byCategory, categoriesExpense, onDataChanged, selectedMonthKey, onPeriodChange }) {
   const [showAll, setShowAll] = useState(false);
   const [budgetInputs, setBudgetInputs] = useState({});
   const [savingCategory, setSavingCategory] = useState(null);
@@ -144,6 +184,11 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
 
   const visibleTransactions = showAll ? transactions : transactions.slice(0, DEFAULT_TX_SHOWN);
   const balance = kpi.income - kpi.expense;
+  const previousBalance = (previousKpi?.income || 0) - (previousKpi?.expense || 0);
+  const hasPreviousData = Boolean((previousKpi?.income || 0) || (previousKpi?.expense || 0));
+  const incomeComparison = kpiComparison({ current: kpi.income, previous: previousKpi?.income || 0, kind: "income", hasPreviousData });
+  const expenseComparison = kpiComparison({ current: kpi.expense, previous: previousKpi?.expense || 0, kind: "expense", hasPreviousData });
+  const balanceComparison = kpiComparison({ current: balance, previous: previousBalance, kind: "balance", hasPreviousData });
   const balanceStatus =
     balance < 0
       ? "danger"
@@ -188,9 +233,9 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
       )}
 
       <div className="mb-4 grid gap-2.5">
-        <KpiCard label="Pemasukan" value={fmtRp(kpi.income)} tone="income" />
-        <KpiCard label="Pengeluaran" value={fmtRp(kpi.expense)} tone="expense" />
-        <KpiCard label="Saldo" value={fmtRp(balance)} tone="balance" status={balanceStatus} />
+        <KpiCard label="Pemasukan" value={fmtRp(kpi.income)} tone="income" comparison={incomeComparison} />
+        <KpiCard label="Pengeluaran" value={fmtRp(kpi.expense)} tone="expense" comparison={expenseComparison} />
+        <KpiCard label="Saldo" value={fmtRp(balance)} tone="balance" status={balanceStatus} comparison={balanceComparison} />
       </div>
 
       <DailySummaryCard rows={dailySummaryRows} monthKey={selectedMonthKey} />

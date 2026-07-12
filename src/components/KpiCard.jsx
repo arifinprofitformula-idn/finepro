@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, ChartPie } from "lucide-react";
+import { ArrowDown, ArrowDownLeft, ArrowUp, ArrowUpRight, ChartPie, Minus } from "lucide-react";
 
 const TONE = {
   income: {
@@ -51,16 +51,29 @@ const BALANCE_STYLE = {
   }
 };
 
-export default function KpiCard({ label, value, tone, status = "safe" }) {
+const COMPARISON_TONE = {
+  good: "bg-mint-light text-mint",
+  bad: "bg-coral-light text-coral",
+  neutral: "bg-neutral-100 text-neutral-500"
+};
+
+const COMPARISON_ICON = {
+  up: ArrowUp,
+  down: ArrowDown,
+  flat: Minus
+};
+
+export default function KpiCard({ label, value, tone, status = "safe", comparison }) {
   const current = TONE[tone] || TONE.balance;
   const Icon = current.icon;
   const isBalance = tone === "balance";
   const balanceStyle = BALANCE_STYLE[status] || BALANCE_STYLE.safe;
   const visual = isBalance ? { ...current, ...balanceStyle } : current;
+  const ComparisonIcon = comparison ? (COMPARISON_ICON[comparison.direction] || Minus) : null;
 
   return (
     <div
-      className="gloss-panel flex min-h-[72px] items-center gap-3 rounded-2xl px-4 py-3"
+      className="gloss-panel flex min-h-[86px] items-center gap-3 rounded-2xl px-4 py-3"
       style={
         isBalance
           ? {
@@ -82,6 +95,12 @@ export default function KpiCard({ label, value, tone, status = "safe" }) {
         >
           {value}
         </div>
+        {comparison && (
+          <div className={`mt-1 inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold leading-tight ${COMPARISON_TONE[comparison.tone] || COMPARISON_TONE.neutral}`}>
+            <ComparisonIcon size={11} strokeWidth={2.5} />
+            <span className="truncate">{comparison.label}</span>
+          </div>
+        )}
       </div>
       <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${visual.indicator}`} />
     </div>

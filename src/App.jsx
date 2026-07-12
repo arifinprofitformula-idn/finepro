@@ -132,6 +132,7 @@ export default function App() {
           household={household}
           transactions={dashboard.transactions}
           kpi={dashboard.kpi}
+          previousKpi={dashboard.previousKpi}
           budgets={dashboard.budgets}
           byCategory={dashboard.byCategory}
           categoriesExpense={categoriesExpense}
