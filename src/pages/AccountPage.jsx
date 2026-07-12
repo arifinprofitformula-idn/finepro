@@ -12,7 +12,7 @@ import { useArisan } from "../hooks/useArisan.js";
 import { uploadAvatar, changePassword, translateAuthError } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
-import { startTelegramLink } from "../api/telegram.js";
+import { disconnectTelegramLink, startTelegramLink } from "../api/telegram.js";
 import { fmtRp, monthKey, todayStr } from "../utils/format.js";
 import { mediaUrl } from "../utils/media.js";
 import {
@@ -128,6 +128,8 @@ export default function AccountPage({
   const [telegramLinkLoading, setTelegramLinkLoading] = useState(false);
   const [telegramLink, setTelegramLink] = useState(null);
   const [telegramLinkMsg, setTelegramLinkMsg] = useState("");
+  const [telegramLinkMsgType, setTelegramLinkMsgType] = useState("");
+  const [telegramDisconnecting, setTelegramDisconnecting] = useState(false);
 
   const isOwner = household.role === "owner";
   const isStudent = household.household_type === "student";
@@ -162,13 +164,36 @@ export default function AccountPage({
   async function handleStartTelegramLink() {
     setTelegramLinkLoading(true);
     setTelegramLinkMsg("");
+    setTelegramLinkMsgType("");
     try {
       const data = await startTelegramLink();
       setTelegramLink(data);
     } catch (err) {
       setTelegramLinkMsg(err.message);
+      setTelegramLinkMsgType("error");
     } finally {
       setTelegramLinkLoading(false);
+    }
+  }
+
+  async function handleDisconnectTelegram() {
+    if (!confirm("Putuskan koneksi Telegram? Bot tidak akan bisa mencatat transaksi otomatis dari akun Telegram ini lagi.")) {
+      return;
+    }
+    setTelegramDisconnecting(true);
+    setTelegramLinkMsg("");
+    setTelegramLinkMsgType("");
+    try {
+      const data = await disconnectTelegramLink();
+      onUserUpdated(data.user);
+      setTelegramLink(null);
+      setTelegramLinkMsg(data.message || "Akun Telegram berhasil diputuskan.");
+      setTelegramLinkMsgType("success");
+    } catch (err) {
+      setTelegramLinkMsg(err.message);
+      setTelegramLinkMsgType("error");
+    } finally {
+      setTelegramDisconnecting(false);
     }
   }
 
@@ -422,9 +447,24 @@ export default function AccountPage({
       <div className="gloss-panel mb-4 rounded-2xl p-4">
         <SectionHeader icon={MessageCircle} tone="mint" title="Hubungkan Telegram" />
         {user.telegram_id ? (
-          <p className="text-xs font-medium text-mint">
-            ✓ Terhubung {user.telegram_username ? `sebagai @${user.telegram_username}` : ""}
-          </p>
+          <>
+            <p className="text-xs font-medium text-mint">
+              ✓ Terhubung {user.telegram_username ? `sebagai @${user.telegram_username}` : ""}
+            </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              Foto struk atau bukti transfer yang dikirim ke bot akan dicatat otomatis ke akun ini.
+            </p>
+            <button
+              type="button"
+              onClick={handleDisconnectTelegram}
+              disabled={telegramDisconnecting}
+              className={`${outlineBtnClass} mt-3 w-full border-coral text-coral disabled:opacity-60`}
+            >
+              <MessageCircle size={15} />
+              {telegramDisconnecting ? "Memutuskan..." : "Putuskan Telegram"}
+            </button>
+            <StatusMsg msg={telegramLinkMsg} type={telegramLinkMsgType} />
+          </>
         ) : (
           <>
             <p className="text-xs text-neutral-500">
@@ -457,7 +497,7 @@ export default function AccountPage({
                 </p>
               </div>
             )}
-            <StatusMsg msg={telegramLinkMsg} type="error" />
+            <StatusMsg msg={telegramLinkMsg} type={telegramLinkMsgType} />
           </>
         )}
       </div>

@@ -138,6 +138,32 @@ router.post('/link/confirm', telegramServiceMiddleware, async (req, res) => {
   }
 });
 
+// DELETE /api/telegram/link — user login web memutus koneksi Telegram dari
+// akun finepro-nya. Riwayat transaksi/scan tetap disimpan; yang dicabut hanya
+// mapping telegram_id agar bot tidak bisa mencatat atas nama user ini lagi.
+router.delete('/link', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET telegram_id = NULL, telegram_username = NULL
+       WHERE id = $1
+       RETURNING id, email, name, avatar_url, role, created_at, telegram_id, telegram_username, (password_hash IS NOT NULL) AS has_password`,
+      [req.user.userId]
+    );
+
+    await pool.query(
+      'UPDATE telegram_link_codes SET used_at = now() WHERE user_id = $1 AND used_at IS NULL',
+      [req.user.userId]
+    );
+
+    const user = result.rows[0];
+    res.json({ user, message: 'Akun Telegram berhasil diputuskan' });
+  } catch (err) {
+    console.error('Telegram unlink error:', err);
+    res.status(500).json({ error: 'Gagal memutus koneksi Telegram' });
+  }
+});
+
 // POST /api/telegram/receipts — dipanggil n8n setiap foto struk/bukti
 // transfer masuk dari user yang sudah terhubung. Reuse penuh pipeline OCR
 // dari api/services/receiptExtraction.js, lalu langsung simpan sebagai

@@ -7,3 +7,7 @@ import { apiFetch } from "./apiClient.js";
 export async function startTelegramLink() {
   return apiFetch("/telegram/link/start", { method: "POST" });
 }
+
+export async function disconnectTelegramLink() {
+  return apiFetch("/telegram/link", { method: "DELETE" });
+}
