@@ -392,7 +392,9 @@ function Hero({ onGetStarted }) {
     <section className="py-12 md:py-20">
       <Container className="grid items-center gap-10 md:grid-cols-2">
         <div>
-          <SectionBrand align="left" className="mb-5" />
+          <div className="mb-5 flex justify-start">
+            <BrandLogo className="h-[108px] max-w-full sm:h-[120px] md:h-[132px]" />
+          </div>
           <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-mint-light px-3 py-1 text-[11px] font-bold text-mint">
             <Gift size={12} />
             Coba Gratis 14 Hari, Tanpa Kartu Kredit
