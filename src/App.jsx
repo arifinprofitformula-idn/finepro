@@ -20,6 +20,7 @@ import AccountPage from "./pages/AccountPage.jsx";
 import PaymentStatusPage from "./pages/PaymentStatusPage.jsx";
 import AppHeader from "./components/AppHeader.jsx";
 import BottomNav from "./components/BottomNav.jsx";
+import InstallPrompt from "./components/InstallPrompt.jsx";
 import TransactionModal from "./components/TransactionModal.jsx";
 
 function SplashScreen() {
@@ -140,6 +141,7 @@ export default function App() {
       )}
 
       <BottomNav page={page} onNavigate={setPage} onAdd={handleOpenModal} />
+      <InstallPrompt />
 
       <TransactionModal
         open={modalOpen}

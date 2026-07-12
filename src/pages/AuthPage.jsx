@@ -6,6 +6,9 @@ import {
   ArrowRight,
   BarChart3,
   CheckCircle2,
+  Eye,
+  EyeOff,
+  Inbox,
   LockKeyhole,
   Mail,
   ReceiptText,
@@ -185,10 +188,12 @@ export default function AuthPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [resetToken, setResetToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState("");
+  const [forgotSubmitted, setForgotSubmitted] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -205,6 +210,8 @@ export default function AuthPage() {
     setMsg("");
     setMsgType("");
     setPassword("");
+    setShowPassword(false);
+    if (next !== "forgot") setForgotSubmitted(false);
   }
 
   async function handleSubmit(e) {
@@ -218,6 +225,7 @@ export default function AuthPage() {
         const data = await forgotPassword(email);
         setMsg(data.message);
         setMsgType("success");
+        setForgotSubmitted(true);
       } else if (mode === "reset") {
         const data = await resetPassword(resetToken, password);
         setMsg(data.message);
@@ -305,8 +313,23 @@ export default function AuthPage() {
               <div className="mt-5 animate-auth-fade-up">
                 <h1 className="text-2xl font-bold leading-tight text-navy">Lupa password?</h1>
                 <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
-                  Masukkan email akunmu, kami kirim tautan reset password.
+                  Masukkan email yang dipakai saat mendaftar. Demi keamanan, kami tidak menampilkan apakah email
+                  tersebut terdaftar atau tidak.
                 </p>
+                <div className="mt-4 grid gap-2 rounded-2xl border border-white/70 bg-white/45 p-3 text-xs font-semibold text-neutral-500">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-violet-light text-[10px] font-bold text-violet">1</span>
+                    Isi email akunmu.
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-violet-light text-[10px] font-bold text-violet">2</span>
+                    Jika email terdaftar, tautan reset dikirim dan berlaku 1 jam.
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-violet-light text-[10px] font-bold text-violet">3</span>
+                    Cek inbox/spam. Jika akun dibuat via Google, masuk dengan tombol Google.
+                  </div>
+                </div>
               </div>
             )}
 
@@ -314,7 +337,8 @@ export default function AuthPage() {
               <div className="mt-5 animate-auth-fade-up">
                 <h1 className="text-2xl font-bold leading-tight text-navy">Buat password baru.</h1>
                 <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
-                  Gunakan minimal 6 karakter agar akunmu kembali bisa diakses.
+                  Masukkan password baru minimal 6 karakter. Link reset berlaku 1 jam; jika ditolak atau kedaluwarsa,
+                  ulangi dari menu Lupa Password.
                 </p>
               </div>
             )}
@@ -322,8 +346,21 @@ export default function AuthPage() {
 
           <div key={mode} className="gloss-panel rounded-[28px] p-4 animate-auth-slide-up">
             <div className="mb-3 rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2 text-xs font-semibold text-neutral-500">
-              Isi data akun pada kolom di bawah.
+              {mode === "forgot" ? "Kami akan memproses permintaan tanpa membocorkan status email." : "Isi data akun pada kolom di bawah."}
             </div>
+            {mode === "forgot" && forgotSubmitted && (
+              <div className="mb-3 rounded-2xl border border-mint/25 bg-mint-light px-3 py-3 text-xs font-semibold text-neutral-700">
+                <div className="mb-2 flex items-center gap-2 text-mint">
+                  <Inbox size={15} />
+                  Langkah berikutnya
+                </div>
+                <p className="leading-relaxed">
+                  Jika email <span className="font-bold text-navy">{email || "yang dimasukkan"}</span> terdaftar,
+                  tautan reset sudah dikirim. Cek inbox dan spam. Tidak ada email masuk? Pastikan emailnya benar,
+                  tunggu sebentar, lalu kirim ulang.
+                </p>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="flex flex-col gap-3">
               {mode === "signup" && (
                 <InputShell icon={UserRound} label="Nama Pengguna">
@@ -356,16 +393,27 @@ export default function AuthPage() {
 
               {(isPasswordMode || mode === "reset") && (
                 <InputShell icon={LockKeyhole} label={mode === "reset" ? "Password Baru" : "Kata Sandi"}>
-                  <input
-                    id="auth-password"
-                    type="password"
-                    required
-                    minLength={6}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Minimal 6 karakter"
-                    className={inputClass}
-                  />
+                  <div className="relative">
+                    <input
+                      id="auth-password"
+                      type={showPassword ? "text" : "password"}
+                      required
+                      minLength={6}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Minimal 6 karakter"
+                      className={`${inputClass} pr-12`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-neutral-500 transition hover:bg-violet-light hover:text-violet"
+                      aria-label={showPassword ? "Sembunyikan password" : "Lihat password"}
+                      title={showPassword ? "Sembunyikan password" : "Lihat password"}
+                    >
+                      {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
                 </InputShell>
               )}
 
@@ -381,7 +429,7 @@ export default function AuthPage() {
                 {loading ? "Memproses..." : null}
                 {!loading && mode === "signup" && "Daftar"}
                 {!loading && mode === "login" && "Masuk"}
-                {!loading && mode === "forgot" && "Kirim Tautan Reset"}
+                {!loading && mode === "forgot" && (forgotSubmitted ? "Kirim Ulang Tautan" : "Kirim Tautan Reset")}
                 {!loading && mode === "reset" && "Simpan Password Baru"}
                 {!loading && <ArrowRight size={16} />}
               </button>

@@ -189,7 +189,9 @@ router.post('/google', authLimiter, async (req, res) => {
 
 // POST /api/auth/forgot-password — kirim link reset password via email
 router.post('/forgot-password', authLimiter, async (req, res) => {
-  const genericResponse = { message: 'Jika email terdaftar, tautan reset password telah dikirim' };
+  const genericResponse = {
+    message: 'Permintaan reset diproses. Jika email tersebut terdaftar, tautan reset password sudah dikirim. Cek inbox dan folder spam.'
+  };
   try {
     const { email } = req.body;
     if (!email) {
@@ -220,8 +222,9 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
       subject: 'Reset Password — Keuangan Keluarga',
       html: `
         <p>Halo ${user.name || ''},</p>
-        <p>Kami menerima permintaan reset password untuk akun Anda. Klik tautan berikut untuk membuat password baru (berlaku 1 jam):</p>
+        <p>Kami menerima permintaan reset password untuk akun Anda. Klik tautan berikut untuk membuat password baru. Tautan ini berlaku 1 jam:</p>
         <p><a href="${resetLink}">${resetLink}</a></p>
+        <p>Jika tautan sudah kedaluwarsa, ulangi proses Lupa Password dari halaman masuk.</p>
         <p>Jika Anda tidak meminta reset password, abaikan email ini.</p>
       `,
     });

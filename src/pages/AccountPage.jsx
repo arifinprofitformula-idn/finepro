@@ -15,6 +15,7 @@ import { subscribeToPush, getPushPermissionState } from "../api/push.js";
 import { disconnectTelegramLink, startTelegramLink } from "../api/telegram.js";
 import { fmtRp, monthKey, todayStr } from "../utils/format.js";
 import { mediaUrl } from "../utils/media.js";
+import { hasNativeInstallPrompt, isAppInstalled, runNativeInstallPrompt, subscribeInstallState } from "../utils/pwaInstall.js";
 import {
   ArrowDownLeft,
   ArrowRightLeft,
@@ -23,11 +24,13 @@ import {
   CalendarClock,
   Crown,
   Download,
+  Home,
   KeyRound,
   LogOut,
   Mail,
   MessageCircle,
   Receipt,
+  Smartphone,
   Tag,
   User,
   UserPlus,
@@ -89,6 +92,8 @@ export default function AccountPage({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState("");
   const [profileMsgType, setProfileMsgType] = useState("");
+  const [installCardVisible, setInstallCardVisible] = useState(() => !isAppInstalled());
+  const [installManualHelp, setInstallManualHelp] = useState(false);
   const [monthlyIncomeDayInput, setMonthlyIncomeDayInput] = useState(household.monthly_income_day || "");
   const [incomeDaySaving, setIncomeDaySaving] = useState(false);
   const [incomeDayMsg, setIncomeDayMsg] = useState("");
@@ -146,6 +151,12 @@ export default function AccountPage({
   }, []);
 
   useEffect(() => {
+    const refreshInstallState = () => setInstallCardVisible(!isAppInstalled());
+    refreshInstallState();
+    return subscribeInstallState(refreshInstallState);
+  }, []);
+
+  useEffect(() => {
     setProfileName(user.name || "");
   }, [user.name]);
 
@@ -168,6 +179,14 @@ export default function AccountPage({
     } finally {
       setPushSubscribing(false);
     }
+  }
+
+  async function handleInstallApp() {
+    const result = await runNativeInstallPrompt();
+    if (!result.supported) {
+      setInstallManualHelp(true);
+    }
+    setInstallCardVisible(!isAppInstalled());
   }
 
   async function handleStartTelegramLink() {
@@ -467,6 +486,29 @@ export default function AccountPage({
           <StatusMsg msg={profileMsg} type={profileMsgType} />
         </form>
       </div>
+
+      {installCardVisible && (
+        <div className="gloss-panel mb-4 rounded-2xl p-4">
+          <SectionHeader icon={Smartphone} tone="violet" title="Install Aplikasi" />
+          <p className="text-xs font-medium leading-relaxed text-neutral-500">
+            Tambahkan Finepro ke layar utama agar akses lebih cepat tanpa perlu membuka browser manual.
+          </p>
+          {installManualHelp && (
+            <div className="mt-3 rounded-xl border border-neutral-border/70 bg-white/60 px-3 py-2 text-xs font-semibold leading-relaxed text-neutral-600">
+              <div className="mb-1 flex items-center gap-1.5 text-violet">
+                <Home size={14} />
+                Cara manual
+              </div>
+              Android: buka menu browser lalu pilih <span className="text-navy">Tambahkan ke layar utama</span>.
+              iPhone: tekan Share lalu <span className="text-navy">Add to Home Screen</span>.
+            </div>
+          )}
+          <button type="button" onClick={handleInstallApp} className={`${primaryBtnClass} mt-3 w-full`}>
+            <Download size={15} />
+            {hasNativeInstallPrompt() ? "Install Sekarang" : "Lihat Cara Install"}
+          </button>
+        </div>
+      )}
 
       {/* Akun & Langganan */}
       <div className="gloss-panel mb-4 rounded-2xl p-4">
