@@ -208,6 +208,17 @@ function paymentTone(status) {
   return "gold";
 }
 
+function formatFetchedAt(value) {
+  if (!value) return "Belum ada waktu pengambilan";
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 export default function AdminPage({ user }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [overview, setOverview] = useState(null);
@@ -681,12 +692,14 @@ export default function AdminPage({ user }) {
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-wide text-gold">GOLDGRAM</div>
                   <div className="mt-1 text-sm font-bold text-navy">{fmtRp(Number(apePreview.gold?.price_per_gram || 0))} / gram</div>
-                  <div className="text-[11px] font-semibold text-neutral-500">{apePreview.gold?.date || "Tanggal terbaru"}</div>
+                  <div className="text-[11px] font-semibold text-neutral-500">Diambil {formatFetchedAt(apePreview.gold?.fetched_at)}</div>
+                  {apePreview.gold?.date && <div className="text-[10px] font-semibold text-neutral-400">Tanggal harga {apePreview.gold.date}</div>}
                 </div>
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-wide text-violet">SILVERGRAM</div>
                   <div className="mt-1 text-sm font-bold text-navy">{fmtRp(Number(apePreview.silver?.price_per_gram || 0))} / gram</div>
-                  <div className="text-[11px] font-semibold text-neutral-500">{apePreview.silver?.date || "Tanggal terbaru"}</div>
+                  <div className="text-[11px] font-semibold text-neutral-500">Diambil {formatFetchedAt(apePreview.silver?.fetched_at)}</div>
+                  {apePreview.silver?.date && <div className="text-[10px] font-semibold text-neutral-400">Tanggal harga {apePreview.silver.date}</div>}
                 </div>
               </div>
             )}
