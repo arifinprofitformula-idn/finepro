@@ -76,7 +76,7 @@ function resetPasswordEmailTemplate({ name, resetLink }) {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #dfe8f1;border-radius:24px;overflow:hidden;box-shadow:0 20px 55px rgba(49,77,119,0.14);">
             <tr>
               <td style="padding:26px 24px;background:linear-gradient(135deg,#0f1f3d 0%,#6f55f2 100%);">
-                <div style="display:inline-block;background:rgba(255,255,255,0.16);border:1px solid rgba(255,255,255,0.28);border-radius:16px;padding:10px 12px;color:#ffffff;font-weight:800;font-size:18px;letter-spacing:0.3px;">FP</div>
+                <img src="https://finepro.my.id/images/finepro-logo-horizontal.png" alt="Finepro" width="280" style="display:block;max-width:280px;width:100%;height:auto;margin:0 0 20px 0;" />
                 <h1 style="margin:18px 0 0;color:#ffffff;font-size:24px;line-height:1.25;">Atur ulang password Finepro</h1>
                 <p style="margin:8px 0 0;color:rgba(255,255,255,0.82);font-size:14px;line-height:1.6;">Kami bantu kamu masuk kembali dengan aman.</p>
               </td>
