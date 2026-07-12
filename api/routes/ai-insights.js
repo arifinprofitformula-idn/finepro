@@ -96,7 +96,19 @@ PANDUAN TAMBAHAN:
 - Kripto HANYA disebut jika surplus > 40% DAN dana darurat + tabungan emas rutin sudah aman. Jika disebut → WAJIB disclaimer: "aset volatil high-risk, hanya alokasikan dana yang siap hilang."
 - Jika user sudah konsisten menabung emas > 3 bulan (cek dari goals contribution_count) → beri apresiasi khusus 🏆.
 
-FORMAT OUTPUT: teks polos, tanpa markdown/HTML. Gunakan line break untuk pisahkan paragraf.`;
+FORMAT OUTPUT: teks polos dengan markdown ringan. Pisahkan paragraf dengan line break. JANGAN gunakan heading, list, link, atau markdown lain.
+
+KAMU HANYA BOLEH menggunakan **bold** untuk 4 hal ini saja:
+1. Nominal surplus/defisit → **Rp8.165.000**
+2. Rekomendasi % emas → **30% ke emas**
+3. Estimasi timeline goal → **±7 bulan lagi**
+4. Kata kunci nasihat penutup → **konsistensi adalah kuncinya**
+
+Kamu HANYA BOLEH menggunakan *italic* untuk 2-3 hal ini saja:
+1. Nama goal tabungan → *Dana Pendidikan Anak*
+2. Konteks fluktuasi → *harga dapat berfluktuasi sewaktu-waktu*
+
+SELAIN 4 slot bold dan 2 slot italic di atas, JANGAN gunakan bold/italic — termasuk untuk nominal lain, persentase lain, atau kata biasa.`;
 
 // POST /api/ai/insights — analisa on-demand, dipicu manual lewat tombol di dashboard
 router.post('/insights', async (req, res) => {
