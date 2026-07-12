@@ -192,6 +192,25 @@ const TONE_BG = {
   gold: "bg-gold-light text-gold"
 };
 
+function BrandLogo({ className = "" }) {
+  return (
+    <img
+      src="/images/fine-pro-header.png"
+      alt="Fine Pro"
+      className={`h-10 w-auto object-contain ${className}`}
+    />
+  );
+}
+
+function SectionBrand({ align = "center", className = "" }) {
+  const alignment = align === "left" ? "justify-start" : "justify-center";
+  return (
+    <div className={`mb-4 flex ${alignment} ${className}`}>
+      <BrandLogo className="h-9 sm:h-10" />
+    </div>
+  );
+}
+
 function Container({ className = "", children }) {
   return <div className={`mx-auto w-full max-w-[1200px] px-5 md:px-8 ${className}`}>{children}</div>;
 }
@@ -290,10 +309,9 @@ function NavBar({ onGetStarted, onLogin }) {
   return (
     <header className="sticky top-0 z-30 border-b border-white/60 bg-white/75 backdrop-blur-xl">
       <Container className="flex h-16 items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-navy text-sm font-bold text-white">FP</div>
-          <span className="text-base font-bold text-navy">Fine Pro</span>
-        </div>
+        <a href="#" className="flex items-center" aria-label="Fine Pro">
+          <BrandLogo className="h-9 sm:h-10" />
+        </a>
 
         <nav className="hidden items-center gap-6 md:flex" aria-label="Navigasi utama">
           {NAV_LINKS.map((link) => (
@@ -374,6 +392,7 @@ function Hero({ onGetStarted }) {
     <section className="py-12 md:py-20">
       <Container className="grid items-center gap-10 md:grid-cols-2">
         <div>
+          <SectionBrand align="left" className="mb-5" />
           <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-mint-light px-3 py-1 text-[11px] font-bold text-mint">
             <Gift size={12} />
             Coba Gratis 14 Hari, Tanpa Kartu Kredit
@@ -453,6 +472,7 @@ function Solution() {
     <section className="py-14 md:py-20">
       <Container className="gloss-panel rounded-[32px] p-6 md:p-10">
         <div className="mx-auto max-w-xl text-center">
+          <SectionBrand />
           <SectionEyebrow>Solusinya</SectionEyebrow>
           <h2 className="text-2xl font-bold text-navy md:text-3xl">Fine Pro Membantu Kamu Melihat Uang dengan Lebih Jelas</h2>
         </div>
@@ -505,6 +525,7 @@ function BudgetCategorySection() {
     <section className="py-14 md:py-20">
       <Container className="gloss-panel rounded-[32px] p-6 md:p-10">
         <div className="mx-auto max-w-xl text-center">
+          <SectionBrand />
           <SectionEyebrow>Bukan sekadar angka</SectionEyebrow>
           <h2 className="text-2xl font-bold text-navy md:text-3xl">Budget yang Lebih Manusiawi</h2>
           <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500 md:text-base">
@@ -564,6 +585,7 @@ function PreviewApp() {
     <section id="preview" className="py-14 md:py-20">
       <Container className="grid items-center gap-10 md:grid-cols-2">
         <div className="order-2 md:order-1">
+          <SectionBrand align="left" />
           <SectionEyebrow>Tampilan asli</SectionEyebrow>
           <h2 className="text-2xl font-bold text-navy md:text-3xl">Lihat Sekilas Dashboard Fine Pro</h2>
           <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500 md:text-base">
@@ -625,6 +647,11 @@ function CtaSection({ onGetStarted }) {
     <section className="py-14 md:py-20">
       <Container>
         <div className="gloss-panel rounded-[32px] bg-gradient-to-br from-navy to-violet p-8 text-center text-white md:p-14">
+          <div className="mb-5 flex justify-center">
+            <div className="rounded-2xl bg-white/95 px-4 py-2 shadow-soft">
+              <BrandLogo className="h-10 sm:h-12" />
+            </div>
+          </div>
           <h2 className="text-2xl font-bold md:text-4xl">Mulai Rapikan Keuanganmu Hari Ini</h2>
           <p className="mx-auto mt-3 max-w-md text-sm font-medium leading-relaxed text-white/80 md:text-base">
             Tidak perlu menunggu gaji berikutnya. Coba gratis 14 hari, tanpa kartu kredit — cukup email untuk mulai.
@@ -708,9 +735,8 @@ function Footer({ onLogin }) {
     <footer className="border-t border-white/60 bg-white/60 py-10">
       <Container className="flex flex-col items-center gap-4 text-center md:flex-row md:justify-between md:text-left">
         <div>
-          <div className="flex items-center justify-center gap-2 md:justify-start">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-navy text-xs font-bold text-white">FP</div>
-            <span className="text-sm font-bold text-navy">Fine Pro</span>
+          <div className="flex items-center justify-center md:justify-start">
+            <BrandLogo className="h-10" />
           </div>
           <p className="mt-2 text-xs font-medium text-neutral-500">Keuangan Lebih Rapi, Hidup Lebih Tenang.</p>
         </div>

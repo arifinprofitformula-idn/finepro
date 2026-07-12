@@ -74,14 +74,12 @@ function GoogleSignInButton({ onCredential }) {
 
 function BrandMark() {
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-navy text-base font-bold text-white shadow-soft">
-        FP
-      </div>
-      <div>
-        <div className="text-sm font-bold leading-tight text-navy">Finepro</div>
-        <div className="text-[11px] font-medium text-neutral-500">Keuangan yang lebih tenang</div>
-      </div>
+    <div className="flex min-w-0 items-center">
+      <img
+        src="/images/fine-pro-header.jpg"
+        alt="FinePro"
+        className="h-10 w-auto max-w-[180px] rounded-xl object-contain sm:h-11"
+      />
     </div>
   );
 }

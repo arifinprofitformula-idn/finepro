@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LogOut, RefreshCw, ShieldCheck } from "lucide-react";
+import { LogOut, RefreshCw } from "lucide-react";
 import { adminLogout, getCurrentAdmin } from "./api/admin.js";
 import AdminLoginPage from "./pages/AdminLoginPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
@@ -48,11 +48,12 @@ export default function AdminConsole() {
             onClick={() => { window.location.href = "/"; }}
             className="flex min-w-0 items-center gap-2 text-left"
           >
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-navy text-white shadow-soft">
-              <ShieldCheck size={19} />
-            </div>
             <div className="min-w-0">
-              <div className="truncate text-sm font-bold text-navy">Finepro Admin</div>
+              <img
+                src="/images/fine-pro-header.jpg"
+                alt="FinePro Admin"
+                className="h-8 w-auto max-w-[150px] rounded-lg object-contain sm:h-9 sm:max-w-[180px]"
+              />
               <div className="truncate text-xs font-semibold text-neutral-500">{admin.email} · {admin.role}</div>
             </div>
           </button>

@@ -32,14 +32,13 @@ export default function AdminLoginPage({ onLoggedIn }) {
         <section className="gloss-panel rounded-[30px] p-5 sm:p-6">
           <div className="relative z-10">
             <div className="mb-5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-navy text-sm font-bold text-white shadow-soft">
-                  FP
-                </div>
-                <div>
-                  <div className="text-sm font-bold leading-tight text-navy">Finepro</div>
-                  <div className="text-[11px] font-semibold text-neutral-500">Admin Console</div>
-                </div>
+              <div className="flex min-w-0 flex-col gap-1">
+                <img
+                  src="/images/fine-pro-header.jpg"
+                  alt="FinePro"
+                  className="h-10 w-auto max-w-[190px] rounded-xl object-contain sm:h-11"
+                />
+                <div className="text-[11px] font-semibold text-neutral-500">Admin Console</div>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-light text-violet">
                 <ShieldCheck size={18} />

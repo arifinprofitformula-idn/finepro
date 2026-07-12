@@ -304,11 +304,16 @@ export default function AdminPage({ user }) {
       <section className="gloss-panel mb-4 rounded-[28px] p-4 sm:p-5">
         <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
+            <img
+              src="/images/fine-pro-header.jpg"
+              alt="FinePro"
+              className="mb-3 h-9 w-auto max-w-[190px] rounded-xl object-contain sm:h-10"
+            />
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-violet-light px-3 py-1 text-[11px] font-bold text-violet">
               <ShieldCheck size={13} />
               Admin Console
             </div>
-            <h1 className="text-2xl font-bold leading-tight text-navy sm:text-3xl">Pengaturan Sistem Finepro</h1>
+            <h1 className="text-2xl font-bold leading-tight text-navy sm:text-3xl">Pengaturan Sistem FinePro</h1>
             <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-neutral-500">
               Kelola integrasi, pengguna, pembayaran, dan jejak aktivitas dari satu ruang kerja yang ringkas.
             </p>

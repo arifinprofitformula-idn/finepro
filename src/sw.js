@@ -22,10 +22,10 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "Keuangan Keluarga", body: event.data ? event.data.text() : "" };
+    data = { title: "FinePro", body: event.data ? event.data.text() : "" };
   }
 
-  const title = data.title || "Keuangan Keluarga";
+  const title = data.title || "FinePro";
   const options = {
     body: data.body || "",
     icon: "/icon-192.png",
