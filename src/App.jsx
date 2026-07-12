@@ -23,6 +23,9 @@ import AppHeader from "./components/AppHeader.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import InstallPrompt from "./components/InstallPrompt.jsx";
 import TransactionModal from "./components/TransactionModal.jsx";
+import { currentMonthKey } from "./utils/format.js";
+
+const SELECTED_PERIOD_KEY = "finepro-selected-period";
 
 function SplashScreen() {
   return (
@@ -51,12 +54,21 @@ export default function App() {
   const categories = useCategories(household?.id);
   const { categoriesExpense, categoriesIncome } = categories;
   const { invites, refresh: refreshInvites } = useInvites(!!household);
-  const dashboard = useDashboard(household?.id);
-  const paymentStatus = usePaymentStatus();
   const [page, setPage] = useState("dashboard");
   const [modalOpen, setModalOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState("login");
+  const [selectedMonthKey, setSelectedMonthKeyState] = useState(() => {
+    const saved = localStorage.getItem(SELECTED_PERIOD_KEY);
+    return /^\d{4}-\d{2}$/.test(saved || "") ? saved : currentMonthKey();
+  });
+  const dashboard = useDashboard(household?.id, selectedMonthKey);
+  const paymentStatus = usePaymentStatus();
+
+  function setSelectedMonthKey(next) {
+    setSelectedMonthKeyState(next);
+    localStorage.setItem(SELECTED_PERIOD_KEY, next);
+  }
 
   // Deteksi redirect balik dari Midtrans (?order_id=...) dan poll status pembayaran.
   useEffect(() => {
@@ -124,6 +136,8 @@ export default function App() {
           byCategory={dashboard.byCategory}
           categoriesExpense={categoriesExpense}
           onDataChanged={dashboard.refresh}
+          selectedMonthKey={selectedMonthKey}
+          onPeriodChange={setSelectedMonthKey}
         />
       )}
 
@@ -133,6 +147,7 @@ export default function App() {
           categoriesExpense={categoriesExpense}
           categoriesIncome={categoriesIncome}
           onDataChanged={dashboard.refresh}
+          selectedMonthKey={selectedMonthKey}
         />
       )}
 

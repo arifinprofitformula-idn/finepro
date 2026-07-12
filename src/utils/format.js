@@ -31,6 +31,42 @@ export function monthKey(dateStr) {
   return dateStr.slice(0, 7);
 }
 
+export function currentMonthKey() {
+  return monthKey(todayStr());
+}
+
+export function monthKeyToParts(key) {
+  const [year, month] = String(key || currentMonthKey()).split("-").map(Number);
+  return {
+    year: Number.isFinite(year) ? year : new Date().getFullYear(),
+    month: Number.isFinite(month) ? month : new Date().getMonth() + 1,
+  };
+}
+
+export function shiftMonthKey(key, delta) {
+  const { year, month } = monthKeyToParts(key);
+  const date = new Date(year, month - 1 + delta, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function monthRangeFromKey(key) {
+  const { year, month } = monthKeyToParts(key);
+  const lastDay = new Date(year, month, 0).getDate();
+  const mm = String(month).padStart(2, "0");
+  return {
+    date_from: `${year}-${mm}-01`,
+    date_to: `${year}-${mm}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
+export function monthLabel(key, options = {}) {
+  const { year, month } = monthKeyToParts(key);
+  return new Intl.DateTimeFormat("id-ID", {
+    month: options.short ? "short" : "long",
+    year: "numeric",
+  }).format(new Date(year, month - 1, 1));
+}
+
 // Hitung selisih hari ke tanggal "uang bulanan" terdekat (1-31), dengan
 // kalender aman untuk bulan pendek (mis. tanggal 31 di bulan Februari).
 export function daysUntilMonthlyDay(day) {

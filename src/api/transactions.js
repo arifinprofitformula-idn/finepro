@@ -153,8 +153,9 @@ export async function getContributions(monthKey) {
   return data.contributions || [];
 }
 
-export async function getZakatSummary() {
-  return apiFetch('/transactions/zakat-summary');
+export async function getZakatSummary(monthKey = "") {
+  const query = monthKey ? `?month=${encodeURIComponent(monthKey)}` : "";
+  return apiFetch(`/transactions/zakat-summary${query}`);
 }
 
 export function summarize(transactions) {

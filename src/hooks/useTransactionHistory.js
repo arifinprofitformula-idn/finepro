@@ -4,8 +4,8 @@ import { getTransactionHistory } from "../api/transactions.js";
 const DEFAULT_FILTERS = { type: "", category: "", wallet_id: "", search: "", date_from: "", date_to: "" };
 const PAGE_SIZE = 20;
 
-export function useTransactionHistory() {
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+export function useTransactionHistory(initialFilters = DEFAULT_FILTERS) {
+  const [filters, setFilters] = useState(initialFilters);
   const [transactions, setTransactions] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(false);
@@ -26,9 +26,8 @@ export function useTransactionHistory() {
   }, []);
 
   useEffect(() => {
-    applyFilters(DEFAULT_FILTERS);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    applyFilters(initialFilters);
+  }, [applyFilters, initialFilters]);
 
   async function loadMore() {
     if (!hasMore || loadingMore) return;

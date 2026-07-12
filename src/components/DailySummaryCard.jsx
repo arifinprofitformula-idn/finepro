@@ -1,5 +1,5 @@
 import { CalendarDays } from "lucide-react";
-import { fmtRp } from "../utils/format.js";
+import { currentMonthKey, fmtRp, monthKeyToParts } from "../utils/format.js";
 
 const MONTH_LABELS = [
   "Jan",
@@ -16,9 +16,12 @@ const MONTH_LABELS = [
   "Des"
 ];
 
-function rangeLabel() {
+function rangeLabel(monthKey) {
+  const { year, month } = monthKeyToParts(monthKey);
   const today = new Date();
-  return `1 s.d Hari Ini (${today.getDate()} ${MONTH_LABELS[today.getMonth()]})`;
+  const isCurrentMonth = monthKey === currentMonthKey();
+  const lastDay = isCurrentMonth ? today.getDate() : new Date(year, month, 0).getDate();
+  return `1 s.d ${lastDay} ${MONTH_LABELS[month - 1]}`;
 }
 
 function signedRp(value, sign) {
@@ -26,7 +29,7 @@ function signedRp(value, sign) {
   return `${sign}${fmtRp(value)}`;
 }
 
-export default function DailySummaryCard({ rows }) {
+export default function DailySummaryCard({ rows, monthKey }) {
   return (
     <div className="gloss-panel mb-4 rounded-2xl p-3.5 sm:p-4">
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -37,7 +40,7 @@ export default function DailySummaryCard({ rows }) {
           <h2 className="text-base font-semibold leading-tight text-navy">Ringkasan Harian</h2>
         </div>
         <span className="w-fit rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold leading-none text-neutral-500 sm:flex-shrink-0">
-          {rangeLabel()}
+          {rangeLabel(monthKey)}
         </span>
       </div>
 
@@ -62,7 +65,7 @@ export default function DailySummaryCard({ rows }) {
         ))}
         {rows.length === 0 && (
           <div className="rounded-xl border border-neutral-border/60 bg-white/50 px-3 py-6 text-center text-sm font-medium text-neutral-500">
-            Belum ada transaksi hari ini.
+            Belum ada transaksi pada periode ini.
           </div>
         )}
       </div>
@@ -96,7 +99,7 @@ export default function DailySummaryCard({ rows }) {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan="4" className="px-3 py-8 text-center text-sm font-medium text-neutral-500">
-                    Belum ada transaksi hari ini.
+                    Belum ada transaksi pada periode ini.
                   </td>
                 </tr>
               )}

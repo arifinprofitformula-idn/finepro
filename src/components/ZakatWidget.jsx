@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { HandHeart } from "lucide-react";
 import { getZakatSummary } from "../api/transactions.js";
-import { fmtRp } from "../utils/format.js";
+import { fmtRp, monthLabel } from "../utils/format.js";
 
-export default function ZakatWidget({ householdId, totalExpense = 0 }) {
+export default function ZakatWidget({ householdId, totalExpense = 0, monthKey }) {
   const [summary, setSummary] = useState(null);
 
   useEffect(() => {
-    getZakatSummary().then(setSummary).catch(() => setSummary(null));
-  }, [householdId]);
+    getZakatSummary(monthKey).then(setSummary).catch(() => setSummary(null));
+  }, [householdId, monthKey]);
 
   if (!summary) return null;
   const operationalExpense = Math.max(0, Number(totalExpense) - Number(summary.thisMonth || 0));
@@ -21,7 +21,7 @@ export default function ZakatWidget({ householdId, totalExpense = 0 }) {
             <HandHeart size={16} />
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-navy">Zakat & Sedekah bulan ini</div>
+            <div className="text-sm font-semibold text-navy">Zakat & Sedekah {monthLabel(monthKey, { short: true })}</div>
             {summary.streakMonths > 1 && (
               <div className="text-xs font-medium text-neutral-500">
                 {summary.streakMonths} bulan berturut-turut tercatat

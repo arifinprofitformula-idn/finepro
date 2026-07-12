@@ -457,6 +457,7 @@ router.get('/zakat-summary', async (req, res) => {
   try {
     const householdId = await getUserHouseholdId(req.user.userId);
     if (!householdId) return res.json({ thisMonth: 0, streakMonths: 0 });
+    const requestedMonth = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : monthKeyFromDate(new Date());
 
     const result = await pool.query(
       `SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month, SUM(amount) as total
@@ -477,13 +478,13 @@ router.get('/zakat-summary', async (req, res) => {
     );
 
     const monthsWithEntries = new Set(result.rows.map((r) => r.month));
-    const thisMonthKey = monthKeyFromDate(new Date());
     const thisMonth = parseFloat(
-      result.rows.find((r) => r.month === thisMonthKey)?.total || 0
+      result.rows.find((r) => r.month === requestedMonth)?.total || 0
     );
 
     let streakMonths = 0;
-    const cursor = new Date();
+    const [requestedYear, requestedMonthNumber] = requestedMonth.split('-').map(Number);
+    const cursor = new Date(requestedYear, requestedMonthNumber - 1, 1);
     while (true) {
       const key = monthKeyFromDate(cursor);
       if (!monthsWithEntries.has(key)) break;

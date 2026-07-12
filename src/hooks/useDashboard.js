@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { getMonthTransactions, summarize, groupExpenseByCategory } from "../api/transactions.js";
 import { getBudgets } from "../api/budgets.js";
-import { monthKey, todayStr } from "../utils/format.js";
+import { currentMonthKey } from "../utils/format.js";
 
-export function useDashboard(householdId) {
+export function useDashboard(householdId, selectedMonthKey = currentMonthKey()) {
   const [transactions, setTransactions] = useState([]);
   const [kpi, setKpi] = useState({ income: 0, expense: 0 });
   const [budgets, setBudgets] = useState({});
@@ -14,9 +14,8 @@ export function useDashboard(householdId) {
     if (!householdId) return;
     setLoading(true);
     try {
-      const month = monthKey(todayStr());
       const [tx, bud] = await Promise.all([
-        getMonthTransactions(householdId, month),
+        getMonthTransactions(householdId, selectedMonthKey),
         getBudgets(householdId)
       ]);
       setTransactions(tx);
@@ -26,7 +25,7 @@ export function useDashboard(householdId) {
     } finally {
       setLoading(false);
     }
-  }, [householdId]);
+  }, [householdId, selectedMonthKey]);
 
   useEffect(() => {
     refresh();

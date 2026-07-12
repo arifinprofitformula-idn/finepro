@@ -19,8 +19,8 @@ import InsightCard from "../components/InsightCard.jsx";
 import { useAiInsight } from "../hooks/useAiInsight.js";
 import { setBudget } from "../api/budgets.js";
 import { getContributions, getDailySummaryRows, groupByDay, getMonthlySummary } from "../api/transactions.js";
-import { fmtRp, daysUntilMonthlyDay, formatNumberIdInput, parseNumberId, monthKey, todayStr } from "../utils/format.js";
-import { ArrowRight, BarChart3, CalendarDays, ChevronUp, Eye, EyeOff, PieChart, ReceiptText, Sparkles, Target, Users } from "lucide-react";
+import { fmtRp, daysUntilMonthlyDay, formatNumberIdInput, parseNumberId, currentMonthKey, monthKeyToParts, monthLabel, shiftMonthKey } from "../utils/format.js";
+import { ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, ChevronUp, Eye, EyeOff, PieChart, ReceiptText, Sparkles, Target, Users } from "lucide-react";
 
 const DEFAULT_TX_SHOWN = 20;
 const SHOW_CONTRIBUTIONS_KEY = "finepro-show-contributions";
@@ -31,7 +31,58 @@ const CHART_MODES = {
   monthly: { title: "Analisis Bulanan", icon: CalendarDays }
 };
 
-export default function DashboardPage({ household, transactions, kpi, budgets, byCategory, categoriesExpense, onDataChanged }) {
+function PeriodSelector({ monthKey, onChange }) {
+  const isCurrentMonth = monthKey === currentMonthKey();
+
+  return (
+    <div className="gloss-panel mb-4 rounded-2xl p-3">
+      <div className="mb-2 flex items-center gap-2 text-xs font-bold text-neutral-500">
+        <CalendarDays size={14} />
+        Periode catatan
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(shiftMonthKey(monthKey, -1))}
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white/70 text-navy transition active:scale-[0.98]"
+          title="Bulan sebelumnya"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <label className="sr-only" htmlFor="dashboard-period">Pilih bulan dan tahun</label>
+        <input
+          id="dashboard-period"
+          type="month"
+          value={monthKey}
+          onChange={(e) => e.target.value && onChange(e.target.value)}
+          className="min-h-[40px] min-w-0 flex-1 rounded-full border border-white/80 bg-white/70 px-3 text-center text-sm font-bold text-navy outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => onChange(shiftMonthKey(monthKey, 1))}
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white/70 text-navy transition active:scale-[0.98]"
+          title="Bulan berikutnya"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="truncate text-xs font-semibold text-neutral-500">{monthLabel(monthKey)}</div>
+        {!isCurrentMonth && (
+          <button
+            type="button"
+            onClick={() => onChange(currentMonthKey())}
+            className="flex-shrink-0 rounded-full bg-mint-light px-3 py-1.5 text-xs font-bold text-mint"
+          >
+            Bulan Ini
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardPage({ household, transactions, kpi, budgets, byCategory, categoriesExpense, onDataChanged, selectedMonthKey, onPeriodChange }) {
   const [showAll, setShowAll] = useState(false);
   const [budgetInputs, setBudgetInputs] = useState({});
   const [savingCategory, setSavingCategory] = useState(null);
@@ -42,17 +93,18 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
   const [monthlyLoading, setMonthlyLoading] = useState(false);
   const insight = useAiInsight();
 
-  const dailyData = useMemo(() => groupByDay(transactions, monthKey(todayStr())), [transactions]);
-  const dailySummaryRows = useMemo(() => getDailySummaryRows(transactions, monthKey(todayStr())), [transactions]);
+  const selectedYear = monthKeyToParts(selectedMonthKey).year;
+  const dailyData = useMemo(() => groupByDay(transactions, selectedMonthKey), [transactions, selectedMonthKey]);
+  const dailySummaryRows = useMemo(() => getDailySummaryRows(transactions, selectedMonthKey), [transactions, selectedMonthKey]);
 
   useEffect(() => {
-    if (chartMode !== "monthly" || monthlyData) return;
+    if (chartMode !== "monthly" || monthlyData?.year === selectedYear) return;
     setMonthlyLoading(true);
-    getMonthlySummary(new Date().getFullYear())
-      .then(setMonthlyData)
-      .catch(() => setMonthlyData([]))
+    getMonthlySummary(selectedYear)
+      .then((months) => setMonthlyData({ year: selectedYear, months }))
+      .catch(() => setMonthlyData({ year: selectedYear, months: [] }))
       .finally(() => setMonthlyLoading(false));
-  }, [chartMode, monthlyData]);
+  }, [chartMode, monthlyData, selectedYear]);
 
   const isStudent = household.household_type === "student";
   const isFamily = household.household_type === "family";
@@ -63,10 +115,10 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
     const saved = localStorage.getItem(SHOW_CONTRIBUTIONS_KEY) === "1";
     setShowContributions(saved);
     if (saved && isFamily) {
-      getContributions(monthKey(todayStr())).then(setContributions).catch(() => {});
+      getContributions(selectedMonthKey).then(setContributions).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [household.id]);
+  }, [household.id, selectedMonthKey]);
 
   async function handleToggleContributions() {
     const next = !showContributions;
@@ -74,7 +126,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
     localStorage.setItem(SHOW_CONTRIBUTIONS_KEY, next ? "1" : "0");
     if (next) {
       try {
-        setContributions(await getContributions(monthKey(todayStr())));
+        setContributions(await getContributions(selectedMonthKey));
       } catch {
         setContributions([]);
       }
@@ -118,6 +170,8 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
 
   return (
     <div className="max-w-lg mx-auto px-5 pb-28">
+      <PeriodSelector monthKey={selectedMonthKey} onChange={onPeriodChange} />
+
       {subscriptionExpired && (
         <div className="gloss-panel mb-4 rounded-3xl p-4 text-sm font-semibold text-coral">
           Langganan Anda telah berakhir. Data lama tetap bisa dilihat, tapi Anda perlu perpanjang di halaman{" "}
@@ -139,7 +193,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         <KpiCard label="Saldo" value={fmtRp(balance)} tone="balance" status={balanceStatus} />
       </div>
 
-      <DailySummaryCard rows={dailySummaryRows} />
+      <DailySummaryCard rows={dailySummaryRows} monthKey={selectedMonthKey} />
 
       <InsightButton onClick={insight.generate} loading={insight.loading} />
       {insight.error && !insight.rateLimited && (
@@ -150,7 +204,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         rateLimitMessage={insight.rateLimited ? insight.error : ""}
       />
 
-      <ZakatWidget householdId={household.id} totalExpense={kpi.expense} />
+      <ZakatWidget householdId={household.id} totalExpense={kpi.expense} monthKey={selectedMonthKey} />
 
       <BillsSection householdId={household.id} />
 
@@ -182,7 +236,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         </div>
         {chartMode === "daily" && <DailyChart data={dailyData} />}
         {chartMode === "category" && <CategoryChart byCategory={byCategory} />}
-        {chartMode === "monthly" && <MonthlyChart data={monthlyData || []} loading={monthlyLoading} />}
+        {chartMode === "monthly" && <MonthlyChart data={monthlyData?.months || []} loading={monthlyLoading} />}
       </div>
 
       {budgetProgress.length > 0 && (
@@ -236,7 +290,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
           </div>
           {showContributions && (
             contributions.length === 0 ? (
-              <div className="py-2 text-xs font-medium text-neutral-500">Belum ada data bulan ini.</div>
+              <div className="py-2 text-xs font-medium text-neutral-500">Belum ada data pada periode ini.</div>
             ) : (
               contributions.map((c) => (
                 <div
@@ -277,7 +331,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
         {transactions.length === 0 && (
           <div className="flex flex-col items-center justify-center py-8 text-center text-sm font-semibold text-neutral-500">
             <Sparkles size={28} className="mb-2 text-violet" />
-            Belum ada transaksi bulan ini. Tekan tombol + untuk menambah.
+            Belum ada transaksi pada periode ini. Tekan tombol + untuk menambah.
           </div>
         )}
       </div>

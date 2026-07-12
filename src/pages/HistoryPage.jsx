@@ -4,16 +4,19 @@
 // pagination di api/routes/transactions.js), plus unduh CSV (memakai filter
 // aktif) dan cadangan JSON penuh (tidak terpengaruh filter).
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import TransactionItem from "../components/TransactionItem.jsx";
 import TransactionModal from "../components/TransactionModal.jsx";
 import { useTransactionHistory } from "../hooks/useTransactionHistory.js";
 import { deleteTransaction, downloadBackup, exportTransactionsCsv, updateTransaction } from "../api/transactions.js";
 import { getWallets } from "../api/wallets.js";
-import { Archive, Download, Loader2, Search } from "lucide-react";
+import { monthLabel, monthRangeFromKey } from "../utils/format.js";
+import { Archive, CalendarDays, Download, Loader2, Search } from "lucide-react";
 
-export default function HistoryPage({ household, categoriesExpense, categoriesIncome, onDataChanged }) {
-  const { filters, transactions, hasMore, loading, loadingMore, applyFilters, loadMore, refresh, defaultFilters } = useTransactionHistory();
+export default function HistoryPage({ household, categoriesExpense, categoriesIncome, onDataChanged, selectedMonthKey }) {
+  const periodRange = useMemo(() => monthRangeFromKey(selectedMonthKey), [selectedMonthKey]);
+  const periodFilters = useMemo(() => ({ type: "", category: "", wallet_id: "", search: "", ...periodRange }), [periodRange]);
+  const { filters, transactions, hasMore, loading, loadingMore, applyFilters, loadMore, refresh, defaultFilters } = useTransactionHistory(periodFilters);
   const [searchInput, setSearchInput] = useState("");
   const [wallets, setWallets] = useState([]);
   const [exporting, setExporting] = useState(false);
@@ -35,6 +38,11 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
 
   function updateFilter(key, value) {
     applyFilters({ ...filters, [key]: value });
+  }
+
+  function applyActivePeriod() {
+    setSearchInput("");
+    applyFilters({ ...defaultFilters, ...periodRange });
   }
 
   const allCategories = [...categoriesExpense, ...categoriesIncome].map((c) => c.name).filter((v, i, arr) => arr.indexOf(v) === i);
@@ -113,6 +121,25 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
       </div>
 
       <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-2xl bg-white/55 px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-light text-violet">
+              <CalendarDays size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-xs font-bold text-navy">Periode aktif: {monthLabel(selectedMonthKey)}</div>
+              <div className="text-[11px] font-medium text-neutral-500">Riwayat mengikuti bulan pilihan dashboard.</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={applyActivePeriod}
+            className="flex-shrink-0 rounded-full bg-violet-light px-3 py-1.5 text-[11px] font-bold text-violet"
+          >
+            Terapkan
+          </button>
+        </div>
+
         <div className="relative mb-3">
           <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
           <input
@@ -175,10 +202,10 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
           {(filters.type || filters.category || filters.wallet_id || filters.date_from || filters.date_to || filters.search) && (
             <button
               type="button"
-              onClick={() => { setSearchInput(""); applyFilters(defaultFilters); }}
+              onClick={() => { setSearchInput(""); applyFilters({ ...defaultFilters, ...periodRange }); }}
               className="col-span-2 min-h-[36px] rounded-xl text-xs font-semibold text-coral"
             >
-              Reset Filter
+              Reset ke Periode Aktif
             </button>
           )}
         </div>
