@@ -5,9 +5,9 @@ import { translateAuthError, forgotPassword, resetPassword } from "../api/auth.j
 import {
   ArrowRight,
   BarChart3,
-  CheckCircle2,
   Eye,
   EyeOff,
+  Gift,
   Inbox,
   LockKeyhole,
   Mail,
@@ -187,9 +187,9 @@ function SignupBenefits() {
   );
 }
 
-export default function AuthPage() {
+export default function AuthPage({ onBack, initialMode } = {}) {
   const { login, signup, loginWithGoogle } = useAuth();
-  const [mode, setMode] = useState("login"); // login | signup | forgot | reset
+  const [mode, setMode] = useState(initialMode === "signup" ? "signup" : "login"); // login | signup | forgot | reset
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -301,6 +301,16 @@ export default function AuthPage() {
   return (
     <div className="app-glow-bg min-h-screen px-5 py-7">
       <div className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-lg flex-col justify-center">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="mb-3 flex w-fit items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-violet"
+          >
+            <ArrowRight size={13} className="rotate-180" />
+            Kembali ke beranda
+          </button>
+        )}
         <div className={`grid gap-4 transition-all duration-500 ${isSignup ? "md:gap-5" : ""}`}>
           <div className={`gloss-panel rounded-[28px] p-4 ${isSignup ? "animate-auth-fade-up" : "animate-auth-float"}`}>
             <div className="flex items-start justify-between gap-3">
@@ -333,12 +343,12 @@ export default function AuthPage() {
             {mode === "signup" && (
               <div className="mt-5 animate-auth-fade-up">
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-gold-light/70 px-3 py-1 text-[11px] font-bold text-gold">
-                  <CheckCircle2 size={13} />
-                  Mulai ruang keuangan baru
+                  <Gift size={13} />
+                  14 Hari Gratis · Tanpa Kartu Kredit
                 </div>
-                <h1 className="mt-3 text-2xl font-bold leading-tight text-navy">Buat akun, rapikan alur uang sejak hari pertama.</h1>
+                <h1 className="mt-3 text-2xl font-bold leading-tight text-navy">Buat Akun, Nikmati 14 Hari Gratis Mulai Hari Ini</h1>
                 <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
-                  Nama pengguna akan tampil di header dan label pencatat transaksi.
+                  Setelah ini, kamu nggak perlu lagi menebak-nebak ke mana uangmu pergi.
                 </p>
                 <div className="mt-4">
                   <SignupBenefits />

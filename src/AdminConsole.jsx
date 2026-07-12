@@ -7,10 +7,10 @@ import AdminPage from "./pages/AdminPage.jsx";
 function AdminSplash() {
   return (
     <div className="app-glow-bg flex min-h-screen flex-col items-center justify-center gap-3">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet text-white shadow-soft">
+      <div className="gloss-panel flex h-16 w-16 items-center justify-center rounded-3xl bg-violet text-white">
         <RefreshCw size={23} className="animate-spin" />
       </div>
-      <div className="text-sm font-medium text-neutral-500">Memuat Admin Console...</div>
+      <div className="text-sm font-bold text-neutral-500">Memuat Admin Console...</div>
     </div>
   );
 }
@@ -41,33 +41,33 @@ export default function AdminConsole() {
 
   return (
     <div className="app-glow-bg min-h-screen">
-      <div className="sticky top-0 z-20 border-b border-white/60 bg-white/70 px-5 py-3 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+      <div className="sticky top-0 z-20 border-b border-white/70 bg-white/65 px-4 py-3 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => { window.location.href = "/"; }}
             className="flex min-w-0 items-center gap-2 text-left"
           >
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-violet text-white shadow-soft">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-navy text-white shadow-soft">
               <ShieldCheck size={19} />
             </div>
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-navy">Finepro Admin</div>
-              <div className="truncate text-xs font-medium text-neutral-500">{admin.email} · {admin.role}</div>
+              <div className="truncate text-sm font-bold text-navy">Finepro Admin</div>
+              <div className="truncate text-xs font-semibold text-neutral-500">{admin.email} · {admin.role}</div>
             </div>
           </button>
           <button
             type="button"
             onClick={handleLogout}
-            className="gloss-button flex h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-navy"
+            className="gloss-button flex h-10 items-center justify-center gap-2 rounded-full px-3 text-sm font-bold text-navy sm:px-4"
             title="Keluar Admin"
           >
             <LogOut size={16} />
-            Keluar
+            <span className="hidden sm:inline">Keluar</span>
           </button>
         </div>
       </div>
-      <div className="pt-5">
+      <div className="pt-4">
         <AdminPage user={admin} />
       </div>
     </div>

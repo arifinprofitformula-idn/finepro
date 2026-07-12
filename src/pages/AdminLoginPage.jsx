@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { LockKeyhole, LogIn, ShieldCheck } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react";
 import { adminLogin } from "../api/admin.js";
 
-const inputClass = "h-11 w-full rounded-xl border border-neutral-border bg-white/80 px-3 text-sm font-medium text-navy outline-none";
+const inputClass =
+  "h-12 w-full rounded-2xl border border-neutral-border bg-white px-3 text-sm font-semibold text-navy shadow-[inset_0_1px_2px_rgba(15,31,61,0.06)] outline-none transition placeholder:text-neutral-400 focus:border-violet focus:shadow-[0_0_0_4px_rgba(111,85,242,0.12),inset_0_1px_2px_rgba(15,31,61,0.04)]";
 
 export default function AdminLoginPage({ onLoggedIn }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -26,59 +28,112 @@ export default function AdminLoginPage({ onLoggedIn }) {
 
   return (
     <div className="app-glow-bg min-h-screen px-5 py-8">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-sm flex-col justify-center">
-        <div className="mb-6">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet text-white shadow-soft">
-            <ShieldCheck size={23} />
-          </div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-violet">Finepro Admin</div>
-          <h1 className="mt-1 text-2xl font-semibold text-navy">Masuk Admin Console</h1>
-          <p className="mt-1 text-sm text-neutral-500">Gunakan akun admin atau superadmin untuk mengatur sistem.</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="gloss-panel rounded-2xl p-4">
-          {message && (
-            <div className="mb-3 rounded-xl bg-coral/10 px-3 py-2 text-sm font-medium text-coral">
-              {message}
+      <div className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="gloss-panel rounded-[30px] p-5 sm:p-6">
+          <div className="relative z-10">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-navy text-sm font-bold text-white shadow-soft">
+                  FP
+                </div>
+                <div>
+                  <div className="text-sm font-bold leading-tight text-navy">Finepro</div>
+                  <div className="text-[11px] font-semibold text-neutral-500">Admin Console</div>
+                </div>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-light text-violet">
+                <ShieldCheck size={18} />
+              </div>
             </div>
-          )}
-          <label className="mb-1 block text-xs font-medium text-neutral-500">Email Admin</label>
-          <input
-            className={inputClass}
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="owner@finepro.my.id"
-          />
 
-          <label className="mb-1 mt-3 block text-xs font-medium text-neutral-500">Password</label>
-          <input
-            className={inputClass}
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password admin"
-          />
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-mint-light px-3 py-1 text-[11px] font-bold text-mint">
+              <ShieldCheck size={13} />
+              Akses terbatas
+            </div>
+            <h1 className="mt-3 text-2xl font-bold leading-tight text-navy sm:text-3xl">
+              Masuk ke ruang kendali Finepro.
+            </h1>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
+              Pantau integrasi, pengguna, pembayaran, dan aktivitas sistem dengan tampilan yang lebih tenang.
+            </p>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-violet px-4 text-sm font-semibold text-white shadow-soft disabled:opacity-60"
-          >
-            {loading ? <LockKeyhole size={16} className="animate-pulse" /> : <LogIn size={16} />}
-            {loading ? "Memverifikasi..." : "Masuk Admin"}
-          </button>
+            <div className="mt-5 grid gap-2 sm:grid-cols-3">
+              {[
+                ["Integrasi", "Mail & AI"],
+                ["Payments", "Midtrans"],
+                ["Audit", "Log admin"]
+              ].map(([title, value]) => (
+                <div key={title} className="rounded-2xl border border-neutral-border/70 bg-white/60 p-3">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{title}</div>
+                  <div className="mt-1 text-sm font-bold text-navy">{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <form onSubmit={handleSubmit} className="gloss-panel rounded-[30px] p-5 sm:p-6" noValidate>
+          <div className="relative z-10">
+            <div className="mb-4">
+              <div className="text-xs font-bold uppercase tracking-wide text-violet">Login Admin</div>
+              <h2 className="mt-1 text-xl font-bold text-navy">Verifikasi akun</h2>
+            </div>
+
+            {message && (
+              <div className="mb-3 rounded-2xl bg-coral-light px-3 py-2 text-sm font-bold text-coral">
+                {message}
+              </div>
+            )}
+
+            <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-neutral-500">Email Admin</label>
+            <input
+              className={inputClass}
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="owner@finepro.my.id"
+            />
+
+            <label className="mb-1.5 mt-3 block text-[11px] font-bold uppercase tracking-wide text-neutral-500">Password</label>
+            <div className="relative">
+              <input
+                className={`${inputClass} pr-12`}
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password admin"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-neutral-500 transition hover:bg-violet-light hover:text-violet"
+                aria-label={showPassword ? "Sembunyikan password" : "Lihat password"}
+                title={showPassword ? "Sembunyikan password" : "Lihat password"}
+              >
+                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-navy px-4 text-sm font-bold text-white shadow-[0_18px_34px_rgba(15,31,61,0.26)] transition active:scale-[0.98] disabled:opacity-60"
+            >
+              {loading ? <LockKeyhole size={16} className="animate-pulse" /> : <ArrowRight size={16} />}
+              {loading ? "Memverifikasi..." : "Masuk Admin"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { window.location.href = "/"; }}
+              className="mt-4 w-full text-center text-sm font-bold text-neutral-500 transition hover:text-violet"
+            >
+              Kembali ke aplikasi
+            </button>
+          </div>
         </form>
-
-        <button
-          type="button"
-          onClick={() => { window.location.href = "/"; }}
-          className="mt-4 text-center text-sm font-medium text-neutral-500"
-        >
-          Kembali ke aplikasi
-        </button>
       </div>
     </div>
   );

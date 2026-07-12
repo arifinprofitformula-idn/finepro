@@ -13,6 +13,7 @@ import { usePaymentStatus } from "./hooks/usePaymentStatus.js";
 import { addTransaction } from "./api/transactions.js";
 import { planLabel } from "./api/subscriptions.js";
 import AuthPage from "./pages/AuthPage.jsx";
+import LandingPage from "./pages/LandingPage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import HistoryPage from "./pages/HistoryPage.jsx";
@@ -50,6 +51,8 @@ export default function App() {
   const paymentStatus = usePaymentStatus();
   const [page, setPage] = useState("dashboard");
   const [modalOpen, setModalOpen] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState("login");
 
   // Deteksi redirect balik dari Midtrans (?order_id=...) dan poll status pembayaran.
   useEffect(() => {
@@ -65,7 +68,17 @@ export default function App() {
   }, [household?.id]);
 
   if (initializing) return <SplashScreen />;
-  if (!user) return <AuthPage />;
+  if (!user) {
+    if (!showAuth) {
+      return (
+        <LandingPage
+          onGetStarted={() => { setAuthMode("signup"); setShowAuth(true); }}
+          onLogin={() => { setAuthMode("login"); setShowAuth(true); }}
+        />
+      );
+    }
+    return <AuthPage initialMode={authMode} onBack={() => setShowAuth(false)} />;
+  }
   if (householdLoading) return <SplashScreen />;
 
   if (!household) {
