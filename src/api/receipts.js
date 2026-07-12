@@ -1,5 +1,5 @@
 // src/api/receipts.js
-// Scan struk (Claude vision) + kuota bulanan — dipindah dari
+// Scan struk + kuota bulanan — dipindah dari
 // src/api/transactions.js supaya satu rumah dengan backend api/routes/receipts.js.
 
 import { apiFetch, getToken } from "./apiClient.js";

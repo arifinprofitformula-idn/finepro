@@ -54,12 +54,11 @@ otomatis per tipe.
   nama bebas (bukan user terdaftar) karena arisan sering melibatkan
   tetangga/teman di luar app. Checklist bayar per periode (default bulan
   berjalan), toggle lunas/belum.
-- ✅ **Scan struk otomatis (Claude vision)** — `POST /api/transactions/
-  scan-receipt`, model `claude-sonnet-4-5`, ekstrak tanggal/nominal/kategori/
-  catatan jadi JSON, **tidak langsung menyimpan** — cuma prefill form,
-  user tetap review & submit manual. **Butuh `ANTHROPIC_API_KEY` diisi di
-  `.env` VPS** (masih placeholder, endpoint gagal graceful dengan pesan
-  jelas sampai diisi — sama pola dengan Midtrans/Mailketing sebelumnya).
+- ✅ **Scan struk otomatis hemat biaya** — `POST /api/receipts/scan`, foto
+  dibaca OCR lokal (Tesseract), lalu regex TOTAL/tanggal dicoba dulu. Kalau
+  regex belum yakin, teks OCR dikirim ke LLM murah via provider aktif
+  (default SumoPod `gpt-4o-mini`, Anthropic tetap alternatif). Hasil hanya
+  prefill form; user tetap review & submit manual.
 - ✅ **Laporan bulanan otomatis via email** — `api/jobs/monthlyReport.js`,
   cron OS, kirim via Mailketing.
 - ✅ **Export CSV** — transaksi bulan berjalan, dari halaman Akun.
@@ -102,5 +101,13 @@ VAPID_PUBLIC_KEY=...   # sudah diisi otomatis (self-generated), aman dipakai apa
 VAPID_PRIVATE_KEY=...  # sudah diisi otomatis (self-generated), JANGAN di-regenerate di VPS
                         # kalau sudah ada user yang subscribe (subscription lama jadi invalid)
 VAPID_SUBJECT=mailto:admin@finepro.my.id
-ANTHROPIC_API_KEY=isi-anthropic-api-key   # BELUM diisi — wajib diisi sebelum fitur scan struk aktif
+AI_PROVIDER=sumopod
+SUMOPOD_API_KEY=isi-sumopod-api-key
+SUMOPOD_BASE_URL=https://ai.sumopod.com/v1
+SUMOPOD_MODEL=gpt-4o-mini
+RECEIPT_PARSE_PROVIDER=sumopod
+
+# Opsional: alternatif jika ingin pilih Anthropic dari Admin Console.
+ANTHROPIC_API_KEY=isi-anthropic-api-key
+ANTHROPIC_MODEL=claude-sonnet-4-5
 ```

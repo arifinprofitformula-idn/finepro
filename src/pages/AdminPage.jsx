@@ -306,7 +306,7 @@ export default function AdminPage({ user }) {
             </button>
           </IntegrationCard>
 
-          <IntegrationCard icon={Bot} title="API AI" description="Analisa keuangan dan scan struk otomatis via Anthropic.">
+          <IntegrationCard icon={Bot} title="API AI" description="Analisa keuangan dan scan struk otomatis via SumoPod AI, dengan Anthropic sebagai alternatif.">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-navy">Aktifkan AI</span>
               <Toggle checked={Boolean(ai.enabled)} onChange={(v) => setAi("enabled", v)} />
@@ -314,13 +314,27 @@ export default function AdminPage({ user }) {
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>Provider</label>
-                <select className={inputClass} value={ai.provider || "anthropic"} onChange={(e) => setAi("provider", e.target.value)}>
+                <select className={inputClass} value={ai.provider || "sumopod"} onChange={(e) => setAi("provider", e.target.value)}>
+                  <option value="sumopod">SumoPod AI</option>
                   <option value="anthropic">Anthropic</option>
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Model</label>
-                <input className={inputClass} value={ai.model || ""} onChange={(e) => setAi("model", e.target.value)} placeholder="claude-sonnet-4-5" />
+                <label className={labelClass}>Model SumoPod</label>
+                <input className={inputClass} value={ai.sumopod_model || ai.model || ""} onChange={(e) => setAi("sumopod_model", e.target.value)} placeholder="gpt-4o-mini" />
+              </div>
+            </div>
+            <label className={`${labelClass} mt-3`}>SumoPod API Key</label>
+            <input className={inputClass} type="password" value={ai.sumopod_api_key || ""} onChange={(e) => setAi("sumopod_api_key", e.target.value)} placeholder={ai.sumopod_api_key_masked || "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"} />
+            <SecretHint configured={ai.sumopod_api_key_configured} />
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Base URL SumoPod</label>
+                <input className={inputClass} value={ai.sumopod_base_url || ""} onChange={(e) => setAi("sumopod_base_url", e.target.value)} placeholder="https://ai.sumopod.com/v1" />
+              </div>
+              <div>
+                <label className={labelClass}>Model Anthropic</label>
+                <input className={inputClass} value={ai.anthropic_model || ai.model || ""} onChange={(e) => setAi("anthropic_model", e.target.value)} placeholder="claude-sonnet-4-5" />
               </div>
             </div>
             <label className={`${labelClass} mt-3`}>Anthropic API Key</label>

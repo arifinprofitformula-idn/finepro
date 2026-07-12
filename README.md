@@ -26,6 +26,19 @@ npm run dev
 
 Isi `.env` di root project dengan kredensial PostgreSQL lokal. Buka `http://localhost:5173`.
 
+## Integrasi AI
+
+Provider utama AI adalah SumoPod AI API yang kompatibel dengan OpenAI SDK:
+
+```env
+AI_PROVIDER=sumopod
+SUMOPOD_API_KEY=isi-sumopod-api-key
+SUMOPOD_BASE_URL=https://ai.sumopod.com/v1
+SUMOPOD_MODEL=gpt-4o-mini
+```
+
+Anthropic tetap tersedia sebagai alternatif lewat Admin Console dengan `ANTHROPIC_API_KEY`.
+
 ## Setup Database Lokal
 
 Jalankan script SQL berikut ke PostgreSQL lokal:

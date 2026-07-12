@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { computeFinancialStats } from '../services/financialStats.js';
 import { getSetting } from '../services/appSettings.js';
+import { aiConfigurationMessage, generateChatText, isAiConfigured } from '../services/aiProvider.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -62,33 +62,30 @@ router.post('/insights', async (req, res) => {
       return res.json({ narrative, stats, rateLimited: false, remaining: dailyLimit - usedToday });
     }
 
-    const apiKey = aiConfig.anthropic_api_key;
-    if (!aiConfig.enabled || !apiKey || apiKey === 'isi-anthropic-api-key') {
-      return res.status(503).json({ error: 'Fitur Analisa Keuangan belum dikonfigurasi (ANTHROPIC_API_KEY belum diisi)' });
+    if (!isAiConfigured(aiConfig)) {
+      return res.status(503).json({ error: aiConfigurationMessage('Fitur Analisa Keuangan') });
     }
 
-    const anthropic = new Anthropic({ apiKey });
-    const message = await anthropic.messages.create({
-      model: aiConfig.model || 'claude-sonnet-4-5',
-      max_tokens: 500,
+    const narrative = await generateChatText({
+      config: aiConfig,
+      maxTokens: 500,
+      temperature: 0.7,
       system: SYSTEM_PROMPT,
       messages: [{
         role: 'user',
         content: `Berikut data agregat keuangan household ini (semua angka dalam Rupiah, sudah dihitung sistem, bukan asumsi):\n\n${JSON.stringify(stats, null, 2)}\n\nBuatkan analisa dan refleksi singkat berdasarkan data ini.`
       }]
     });
-
-    const textBlock = message.content.find((b) => b.type === 'text');
-    const narrative = textBlock?.text?.trim() || 'Tidak ada narasi yang dihasilkan.';
+    const finalNarrative = narrative || 'Tidak ada narasi yang dihasilkan.';
 
     const inserted = await pool.query(
       `INSERT INTO ai_insights (household_id, stats_snapshot, narrative_text)
        VALUES ($1, $2, $3) RETURNING generated_at`,
-      [householdId, JSON.stringify(stats), narrative]
+      [householdId, JSON.stringify(stats), finalNarrative]
     );
 
     res.json({
-      narrative,
+      narrative: finalNarrative,
       stats,
       generated_at: inserted.rows[0].generated_at,
       rateLimited: false,

@@ -1,9 +1,8 @@
 -- ============================================================
--- Migrasi: log pemanggilan scan struk (AI vision) untuk rate limiting
--- Setiap baris = satu kali panggilan ke Claude vision API yang BENAR-BENAR
--- terjadi (biaya API sudah timbul saat baris ini dicatat, terlepas hasil
--- ekstraksinya berhasil dibaca atau tidak) — dipakai menghitung kuota
--- 30 scan/household/bulan di GET/POST /api/receipts/*.
+-- Migrasi: log pemanggilan scan struk untuk rate limiting
+-- Setiap baris = satu kali scan struk yang selesai diproses (OCR/regex dan
+-- bila perlu fallback AI) — dipakai menghitung kuota 30 scan/household/bulan
+-- di GET/POST /api/receipts/*.
 -- Target: PostgreSQL standalone (lihat supabase/schema-pg.sql)
 -- Jalankan manual: psql -U keuangan_app -d keuangan -f supabase/migrations/016_receipt_scans.sql
 -- ============================================================

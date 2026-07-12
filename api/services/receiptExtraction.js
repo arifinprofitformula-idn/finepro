@@ -4,7 +4,8 @@
 //   2. tryRegexExtraction() — coba baca TOTAL/GRAND TOTAL + tanggal pakai regex.
 //      Kalau ketemu dengan pola jelas, LLM SAMA SEKALI TIDAK DIPANGGIL.
 //   3. parseReceiptText() — baru kalau regex gagal/kurang yakin, teks OCR
-//      (bukan gambar) dikirim ke LLM murah (default Claude Haiku, text-only).
+//      (bukan gambar) dikirim ke LLM murah (default SumoPod gpt-4o-mini,
+//      text-only; Anthropic tetap tersedia sebagai alternatif).
 // parseReceiptText() sengaja pluggable lewat RECEIPT_PARSE_PROVIDER supaya
 // provider text-parsing bisa diganti tanpa ubah kode pemanggil di routes/receipts.js.
 
@@ -13,7 +14,7 @@ import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import tesseract from 'node-tesseract-ocr';
-import Anthropic from '@anthropic-ai/sdk';
+import { generateChatText } from './aiProvider.js';
 
 const TESSERACT_CONFIG = {
   lang: process.env.TESSERACT_LANG || 'ind+eng',
@@ -101,30 +102,50 @@ export function tryRegexExtraction(rawText) {
   return { date, amount, suggested_category: '', note, source: 'regex' };
 }
 
-async function parseWithClaudeHaiku(rawText, { apiKey, model } = {}) {
-  const key = apiKey || process.env.ANTHROPIC_API_KEY;
-  if (!key || key === 'isi-anthropic-api-key') {
-    throw new Error('ANTHROPIC_API_KEY belum diisi');
-  }
+function receiptPrompt(rawText) {
+  return 'Ini hasil OCR dari foto struk belanja (mungkin ada noise/typo dari OCR):\n\n"""\n' +
+    rawText +
+    '\n"""\n\nEkstrak informasinya dan balas HANYA dengan JSON valid (tanpa markdown/teks lain) ' +
+    'persis format ini: {"date":"YYYY-MM-DD","amount":<angka total belanja tanpa titik/koma>,' +
+    '"suggested_category":"<kategori singkat dalam Bahasa Indonesia, mis. Rumah Tangga/Kebutuhan Pokok/Transportasi>",' +
+    '"note":"<nama toko/warung kalau ada>"}. ' +
+    'Kalau tanggal tidak terbaca, pakai null. Kalau total tidak terbaca, pakai 0.';
+}
 
-  const anthropic = new Anthropic({ apiKey: key });
-  const message = await anthropic.messages.create({
-    model: model || process.env.ANTHROPIC_HAIKU_MODEL || 'claude-haiku-4-5',
-    max_tokens: 300,
+function fallbackConfig(providerName) {
+  const provider = providerName === 'claude-haiku' ? 'anthropic' : providerName;
+  return {
+    enabled: true,
+    provider,
+    sumopod_api_key: process.env.SUMOPOD_API_KEY || '',
+    sumopod_base_url: process.env.SUMOPOD_BASE_URL || 'https://ai.sumopod.com/v1',
+    sumopod_model: process.env.SUMOPOD_RECEIPT_MODEL || process.env.SUMOPOD_MODEL || 'gpt-4o-mini',
+    anthropic_api_key: process.env.ANTHROPIC_API_KEY || '',
+    anthropic_model: process.env.ANTHROPIC_HAIKU_MODEL || process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5',
+  };
+}
+
+async function parseWithAiProvider(rawText, options = {}) {
+  const providerName = options.provider || process.env.RECEIPT_PARSE_PROVIDER || 'sumopod';
+  const config = {
+    ...fallbackConfig(providerName),
+    ...(options.aiConfig || {}),
+    provider: providerName === 'claude-haiku' ? 'anthropic' : (options.aiConfig?.provider || providerName),
+  };
+
+  const text = await generateChatText({
+    config,
+    maxTokens: 300,
+    temperature: 0.1,
+    sumopodModel: options.sumopodModel || process.env.SUMOPOD_RECEIPT_MODEL || config.sumopod_model,
+    anthropicModel: options.anthropicModel || process.env.ANTHROPIC_HAIKU_MODEL || config.anthropic_model,
     messages: [{
       role: 'user',
-      content: 'Ini hasil OCR dari foto struk belanja (mungkin ada noise/typo dari OCR):\n\n"""\n' +
-        rawText +
-        '\n"""\n\nEkstrak informasinya dan balas HANYA dengan JSON valid (tanpa markdown/teks lain) ' +
-        'persis format ini: {"date":"YYYY-MM-DD","amount":<angka total belanja tanpa titik/koma>,' +
-        '"suggested_category":"<kategori singkat dalam Bahasa Indonesia, mis. Rumah Tangga/Kebutuhan Pokok/Transportasi>",' +
-        '"note":"<nama toko/warung kalau ada>"}. ' +
-        'Kalau tanggal tidak terbaca, pakai null. Kalau total tidak terbaca, pakai 0.'
-    }]
+      content: receiptPrompt(rawText),
+    }],
   });
 
-  const textBlock = message.content.find((b) => b.type === 'text');
-  const raw = (textBlock?.text || '').trim().replace(/^```json\s*|```$/g, '');
+  const raw = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
   return JSON.parse(raw);
 }
 
@@ -132,11 +153,13 @@ async function parseWithClaudeHaiku(rawText, { apiKey, model } = {}) {
 // cukup daftarkan fungsi di sini, kode pemanggil (routes/receipts.js) tidak
 // perlu diubah sama sekali.
 const PARSE_PROVIDERS = {
-  'claude-haiku': parseWithClaudeHaiku,
+  sumopod: parseWithAiProvider,
+  anthropic: parseWithAiProvider,
+  'claude-haiku': parseWithAiProvider,
 };
 
 export async function parseReceiptText(rawText, options = {}) {
-  const providerName = options.provider || process.env.RECEIPT_PARSE_PROVIDER || 'claude-haiku';
+  const providerName = options.provider || process.env.RECEIPT_PARSE_PROVIDER || 'sumopod';
   const provider = PARSE_PROVIDERS[providerName];
   if (!provider) {
     throw new Error(`Provider parsing struk tidak dikenal: ${providerName}`);

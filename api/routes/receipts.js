@@ -14,6 +14,7 @@ import multer from 'multer';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getSetting } from '../services/appSettings.js';
+import { isAiConfigured } from '../services/aiProvider.js';
 import { extractText, tryRegexExtraction, parseReceiptText } from '../services/receiptExtraction.js';
 
 const router = Router();
@@ -93,18 +94,15 @@ router.post('/scan', (req, res) => {
       let parsed = tryRegexExtraction(rawText);
 
       if (!parsed) {
-        const apiKey = aiConfig.anthropic_api_key;
-        if (!aiConfig.enabled || !apiKey || apiKey === 'isi-anthropic-api-key') {
+        if (!isAiConfigured(aiConfig)) {
           return res.status(503).json({
             error: 'Struk tidak bisa dibaca otomatis dan fitur AI belum dikonfigurasi. Silakan input transaksi manual.'
           });
         }
         try {
-          // Sengaja TIDAK pakai aiConfig.model — itu model untuk fitur AI lain
-          // (mis. insights) yang biasanya di-set ke Sonnet/Opus. Parsing teks
-          // struk selalu lewat model murah (default Haiku, lihat env
-          // ANTHROPIC_HAIKU_MODEL / RECEIPT_PARSE_PROVIDER).
-          parsed = await parseReceiptText(rawText, { apiKey });
+          // Parsing teks struk memakai model murah dari provider aktif
+          // (default SumoPod gpt-4o-mini, Anthropic tetap bisa dipilih).
+          parsed = await parseReceiptText(rawText, { aiConfig });
         } catch (parseErr) {
           console.error('Parse receipt text error:', parseErr);
           return res.status(502).json({ error: 'Gagal membaca hasil dari AI, coba lagi dengan foto yang lebih jelas' });

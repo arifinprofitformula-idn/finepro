@@ -22,9 +22,12 @@ const DEFAULTS = {
   },
   ai: {
     enabled: false,
-    provider: 'anthropic',
+    provider: 'sumopod',
+    sumopod_api_key: '',
+    sumopod_base_url: 'https://ai.sumopod.com/v1',
+    sumopod_model: 'gpt-4o-mini',
     anthropic_api_key: '',
-    model: 'claude-sonnet-4-5',
+    anthropic_model: 'claude-sonnet-4-5',
     insights_daily_limit: 3,
     receipt_scan_monthly_limit: 30,
   },
@@ -39,7 +42,7 @@ const DEFAULTS = {
 const SECRET_FIELDS = {
   mailketing: ['api_token'],
   midtrans: ['server_key', 'client_key'],
-  ai: ['anthropic_api_key'],
+  ai: ['sumopod_api_key', 'anthropic_api_key'],
   web_push: ['vapid_private_key'],
 };
 
@@ -47,7 +50,18 @@ const ALLOWED_FIELDS = {
   mailketing: ['enabled', 'api_token', 'from_email', 'from_name'],
   midtrans: ['enabled', 'is_production', 'server_key', 'client_key'],
   manual_payment: ['enabled', 'bank_name', 'account_number', 'account_name', 'instructions'],
-  ai: ['enabled', 'provider', 'anthropic_api_key', 'model', 'insights_daily_limit', 'receipt_scan_monthly_limit'],
+  ai: [
+    'enabled',
+    'provider',
+    'sumopod_api_key',
+    'sumopod_base_url',
+    'sumopod_model',
+    'anthropic_api_key',
+    'anthropic_model',
+    'model',
+    'insights_daily_limit',
+    'receipt_scan_monthly_limit'
+  ],
   web_push: ['enabled', 'vapid_public_key', 'vapid_private_key', 'vapid_subject'],
 };
 
@@ -69,11 +83,19 @@ function envFallback(key) {
     };
   }
   if (key === 'ai') {
+    const sumopodKey = process.env.SUMOPOD_API_KEY || '';
+    const anthropicKey = process.env.ANTHROPIC_API_KEY || '';
+    const hasSumopod = Boolean(sumopodKey && sumopodKey !== 'isi-sumopod-api-key');
+    const hasAnthropic = Boolean(anthropicKey && anthropicKey !== 'isi-anthropic-api-key');
     return {
-      enabled: Boolean(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'isi-anthropic-api-key'),
-      provider: 'anthropic',
-      anthropic_api_key: process.env.ANTHROPIC_API_KEY || '',
-      model: process.env.ANTHROPIC_MODEL || DEFAULTS.ai.model,
+      enabled: hasSumopod || hasAnthropic,
+      provider: process.env.AI_PROVIDER || (hasAnthropic && !hasSumopod ? 'anthropic' : 'sumopod'),
+      sumopod_api_key: sumopodKey,
+      sumopod_base_url: process.env.SUMOPOD_BASE_URL || DEFAULTS.ai.sumopod_base_url,
+      sumopod_model: process.env.SUMOPOD_MODEL || DEFAULTS.ai.sumopod_model,
+      anthropic_api_key: anthropicKey,
+      anthropic_model: process.env.ANTHROPIC_MODEL || DEFAULTS.ai.anthropic_model,
+      model: process.env.SUMOPOD_MODEL || process.env.ANTHROPIC_MODEL || DEFAULTS.ai.sumopod_model,
       insights_daily_limit: Number(process.env.AI_INSIGHTS_DAILY_LIMIT || DEFAULTS.ai.insights_daily_limit),
       receipt_scan_monthly_limit: Number(process.env.RECEIPT_SCAN_MONTHLY_LIMIT || DEFAULTS.ai.receipt_scan_monthly_limit),
     };
