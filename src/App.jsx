@@ -1,10 +1,7 @@
 // src/App.jsx
-// Routing state-based (tanpa react-router-dom): 4 layar (auth/onboarding/
-// dashboard/account) cukup di-switch lewat kondisi user+household, sama
-// seperti pola view/page di versi Alpine — lebih ringan, tanpa perlu
-// konfigurasi SPA-fallback tambahan di Nginx. Konsekuensinya: tidak ada
-// URL per halaman, jadi tidak ada isu refresh-di-URL-mana-pun yang perlu
-// ditangani Nginx (poin 4 Step 4 di dokumen migrasi jadi otomatis aman).
+// Routing user-app tetap state-based (tanpa react-router-dom): layar utama
+// cukup di-switch lewat kondisi user+household. Route URL khusus hanya
+// dipakai untuk Admin Console terpisah di /admin lewat src/main.jsx.
 
 import { useEffect, useState } from "react";
 import { useAuth } from "./hooks/useAuth.js";
@@ -21,7 +18,6 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import HistoryPage from "./pages/HistoryPage.jsx";
 import AccountPage from "./pages/AccountPage.jsx";
 import PaymentStatusPage from "./pages/PaymentStatusPage.jsx";
-import AdminPage from "./pages/AdminPage.jsx";
 import AppHeader from "./components/AppHeader.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import TransactionModal from "./components/TransactionModal.jsx";
@@ -97,7 +93,7 @@ export default function App() {
         planLabel={planLabel(household)}
         pendingInviteCount={invites.length}
         onNavigateAccount={() => setPage("account")}
-        onNavigateAdmin={() => setPage("admin")}
+        onNavigateAdmin={() => { window.location.href = "/admin"; }}
         onLogout={logout}
       />
 
@@ -140,10 +136,6 @@ export default function App() {
           onInvitesChanged={refreshInvites}
           onLogout={logout}
         />
-      )}
-
-      {page === "admin" && ["admin", "super_admin"].includes(user.role) && (
-        <AdminPage user={user} />
       )}
 
       <BottomNav page={page} onNavigate={setPage} onAdd={handleOpenModal} />

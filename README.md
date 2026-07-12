@@ -39,6 +39,13 @@ SUMOPOD_MODEL=gpt-4o-mini
 
 Anthropic tetap tersedia sebagai alternatif lewat Admin Console dengan `ANTHROPIC_API_KEY`.
 
+## Admin Console
+
+Admin Console tersedia terpisah di `/admin` dengan halaman login sendiri. Akun
+yang bisa masuk harus ber-role `admin`/`super_admin`, atau email-nya terdaftar
+di `ADMIN_EMAILS`/`ADMIN_SUPER_EMAILS`. Session admin memakai token terpisah
+dari session user biasa.
+
 ## Setup Database Lokal
 
 Jalankan script SQL berikut ke PostgreSQL lokal:

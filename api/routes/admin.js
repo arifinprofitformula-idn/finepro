@@ -1,10 +1,19 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 import pool from '../db.js';
-import { authMiddleware, adminMiddleware, superAdminMiddleware, adminRoleForEmail } from '../middleware/auth.js';
+import { authMiddleware, adminMiddleware, superAdminMiddleware, adminRoleForEmail, generateToken } from '../middleware/auth.js';
 import { auditAdminAction, getAllSettings, publicSetting, updateSetting } from '../services/appSettings.js';
 
 const router = Router();
-router.use(authMiddleware, adminMiddleware);
+
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Terlalu banyak percobaan, coba lagi beberapa menit lagi' },
+});
 
 const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'manual_payment', 'ai', 'web_push']);
 
@@ -12,6 +21,58 @@ function toInt(value, fallback) {
   const n = Number(value);
   return Number.isInteger(n) && n >= 0 ? n : fallback;
 }
+
+router.post('/login', adminLoginLimiter, async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email dan password wajib diisi' });
+    }
+
+    const result = await pool.query(
+      'SELECT id, email, password_hash, name, avatar_url, role, created_at FROM users WHERE email = $1',
+      [email]
+    );
+    const user = result.rows[0];
+    if (!user || !user.password_hash) {
+      return res.status(401).json({ error: 'Email atau password salah' });
+    }
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Email atau password salah' });
+    }
+
+    const role = adminRoleForEmail(user.email, user.role);
+    if (!['admin', 'super_admin'].includes(role)) {
+      return res.status(403).json({ error: 'Akses admin diperlukan' });
+    }
+
+    const token = generateToken(user);
+    const { password_hash, ...safeUser } = user;
+    res.json({ token, user: { ...safeUser, role, has_password: Boolean(password_hash) } });
+  } catch (err) {
+    console.error('Admin login error:', err);
+    res.status(500).json({ error: 'Gagal login admin' });
+  }
+});
+
+router.use(authMiddleware, adminMiddleware);
+
+router.get('/me', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, email, name, avatar_url, role, created_at, (password_hash IS NOT NULL) AS has_password FROM users WHERE id = $1',
+      [req.admin.id]
+    );
+    const user = result.rows[0];
+    if (!user) return res.status(404).json({ error: 'Admin tidak ditemukan' });
+    res.json({ user: { ...user, role: adminRoleForEmail(user.email, user.role) } });
+  } catch (err) {
+    console.error('Admin me error:', err);
+    res.status(500).json({ error: 'Gagal mengambil data admin' });
+  }
+});
 
 router.get('/overview', async (req, res) => {
   try {
