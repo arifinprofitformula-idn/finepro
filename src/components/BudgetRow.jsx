@@ -1,5 +1,6 @@
 import { fmtRp } from "../utils/format.js";
-import { PiggyBank, Save } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Baby, Car, Check, CircleDollarSign, Gift, GraduationCap, HeartPulse, Home, Landmark, Pencil, PiggyBank, ShoppingBag, Smile, Utensils } from "lucide-react";
 
 const RING_COLOR = { ok: "#18c594", warn: "#6f55f2", over: "#ff4b4b" };
 
@@ -9,58 +10,90 @@ function toneFor(pct) {
   return { key: "over", color: RING_COLOR.over, text: "text-coral", bg: "bg-coral-light", border: "border-coral" };
 }
 
+function iconForCategory(category) {
+  const text = category.toLowerCase();
+  if (text.includes("rumah") || text.includes("pokok") || text.includes("kos") || text.includes("kontrakan")) return Home;
+  if (text.includes("makan") || text.includes("dapur")) return Utensils;
+  if (text.includes("transport") || text.includes("bensin") || text.includes("ojol")) return Car;
+  if (text.includes("kesehatan")) return HeartPulse;
+  if (text.includes("pendidikan") || text.includes("kuliah") || text.includes("buku")) return GraduationCap;
+  if (text.includes("anak")) return Baby;
+  if (text.includes("tabungan") || text.includes("investasi")) return PiggyBank;
+  if (text.includes("ibadah") || text.includes("sedekah") || text.includes("zakat")) return Gift;
+  if (text.includes("cicilan") || text.includes("utang")) return Landmark;
+  if (text.includes("hiburan") || text.includes("nongkrong")) return Smile;
+  if (text.includes("belanja")) return ShoppingBag;
+  return CircleDollarSign;
+}
+
 export default function BudgetRow({ category, budget, spent, pct, inputValue, onInputChange, onSave, saving }) {
+  const [editing, setEditing] = useState(false);
   const tone = toneFor(pct);
   const clamped = Math.min(pct, 100);
+  const CategoryIcon = iconForCategory(category);
+
+  useEffect(() => {
+    if (!saving) setEditing(false);
+  }, [saving]);
 
   return (
-    <div className="grid gap-3 border-b border-neutral-border/60 py-3.5 last:border-0">
-      <div className="flex min-w-0 items-center gap-3">
-        <div
-          className="relative h-14 w-14 flex-shrink-0 rounded-full shadow-soft"
-          style={{ background: `conic-gradient(${tone.color} ${clamped}%, #edf2f7 0)` }}
-        >
-          <div className="absolute inset-[6px] flex items-center justify-center rounded-full bg-white text-sm font-semibold text-navy">
+    <div className="border-b border-neutral-border/60 py-3 last:border-0">
+      <div className="mb-2 flex min-w-0 items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-2.5">
+          <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${tone.bg} ${tone.text}`}>
+            <CategoryIcon size={15} strokeWidth={2.2} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-navy">{category}</div>
+            <div className="mt-1 text-xs font-medium text-neutral-500">
+              {fmtRp(spent)} / {fmtRp(budget)}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone.bg} ${tone.text}`}>
             {clamped}%
-          </div>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-base font-semibold text-navy">{category}</div>
-          <div className="mt-1 text-xs font-medium text-neutral-500">
-            {fmtRp(spent)} / {fmtRp(budget)}
-          </div>
+          </span>
+          {!editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-500"
+              title={`Ubah budget ${category}`}
+            >
+              <Pencil size={14} />
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2 min-[420px]:grid-cols-[minmax(0,1fr)_92px]">
-        <label htmlFor={`budget-${category}`} className="sr-only">
-          Set budget untuk {category}
-        </label>
-        <div className="relative min-w-0">
-          <PiggyBank size={15} className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${tone.text}`} />
+      {editing && (
+        <div className="mb-2 grid grid-cols-[minmax(0,1fr)_40px] gap-2">
+          <label htmlFor={`budget-${category}`} className="sr-only">
+            Set budget untuk {category}
+          </label>
           <input
-            id={`budget-${category}`}
-            type="text"
-            inputMode="decimal"
-            value={inputValue}
-            onChange={(e) => onInputChange(e.target.value)}
-            placeholder="1.500.000"
-            className={`h-11 w-full rounded-full border bg-white/70 pl-9 pr-4 text-sm font-medium text-navy outline-none backdrop-blur ${tone.border}`}
-          />
+              id={`budget-${category}`}
+              type="text"
+              inputMode="decimal"
+              value={inputValue}
+              onChange={(e) => onInputChange(e.target.value)}
+              placeholder="1.500.000"
+              className={`h-10 w-full rounded-full border bg-white/70 px-4 text-sm font-medium text-navy outline-none backdrop-blur ${tone.border}`}
+            />
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className={`flex h-10 w-10 items-center justify-center rounded-full disabled:opacity-60 ${tone.bg} ${tone.text}`}
+            title="Simpan budget"
+          >
+            <Check size={16} />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={saving}
-          className={`flex h-11 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold disabled:opacity-60 ${tone.bg} ${tone.text}`}
-          title="Simpan budget"
-        >
-          <Save size={15} />
-          <span className="hidden min-[420px]:inline">{saving ? "..." : "Simpan"}</span>
-        </button>
-      </div>
+      )}
 
-      <div className="soft-progress h-2.5 overflow-hidden">
+      <div className="soft-progress h-2 overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${clamped}%`, backgroundColor: tone.color }} />
       </div>
     </div>

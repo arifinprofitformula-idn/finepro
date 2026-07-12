@@ -91,6 +91,13 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
   }, [categoriesExpense, budgets, byCategory]);
 
   const visibleTransactions = showAll ? transactions : transactions.slice(0, DEFAULT_TX_SHOWN);
+  const balance = kpi.income - kpi.expense;
+  const balanceStatus =
+    balance < 0
+      ? "danger"
+      : kpi.income > 0 && balance > 0 && balance <= kpi.income * 0.2
+      ? "warning"
+      : "safe";
 
   function inputValueFor(category) {
     return budgetInputs[category] !== undefined ? budgetInputs[category] : formatNumberIdInput(budgets[category] || "");
@@ -129,7 +136,7 @@ export default function DashboardPage({ household, transactions, kpi, budgets, b
       <div className="mb-4 grid gap-2.5">
         <KpiCard label="Pemasukan" value={fmtRp(kpi.income)} tone="income" />
         <KpiCard label="Pengeluaran" value={fmtRp(kpi.expense)} tone="expense" />
-        <KpiCard label="Saldo" value={fmtRp(kpi.income - kpi.expense)} tone="balance" />
+        <KpiCard label="Saldo" value={fmtRp(balance)} tone="balance" status={balanceStatus} />
       </div>
 
       <DailySummaryCard rows={dailySummaryRows} />
