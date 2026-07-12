@@ -17,6 +17,7 @@
     "jsonwebtoken": "^9.0.2",
     "midtrans-client": "^1.4.3",
     "multer": "^2.2.0",
+    "node-tesseract-ocr": "^2.2.1",
     "pg": "^8.13.0",
     "web-push": "^3.6.7"
   }

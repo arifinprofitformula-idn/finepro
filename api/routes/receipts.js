@@ -1,16 +1,20 @@
 // api/routes/receipts.js
-// Scan struk lewat Claude vision — dipindah dari api/routes/transactions.js
-// supaya kuota/rate-limit-nya (lihat SCAN_LIMIT_PER_MONTH) punya rumah
-// sendiri yang jelas, terpisah dari CRUD transaksi. TIDAK langsung
-// menyimpan transaksi — cuma prefill draft, user tetap review & submit
-// lewat POST /api/transactions yang normal.
+// Scan struk dua tahap — dipindah dari api/routes/transactions.js supaya
+// kuota/rate-limit-nya (lihat SCAN_LIMIT_PER_MONTH) punya rumah sendiri yang
+// jelas, terpisah dari CRUD transaksi. TIDAK langsung menyimpan transaksi —
+// cuma prefill draft, user tetap review & submit lewat POST /api/transactions
+// yang normal.
+//
+// Arsitektur: foto -> OCR lokal (Tesseract) -> regex TOTAL/tanggal -> kalau
+// gagal/kurang yakin baru teks OCR (bukan gambar) dikirim ke LLM murah
+// (default Claude Haiku). Lihat api/services/receiptExtraction.js.
 
 import { Router } from 'express';
 import multer from 'multer';
-import Anthropic from '@anthropic-ai/sdk';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getSetting } from '../services/appSettings.js';
+import { extractText, tryRegexExtraction, parseReceiptText } from '../services/receiptExtraction.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -69,10 +73,6 @@ router.post('/scan', (req, res) => {
     }
 
     const aiConfig = await getSetting('ai');
-    const apiKey = aiConfig.anthropic_api_key;
-    if (!aiConfig.enabled || !apiKey || apiKey === 'isi-anthropic-api-key') {
-      return res.status(503).json({ error: 'Fitur scan struk belum dikonfigurasi (ANTHROPIC_API_KEY belum diisi)' });
-    }
 
     try {
       const householdId = await getUserHouseholdId(req.user.userId);
@@ -86,48 +86,38 @@ router.post('/scan', (req, res) => {
         });
       }
 
-      const anthropic = new Anthropic({ apiKey });
-      const base64Image = req.file.buffer.toString('base64');
+      const rawText = await extractText(req.file.buffer);
 
-      const message = await anthropic.messages.create({
-        model: aiConfig.model || 'claude-sonnet-4-5',
-        max_tokens: 300,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: req.file.mimetype, data: base64Image }
-            },
-            {
-              type: 'text',
-              text: 'Ini foto struk belanja. Ekstrak informasinya dan balas HANYA dengan JSON ' +
-                'valid (tanpa markdown/teks lain) persis format ini: ' +
-                '{"date":"YYYY-MM-DD","amount":<angka total belanja tanpa titik/koma>,' +
-                '"suggested_category":"<kategori singkat dalam Bahasa Indonesia, mis. Rumah Tangga/Kebutuhan Pokok/Transportasi>",' +
-                '"note":"<nama toko/warung kalau ada>"}. ' +
-                'Kalau tanggal tidak terbaca, pakai null. Kalau total tidak terbaca, pakai 0.'
-            }
-          ]
-        }]
-      });
+      // Coba regex dulu (TOTAL/GRAND TOTAL + tanggal) — kalau confidence
+      // tinggi, LLM sama sekali tidak dipanggil (nol biaya tambahan).
+      let parsed = tryRegexExtraction(rawText);
 
-      // Dicatat SETELAH panggilan Claude sukses (biaya API sudah timbul di
-      // titik ini terlepas hasil JSON-nya kebaca atau tidak di bawah) —
-      // supaya kuota mencerminkan biaya nyata, bukan cuma scan yang "berhasil".
+      if (!parsed) {
+        const apiKey = aiConfig.anthropic_api_key;
+        if (!aiConfig.enabled || !apiKey || apiKey === 'isi-anthropic-api-key') {
+          return res.status(503).json({
+            error: 'Struk tidak bisa dibaca otomatis dan fitur AI belum dikonfigurasi. Silakan input transaksi manual.'
+          });
+        }
+        try {
+          // Sengaja TIDAK pakai aiConfig.model — itu model untuk fitur AI lain
+          // (mis. insights) yang biasanya di-set ke Sonnet/Opus. Parsing teks
+          // struk selalu lewat model murah (default Haiku, lihat env
+          // ANTHROPIC_HAIKU_MODEL / RECEIPT_PARSE_PROVIDER).
+          parsed = await parseReceiptText(rawText, { apiKey });
+        } catch (parseErr) {
+          console.error('Parse receipt text error:', parseErr);
+          return res.status(502).json({ error: 'Gagal membaca hasil dari AI, coba lagi dengan foto yang lebih jelas' });
+        }
+      }
+
+      // Dicatat setelah proses (OCR dan/atau LLM) selesai — supaya kuota
+      // tetap jadi jaring pengaman meski biaya per scan sudah jauh lebih
+      // rendah dibanding kirim gambar langsung ke vision model.
       await pool.query(
         'INSERT INTO receipt_scans (household_id, created_by) VALUES ($1, $2)',
         [householdId, req.user.userId]
       );
-
-      const textBlock = message.content.find(b => b.type === 'text');
-      const raw = (textBlock?.text || '').trim().replace(/^```json\s*|```$/g, '');
-      let parsed;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        return res.status(502).json({ error: 'Gagal membaca hasil dari AI, coba lagi dengan foto yang lebih jelas' });
-      }
 
       res.json({
         date: parsed.date || null,
