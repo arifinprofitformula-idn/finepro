@@ -24,7 +24,17 @@ const authLimiter = rateLimit({
 });
 
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 jam
+const TRIAL_DAYS = 14;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+const INDO_MONTHS = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+];
+
+function formatIndoDate(date) {
+  return `${date.getDate()} ${INDO_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+}
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -108,6 +118,61 @@ function resetPasswordEmailTemplate({ name, resetLink }) {
 </html>`;
 }
 
+function welcomeEmailTemplate({ name, email, password, trialEndsAt, loginLink }) {
+  const safeName = escapeHtml(name || 'Sahabat Finepro');
+  const safeEmail = escapeHtml(email);
+  const safePassword = escapeHtml(password);
+  const safeLoginLink = escapeHtml(loginLink);
+  const safeTrialEndsAt = escapeHtml(formatIndoDate(trialEndsAt));
+
+  return `
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Akun Finepro Kamu Berhasil Dibuat</title>
+  </head>
+  <body style="margin:0;background:#f6fbff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1c2230;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6fbff;padding:28px 14px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #dfe8f1;border-radius:24px;overflow:hidden;box-shadow:0 20px 55px rgba(49,77,119,0.14);">
+            <tr>
+              <td style="padding:26px 24px;background:linear-gradient(135deg,#0f1f3d 0%,#6f55f2 100%);">
+                <img src="https://finepro.my.id/images/fine-pro-header.png" alt="Finepro" width="240" style="display:block;max-width:240px;width:100%;height:auto;margin:0 0 18px 0;" />
+                <h1 style="margin:18px 0 0;color:#ffffff;font-size:24px;line-height:1.25;">Akun Finepro kamu berhasil dibuat</h1>
+                <p style="margin:8px 0 0;color:rgba(255,255,255,0.82);font-size:14px;line-height:1.6;">Masa trial 14 hari kamu sudah mulai berjalan.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 24px;">
+                <p style="margin:0 0 14px;font-size:15px;line-height:1.7;">Halo <strong>${safeName}</strong>,</p>
+                <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#3f4657;">Terima kasih sudah mendaftar di Finepro. Pendaftaran kamu berhasil dan masa trial gratis selama <strong>${TRIAL_DAYS} hari</strong> sudah mulai berjalan, berakhir pada <strong>${safeTrialEndsAt}</strong>.</p>
+                <div style="background:#efeaff;border:1px solid rgba(111,85,242,0.18);border-radius:16px;padding:14px 16px;margin:0 0 18px;">
+                  <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#3f2ca8;">Simpan detail login kamu berikut ini sebagai pengingat:</p>
+                  <p style="margin:0;font-size:13px;line-height:1.7;color:#0f1f3d;">Email: <strong>${safeEmail}</strong></p>
+                  <p style="margin:0;font-size:13px;line-height:1.7;color:#0f1f3d;">Password: <strong>${safePassword}</strong></p>
+                </div>
+                <p style="margin:26px 0;text-align:center;">
+                  <a href="${safeLoginLink}" style="display:inline-block;background:#6f55f2;color:#ffffff;text-decoration:none;border-radius:999px;padding:14px 22px;font-size:14px;font-weight:800;box-shadow:0 14px 28px rgba(111,85,242,0.26);">Masuk ke Finepro</a>
+                </p>
+                <p style="margin:0;font-size:13px;line-height:1.7;color:#6b7280;">Demi keamanan akun, jangan bagikan email ini ke siapa pun dan segera ganti password lewat menu Akun setelah masuk, jika kamu merasa perlu.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 24px;background:#f9f9f8;border-top:1px solid #dfe8f1;">
+                <p style="margin:0;font-size:12px;line-height:1.6;color:#6b7280;">Finepro menjaga data keuanganmu tetap rapi, tenang, dan mudah dipahami.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AVATAR_DIR = path.join(__dirname, '..', 'uploads', 'avatars');
 mkdirSync(AVATAR_DIR, { recursive: true });
@@ -159,6 +224,15 @@ router.post('/register', authLimiter, async (req, res) => {
 
     const user = { ...result.rows[0], role: adminRoleForEmail(result.rows[0].email, result.rows[0].role), has_password: true };
     const token = generateToken(user);
+
+    // Email selamat datang — kirim best-effort, jangan gagalkan pendaftaran kalau Mailketing bermasalah.
+    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    const loginLink = `${appBaseUrl(req)}/`;
+    sendMail({
+      to: email,
+      subject: 'Akun FinePro Kamu Berhasil Dibuat',
+      html: welcomeEmailTemplate({ name, email, password, trialEndsAt, loginLink }),
+    }).catch((err) => console.error('Gagal kirim email selamat datang:', err));
 
     res.status(201).json({ user, token });
   } catch (err) {
