@@ -19,6 +19,7 @@ import { isAiConfigured } from '../services/aiProvider.js';
 import { normalizeTransactionCategory } from '../services/categoryMatcher.js';
 import { extractText, tryRegexExtraction, parseReceiptText } from '../services/receiptExtraction.js';
 import { checkBudgetThreshold } from '../services/transactionEffects.js';
+import { assertQuotaAvailable, recordAiUsage } from '../services/aiUsage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'telegram');
@@ -42,15 +43,6 @@ async function getUserHouseholdId(userId) {
     [userId]
   );
   return result.rows[0]?.household_id || null;
-}
-
-async function countScansThisMonth(householdId) {
-  const result = await pool.query(
-    `SELECT COUNT(*) as count FROM receipt_scans
-     WHERE household_id = $1 AND created_at >= date_trunc('month', now())`,
-    [householdId]
-  );
-  return parseInt(result.rows[0].count, 10);
 }
 
 async function resolveDefaultWalletId(householdId) {
@@ -238,17 +230,19 @@ async function processReceipt(req, res) {
       }
 
       const aiConfig = await getSetting('ai');
-      const used = await countScansThisMonth(householdId);
-      const scanLimit = Number(aiConfig.receipt_scan_monthly_limit || 30);
-      if (used >= scanLimit) {
-        return res.status(429).json({
-          error: 'Kuota scan bulan ini habis',
-          message: `Kuota scan struk bulan ini sudah habis (${scanLimit}/bulan). Catat manual dulu di web, atau coba lagi bulan depan.`,
+      try {
+        await assertQuotaAvailable(householdId, 'receipt_scan', 'Kuota scan otomatis');
+      } catch (quotaErr) {
+        return res.status(quotaErr.status || 429).json({
+          error: 'Kuota scan habis',
+          message: `${quotaErr.message} Catat manual dulu di web, atau upgrade paket.`,
+          quota: quotaErr.quota,
         });
       }
 
       const rawText = await extractText(req.file.buffer);
       let parsed = tryRegexExtraction(rawText);
+      let usedAi = false;
 
       if (!parsed) {
         if (!isAiConfigured(aiConfig)) {
@@ -258,9 +252,20 @@ async function processReceipt(req, res) {
           });
         }
         try {
+          usedAi = true;
           parsed = await parseReceiptText(rawText, { aiConfig });
         } catch (parseErr) {
           console.error('Telegram parse receipt error:', parseErr);
+          await recordAiUsage({
+            householdId,
+            userId: user.id,
+            feature: 'receipt_scan',
+            source: 'telegram',
+            usedAi,
+            provider: usedAi ? aiConfig.provider : null,
+            model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
+            metadata: { status: 'failed', reason: 'ai_parse_error', telegram_id: telegramId },
+          });
           await pool.query(
             `INSERT INTO telegram_receipts (household_id, created_by, telegram_id, raw_text, status, error_message)
              VALUES ($1, $2, $3, $4, 'failed', $5)`,
@@ -285,6 +290,16 @@ async function processReceipt(req, res) {
       const note = parsed.note || null;
 
       if (amount <= 0) {
+        await recordAiUsage({
+          householdId,
+          userId: user.id,
+          feature: 'receipt_scan',
+          source: 'telegram',
+          usedAi,
+          provider: usedAi ? aiConfig.provider : null,
+          model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
+          metadata: { status: 'failed', reason: 'amount_not_found', telegram_id: telegramId },
+        });
         await pool.query(
           `INSERT INTO telegram_receipts (household_id, created_by, telegram_id, doc_type, raw_text, extracted, status, error_message)
            VALUES ($1, $2, $3, $4, $5, $6, 'failed', $7)`,
@@ -322,6 +337,16 @@ async function processReceipt(req, res) {
         'INSERT INTO receipt_scans (household_id, created_by) VALUES ($1, $2)',
         [householdId, user.id]
       );
+      await recordAiUsage({
+        householdId,
+        userId: user.id,
+        feature: 'receipt_scan',
+        source: 'telegram',
+        usedAi,
+        provider: usedAi ? aiConfig.provider : null,
+        model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
+        metadata: { status: 'success', parser: parsed.source || (usedAi ? 'ai' : 'regex'), telegram_id: telegramId, transaction_id: transaction.id },
+      });
       await pool.query(
         `INSERT INTO telegram_receipts (household_id, created_by, telegram_id, doc_type, image_path, raw_text, extracted, transaction_id, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'success')`,

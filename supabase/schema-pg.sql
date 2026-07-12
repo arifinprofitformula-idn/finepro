@@ -218,6 +218,22 @@ CREATE TABLE IF NOT EXISTS receipt_scans (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS ai_usage_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  feature TEXT NOT NULL CHECK (feature IN ('receipt_scan','ai_insight')),
+  source TEXT NOT NULL CHECK (source IN ('web','telegram')),
+  used_ai BOOLEAN NOT NULL DEFAULT false,
+  provider TEXT,
+  model TEXT,
+  input_tokens INTEGER,
+  output_tokens INTEGER,
+  estimated_cost NUMERIC,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- 15. Google/local password reset
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -377,6 +393,8 @@ CREATE INDEX IF NOT EXISTS idx_arisan_entries_group_date ON arisan_entries (aris
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions (user_id);
 CREATE INDEX IF NOT EXISTS idx_ai_insights_household ON ai_insights (household_id, generated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_receipt_scans_household_month ON receipt_scans (household_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_household_feature_created ON ai_usage_events (household_id, feature, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_source_created ON ai_usage_events (source, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token_hash ON password_reset_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_telegram_receipts_household ON telegram_receipts (household_id, created_at);
@@ -393,6 +411,7 @@ VALUES
   ('midtrans', '{"enabled": false, "is_production": false, "server_key": "", "client_key": ""}', true),
   ('manual_payment', '{"enabled": false, "bank_name": "", "account_number": "", "account_name": "", "instructions": ""}', false),
   ('ai', '{"enabled": false, "provider": "sumopod", "sumopod_api_key": "", "sumopod_base_url": "https://ai.sumopod.com/v1", "sumopod_model": "gpt-4o-mini", "anthropic_api_key": "", "anthropic_model": "claude-sonnet-4-5", "insights_daily_limit": 3, "receipt_scan_monthly_limit": 30}', true),
+  ('ai_quota', '{"trial_insight_total": 3, "trial_scan_total": 5, "free_insight_monthly": 1, "free_scan_monthly": 3, "paid_insight_daily": 3, "paid_scan_monthly": 30}', false),
   ('web_push', '{"enabled": true, "vapid_public_key": "", "vapid_private_key": "", "vapid_subject": "mailto:admin@finepro.my.id"}', true),
   ('telegram', '{"enabled": false, "bot_token": "", "bot_username": "", "n8n_shared_secret": ""}', true)
 ON CONFLICT (key) DO NOTHING;

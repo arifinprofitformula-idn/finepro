@@ -15,7 +15,7 @@ const adminLoginLimiter = rateLimit({
   message: { error: 'Terlalu banyak percobaan, coba lagi beberapa menit lagi' },
 });
 
-const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'manual_payment', 'ai', 'web_push', 'telegram']);
+const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'manual_payment', 'ai', 'ai_quota', 'web_push', 'telegram']);
 
 function toInt(value, fallback) {
   const n = Number(value);

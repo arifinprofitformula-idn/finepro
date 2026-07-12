@@ -223,6 +223,7 @@ export default function AdminPage({ user }) {
   const [midtrans, setMidtrans] = useFormState(settings?.midtrans);
   const [manualPayment, setManualPayment] = useFormState(settings?.manual_payment);
   const [ai, setAi] = useFormState(settings?.ai);
+  const [aiQuota, setAiQuota] = useFormState(settings?.ai_quota);
   const [webPush, setWebPush] = useFormState(settings?.web_push);
   const [telegram, setTelegram] = useFormState(settings?.telegram);
 
@@ -510,17 +511,65 @@ export default function AdminPage({ user }) {
               <input className={inputClass} type="password" value={ai.anthropic_api_key || ""} onChange={(e) => setAi("anthropic_api_key", e.target.value)} placeholder={ai.anthropic_api_key_masked || "API key baru"} />
               <SecretHint configured={ai.anthropic_api_key_configured} />
             </div>
-            <FormRow>
-              <div>
-                <label className={labelClass}>Limit Insight / Hari</label>
-                <input className={inputClass} type="number" min="0" value={ai.insights_daily_limit || 0} onChange={(e) => setAi("insights_daily_limit", Number(e.target.value))} />
-              </div>
-              <div>
-                <label className={labelClass}>Limit Scan Struk / Bulan</label>
-                <input className={inputClass} type="number" min="0" value={ai.receipt_scan_monthly_limit || 0} onChange={(e) => setAi("receipt_scan_monthly_limit", Number(e.target.value))} />
-              </div>
-            </FormRow>
           </IntegrationCard>
+
+          <section className="gloss-panel rounded-2xl p-4">
+            <SectionTitle
+              icon={BrainCircuit}
+              title="Limit AI per Tier"
+              subtitle="Mengatur kuota gabungan web dan Telegram berdasarkan paket pengguna."
+              tone="mint"
+            />
+            <div className="relative z-10 space-y-4">
+              <div className="rounded-2xl border border-mint/15 bg-mint-light/70 p-3">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-mint">Trial</div>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Insight total trial</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.trial_insight_total ?? 3} onChange={(e) => setAiQuota("trial_insight_total", Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Scan total trial</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.trial_scan_total ?? 5} onChange={(e) => setAiQuota("trial_scan_total", Number(e.target.value))} />
+                  </div>
+                </FormRow>
+              </div>
+
+              <div className="rounded-2xl border border-neutral-border/70 bg-white/65 p-3">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Free / Expired</div>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Insight / Bulan</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.free_insight_monthly ?? 1} onChange={(e) => setAiQuota("free_insight_monthly", Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Scan / Bulan</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.free_scan_monthly ?? 3} onChange={(e) => setAiQuota("free_scan_monthly", Number(e.target.value))} />
+                  </div>
+                </FormRow>
+              </div>
+
+              <div className="rounded-2xl border border-violet/15 bg-violet-light/60 p-3">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-violet">Paid: Monthly / 6 Bulan / Annual</div>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Insight / Hari</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.paid_insight_daily ?? 3} onChange={(e) => setAiQuota("paid_insight_daily", Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Scan / Bulan</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.paid_scan_monthly ?? 30} onChange={(e) => setAiQuota("paid_scan_monthly", Number(e.target.value))} />
+                  </div>
+                </FormRow>
+              </div>
+
+              <div className="rounded-2xl bg-white/60 px-3 py-2 text-xs font-semibold leading-relaxed text-neutral-500">
+                Scan otomatis dihitung gabungan dari web, upload file, kamera, dan Telegram. Insight dihitung dari tombol Analisa Keuangan.
+              </div>
+
+              <SaveButton label="Simpan Limit Tier" saving={savingKey === "ai_quota"} onClick={() => saveSetting("ai_quota", aiQuota)} tone="mint" />
+            </div>
+          </section>
 
           <IntegrationCard
             icon={BellRing}

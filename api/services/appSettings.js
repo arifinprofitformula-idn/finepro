@@ -31,6 +31,14 @@ const DEFAULTS = {
     insights_daily_limit: 3,
     receipt_scan_monthly_limit: 30,
   },
+  ai_quota: {
+    trial_insight_total: 3,
+    trial_scan_total: 5,
+    free_insight_monthly: 1,
+    free_scan_monthly: 3,
+    paid_insight_daily: 3,
+    paid_scan_monthly: 30,
+  },
   web_push: {
     enabled: true,
     vapid_public_key: '',
@@ -68,6 +76,14 @@ const ALLOWED_FIELDS = {
     'model',
     'insights_daily_limit',
     'receipt_scan_monthly_limit'
+  ],
+  ai_quota: [
+    'trial_insight_total',
+    'trial_scan_total',
+    'free_insight_monthly',
+    'free_scan_monthly',
+    'paid_insight_daily',
+    'paid_scan_monthly'
   ],
   web_push: ['enabled', 'vapid_public_key', 'vapid_private_key', 'vapid_subject'],
   telegram: ['enabled', 'bot_token', 'bot_username', 'n8n_shared_secret'],

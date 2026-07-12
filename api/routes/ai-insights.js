@@ -4,6 +4,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { computeFinancialStats } from '../services/financialStats.js';
 import { getSetting } from '../services/appSettings.js';
 import { aiConfigurationMessage, generateChatText, isAiConfigured } from '../services/aiProvider.js';
+import { getQuotaStatus, recordAiUsage } from '../services/aiUsage.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -42,15 +43,9 @@ router.post('/insights', async (req, res) => {
     const householdId = await getUserHouseholdId(req.user.userId);
     if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
     const aiConfig = await getSetting('ai');
-    const dailyLimit = Number(aiConfig.insights_daily_limit || 3);
+    const quota = await getQuotaStatus(householdId, 'ai_insight');
 
-    const countResult = await pool.query(
-      `SELECT COUNT(*) as count FROM ai_insights WHERE household_id = $1 AND generated_at >= CURRENT_DATE`,
-      [householdId]
-    );
-    const usedToday = Number(countResult.rows[0].count);
-
-    if (usedToday >= dailyLimit) {
+    if (!quota.allowed) {
       const cached = await pool.query(
         `SELECT narrative_text, generated_at FROM ai_insights
          WHERE household_id = $1 ORDER BY generated_at DESC LIMIT 1`,
@@ -61,7 +56,7 @@ router.post('/insights', async (req, res) => {
         generated_at: cached.rows[0]?.generated_at || null,
         rateLimited: true,
         remaining: 0,
-        message: `Sudah generate analisa ${dailyLimit}x hari ini. Coba lagi besok — ini hasil analisa terakhir Anda.`
+        message: `Kuota Analisa Keuangan sudah habis (${quota.used}/${quota.limit}). Upgrade paket untuk melanjutkan — ini hasil analisa terakhir Anda.`
       });
     }
 
@@ -69,7 +64,7 @@ router.post('/insights', async (req, res) => {
 
     if (stats.insufficientData) {
       const narrative = `Data transaksi Anda baru tercatat ${stats.monthsWithData} bulan. Catat transaksi rutin minimal 2 bulan berturut-turut supaya Analisa Keuangan bisa membaca pola pemasukan dan pengeluaran dengan lebih akurat.`;
-      return res.json({ narrative, stats, rateLimited: false, remaining: dailyLimit - usedToday });
+      return res.json({ narrative, stats, rateLimited: false, remaining: quota.remaining });
     }
 
     if (!isAiConfigured(aiConfig)) {
@@ -87,6 +82,16 @@ router.post('/insights', async (req, res) => {
       }]
     });
     const finalNarrative = narrative || 'Tidak ada narasi yang dihasilkan.';
+    await recordAiUsage({
+      householdId,
+      userId: req.user.userId,
+      feature: 'ai_insight',
+      source: 'web',
+      usedAi: true,
+      provider: aiConfig.provider || null,
+      model: aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null,
+      metadata: { status: 'success' },
+    });
 
     const inserted = await pool.query(
       `INSERT INTO ai_insights (household_id, stats_snapshot, narrative_text)
@@ -99,7 +104,7 @@ router.post('/insights', async (req, res) => {
       stats,
       generated_at: inserted.rows[0].generated_at,
       rateLimited: false,
-      remaining: dailyLimit - usedToday - 1
+      remaining: Math.max(0, quota.remaining - 1)
     });
   } catch (err) {
     console.error('AI insight error:', err);

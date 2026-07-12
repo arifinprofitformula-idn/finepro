@@ -17,6 +17,7 @@ import { getSetting } from '../services/appSettings.js';
 import { isAiConfigured } from '../services/aiProvider.js';
 import { normalizeTransactionCategory } from '../services/categoryMatcher.js';
 import { extractText, tryRegexExtraction, parseReceiptText } from '../services/receiptExtraction.js';
+import { assertQuotaAvailable, getQuotaStatus, recordAiUsage } from '../services/aiUsage.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -40,15 +41,6 @@ async function getUserHouseholdId(userId) {
   return result.rows[0]?.household_id || null;
 }
 
-async function countScansThisMonth(householdId) {
-  const result = await pool.query(
-    `SELECT COUNT(*) as count FROM receipt_scans
-     WHERE household_id = $1 AND created_at >= date_trunc('month', now())`,
-    [householdId]
-  );
-  return parseInt(result.rows[0].count, 10);
-}
-
 // GET /api/receipts/quota — sisa kuota scan bulan ini, dipakai badge di UI
 router.get('/quota', async (req, res) => {
   try {
@@ -57,8 +49,8 @@ router.get('/quota', async (req, res) => {
     const householdId = await getUserHouseholdId(req.user.userId);
     if (!householdId) return res.json({ used: 0, limit: scanLimit, remaining: scanLimit });
 
-    const used = await countScansThisMonth(householdId);
-    res.json({ used, limit: scanLimit, remaining: Math.max(0, scanLimit - used) });
+    const status = await getQuotaStatus(householdId, 'receipt_scan');
+    res.json(status);
   } catch (err) {
     res.status(500).json({ error: 'Gagal mengambil sisa kuota' });
   }
@@ -80,15 +72,10 @@ router.post('/scan', (req, res) => {
       const householdId = await getUserHouseholdId(req.user.userId);
       if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
 
-      const used = await countScansThisMonth(householdId);
-      const scanLimit = Number(aiConfig.receipt_scan_monthly_limit || 30);
-      if (used >= scanLimit) {
-        return res.status(429).json({
-          error: `Kuota scan struk bulan ini sudah habis (${scanLimit}/bulan). Silakan input transaksi manual, atau coba lagi bulan depan.`
-        });
-      }
+      await assertQuotaAvailable(householdId, 'receipt_scan', 'Kuota scan otomatis');
 
       const rawText = await extractText(req.file.buffer);
+      let usedAi = false;
 
       // Coba regex dulu (TOTAL/GRAND TOTAL + tanggal) — kalau confidence
       // tinggi, LLM sama sekali tidak dipanggil (nol biaya tambahan).
@@ -103,9 +90,20 @@ router.post('/scan', (req, res) => {
         try {
           // Parsing teks struk memakai model murah dari provider aktif
           // (default SumoPod gpt-4o-mini, Anthropic tetap bisa dipilih).
+          usedAi = true;
           parsed = await parseReceiptText(rawText, { aiConfig });
         } catch (parseErr) {
           console.error('Parse receipt text error:', parseErr);
+          await recordAiUsage({
+            householdId,
+            userId: req.user.userId,
+            feature: 'receipt_scan',
+            source: 'web',
+            usedAi,
+            provider: usedAi ? aiConfig.provider : null,
+            model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
+            metadata: { status: 'failed', reason: 'ai_parse_error' },
+          });
           return res.status(502).json({ error: 'Gagal membaca hasil dari AI, coba lagi dengan foto yang lebih jelas' });
         }
       }
@@ -117,6 +115,16 @@ router.post('/scan', (req, res) => {
         'INSERT INTO receipt_scans (household_id, created_by) VALUES ($1, $2)',
         [householdId, req.user.userId]
       );
+      await recordAiUsage({
+        householdId,
+        userId: req.user.userId,
+        feature: 'receipt_scan',
+        source: 'web',
+        usedAi,
+        provider: usedAi ? aiConfig.provider : null,
+        model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
+        metadata: { status: 'success', parser: parsed.source || (usedAi ? 'ai' : 'regex') },
+      });
 
       const intentType = req.body?.intent_type === 'income' ? 'income' : 'expense';
       const type = intentType === 'income' ? 'income' : parsed.type === 'income' ? 'income' : 'expense';
