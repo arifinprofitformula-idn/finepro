@@ -9,7 +9,7 @@ import WalletCard from "../components/WalletCard.jsx";
 import CategoryRow from "../components/CategoryRow.jsx";
 import { useWallets } from "../hooks/useWallets.js";
 import { useArisan } from "../hooks/useArisan.js";
-import { uploadAvatar } from "../api/auth.js";
+import { uploadAvatar, changePassword, translateAuthError } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
 import { fmtRp, monthKey, todayStr } from "../utils/format.js";
@@ -21,6 +21,7 @@ import {
   CalendarClock,
   Crown,
   Download,
+  KeyRound,
   LogOut,
   Mail,
   Receipt,
@@ -115,6 +116,12 @@ export default function AccountPage({
   const [newCategoryType, setNewCategoryType] = useState("expense");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categorySaving, setCategorySaving] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState("");
+  const [passwordMsgType, setPasswordMsgType] = useState("");
 
   const isOwner = household.role === "owner";
   const isStudent = household.household_type === "student";
@@ -229,6 +236,31 @@ export default function AccountPage({
     } finally {
       setAvatarUploading(false);
       e.target.value = "";
+    }
+  }
+
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg("Konfirmasi password baru tidak cocok.");
+      setPasswordMsgType("error");
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordMsg("");
+    try {
+      const data = await changePassword(user.has_password ? oldPassword : undefined, newPassword);
+      onUserUpdated({ has_password: true });
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordMsg(data.message);
+      setPasswordMsgType("success");
+    } catch (err) {
+      setPasswordMsg(translateAuthError(err.message));
+      setPasswordMsgType("error");
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
@@ -364,6 +396,50 @@ export default function AccountPage({
           <LogOut size={15} />
           Keluar
         </button>
+      </div>
+
+      {/* Keamanan — ganti password (atau buat password baru untuk akun Google-only) */}
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={KeyRound} tone="coral" title={user.has_password ? "Ganti Password" : "Buat Password"} />
+        {!user.has_password && (
+          <p className="mb-2 text-xs text-neutral-500">
+            Anda masuk dengan Google. Buat password supaya bisa masuk manual juga.
+          </p>
+        )}
+        <form onSubmit={handleChangePassword} className="flex flex-col gap-2">
+          {user.has_password && (
+            <input
+              type="password"
+              required
+              value={oldPassword}
+              onChange={(e) => setOldPassword(e.target.value)}
+              placeholder="Password lama"
+              className={inputClass}
+            />
+          )}
+          <input
+            type="password"
+            required
+            minLength={6}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="Password baru (minimal 6 karakter)"
+            className={inputClass}
+          />
+          <input
+            type="password"
+            required
+            minLength={6}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Konfirmasi password baru"
+            className={inputClass}
+          />
+          <button type="submit" disabled={passwordSaving} className={primaryBtnClass}>
+            {passwordSaving ? "Menyimpan..." : user.has_password ? "Simpan Password Baru" : "Buat Password"}
+          </button>
+          <StatusMsg msg={passwordMsg} type={passwordMsgType} />
+        </form>
       </div>
 
       {/* Upgrade Paket (owner only) */}

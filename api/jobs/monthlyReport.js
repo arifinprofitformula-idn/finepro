@@ -14,9 +14,7 @@
 //   node jobs/monthlyReport.js
 
 import pool from '../db.js';
-import { getSetting } from '../services/appSettings.js';
-
-const MAILKETING_API_URL = 'https://api.mailketing.co.id/api/v1/send';
+import { sendMail } from '../services/mailer.js';
 
 function previousMonthLabel() {
   const now = new Date();
@@ -66,35 +64,12 @@ async function getPreviousMonthSummaries() {
 }
 
 async function sendReportEmail(summary) {
-  const mailketing = await getSetting('mailketing');
-  const apiToken = mailketing.api_token;
-  const fromEmail = mailketing.from_email;
-  const fromName = mailketing.from_name || 'Keuangan Keluarga';
-
-  if (!mailketing.enabled || !apiToken || apiToken === 'isi-api-token-mailketing' || !fromEmail || fromEmail === 'isi-email-pengirim-terverifikasi') {
-    throw new Error('Mailketing belum aktif atau belum lengkap di Admin Console');
-  }
-
   const monthLabel = previousMonthLabel();
-  const body = new URLSearchParams({
-    api_token: apiToken,
-    from_name: fromName,
-    from_email: fromEmail,
-    recipient: summary.owner_email,
+  await sendMail({
+    to: summary.owner_email,
     subject: `Laporan Keuangan ${summary.household_name} — ${monthLabel}`,
-    content: buildReportContent(summary, monthLabel),
+    html: buildReportContent(summary, monthLabel),
   });
-
-  const res = await fetch(MAILKETING_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data || data.status !== 'success') {
-    throw new Error(`Mailketing gagal: ${data?.response || res.statusText}`);
-  }
 }
 
 async function run() {

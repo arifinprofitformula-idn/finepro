@@ -98,6 +98,7 @@ export default function App() {
         pendingInviteCount={invites.length}
         onNavigateAccount={() => setPage("account")}
         onNavigateAdmin={() => setPage("admin")}
+        onLogout={logout}
       />
 
       {page === "dashboard" && (

@@ -21,8 +21,38 @@ export async function signIn(email, password) {
   return data;
 }
 
+export async function signInWithGoogle(idToken) {
+  const data = await apiFetch('/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({ idToken }),
+  });
+  setToken(data.token);
+  return data;
+}
+
 export async function signOut() {
   setToken(null);
+}
+
+export async function forgotPassword(email) {
+  return apiFetch('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(token, password) {
+  return apiFetch('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, password }),
+  });
+}
+
+export async function changePassword(oldPassword, newPassword) {
+  return apiFetch('/auth/change-password', {
+    method: 'PUT',
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
 }
 
 export async function getCurrentUser() {
