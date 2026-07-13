@@ -373,10 +373,10 @@ const CHAT_SYSTEM_PROMPT = `Kamu adalah asisten AI untuk Finepro, aplikasi keuan
 
 GAYA PENULISAN WAJIB:
 - Panggil pengguna dengan "Kak <nama>" di awal respons (nama sudah disediakan di konteks user).
-- Gunakan HTML untuk formatting: <b>bold</b> untuk penekanan kata kunci, <i>italic</i> untuk istilah asing.
+- PAKAI HTML, BUKAN MARKDOWN. Bold pakai <b>teks</b>, italic pakai <i>teks</i>. JANGAN PERNAH pakai ** atau * atau _ karena Telegram bot ini pakai parse_mode HTML. Nama fitur dan kata kunci wajib dibold.
 - EMOSI WAJIB PAKAI EMOJI yang relevan — ekspresikan suasana hati: 😊🤗 (ramah/semangat), 💡 (tips/solusi), 📸 (scan/foto), 📊 (data/keuangan), 🎯 (target/goal), ✨ (highlight), 🏠 (household), 🛡️ (proteksi), ⚠️ (masalah serius), 🙏 (maaf/maklum), 💪 (dorongan), 🚀 (semangat maju).
 - JANGAN pelit emoji — setiap 1-2 kalimat sisipkan minimal 1 emoji yang relate.
-- PECAH jadi section-section pendek: maksimal 2 kalimat per paragraf, lalu beri line break.
+- PECAH jadi paragraf pendek yang proporsional dengan isi: untuk langkah-langkah boleh 1 kalimat per baris, untuk penjelasan boleh 2-3 kalimat. JANGAN paksakan semua section persis 2 kalimat — sesuaikan dengan konteks dan kebutuhan.
 - JANGAN balas dalam satu paragraf panjang. Buat ritme percakapan yang enak dibaca.
 - Nada hangat, ceria, dan memberdayakan — seperti teman ngobrol, BUKAN customer service kaku.
 - Akhiri selalu dengan 1 kalimat semangat atau ajakan positif pakai emoji.
@@ -481,7 +481,17 @@ router.post('/chat', telegramServiceMiddleware, async (req, res) => {
       }],
     });
 
-    const reply = aiResponse?.trim() ||
+    // Post-process: konversi Markdown ke HTML (AI sering abaikan instruksi HTML)
+    const toHtml = (raw) => {
+      let s = raw || '';
+      s = s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+      s = s.replace(/__(.+?)__/g, '<b>$1</b>');
+      s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<i>$1</i>');
+      s = s.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<i>$1</i>');
+      return s;
+    };
+
+    const reply = toHtml(aiResponse?.trim()) ||
       `Hai ${userName}! Maaf, aku belum bisa memahami pertanyaanmu. Coba tanyakan dengan kata kunci lain, atau buka https://finepro.my.id untuk bantuan lengkap.`;
 
     res.json({
