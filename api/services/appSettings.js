@@ -38,6 +38,7 @@ const DEFAULTS = {
     free_scan_monthly: 3,
     paid_insight_daily: 3,
     paid_scan_monthly: 30,
+    telegram_chat_daily: 100,
   },
   ape_epi: {
     enabled: false,
@@ -94,7 +95,8 @@ const ALLOWED_FIELDS = {
     'free_insight_monthly',
     'free_scan_monthly',
     'paid_insight_daily',
-    'paid_scan_monthly'
+    'paid_scan_monthly',
+    'telegram_chat_daily'
   ],
   ape_epi: ['enabled', 'base_url', 'api_key', 'level', 'gold_brand', 'silver_brand', 'cache_ttl_minutes', 'max_daily_requests'],
   web_push: ['enabled', 'vapid_public_key', 'vapid_private_key', 'vapid_subject'],

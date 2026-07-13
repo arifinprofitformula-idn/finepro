@@ -23,15 +23,20 @@ function toInt(value, fallback) {
   return Number.isInteger(n) && n >= 0 ? n : fallback;
 }
 
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
 router.post('/login', adminLoginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body || {};
+    const { password } = req.body || {};
+    const email = normalizeEmail(req.body?.email);
     if (!email || !password) {
       return res.status(400).json({ error: 'Email dan password wajib diisi' });
     }
 
     const result = await pool.query(
-      'SELECT id, email, password_hash, name, avatar_url, role, created_at FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, name, avatar_url, role, created_at FROM users WHERE LOWER(email) = LOWER($1)',
       [email]
     );
     const user = result.rows[0];

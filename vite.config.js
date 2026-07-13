@@ -45,11 +45,31 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: "http://127.0.0.1:3001",
-        changeOrigin: true
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", (_err, _req, res) => {
+            if (!res.headersSent) {
+              res.writeHead(502, { "Content-Type": "application/json" });
+            }
+            res.end(JSON.stringify({
+              error: "Backend API belum berjalan di http://127.0.0.1:3001. Jalankan server API dari folder api.",
+            }));
+          });
+        }
       },
       "/uploads": {
         target: "http://127.0.0.1:3001",
-        changeOrigin: true
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", (_err, _req, res) => {
+            if (!res.headersSent) {
+              res.writeHead(502, { "Content-Type": "application/json" });
+            }
+            res.end(JSON.stringify({
+              error: "Backend API belum berjalan di http://127.0.0.1:3001. Jalankan server API dari folder api.",
+            }));
+          });
+        }
       }
     }
   },

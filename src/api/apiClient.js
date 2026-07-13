@@ -37,7 +37,16 @@ export async function apiFetch(path, options = {}) {
     throw new Error('Sesi berakhir. Silakan login kembali.');
   }
 
-  const data = await res.json();
+  const text = await res.text();
+  let data = {};
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: text };
+    }
+  }
 
   if (!res.ok) {
     throw new Error(data.error || 'Terjadi kesalahan');

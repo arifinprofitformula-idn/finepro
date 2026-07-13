@@ -561,8 +561,8 @@ export default function AdminPage({ user }) {
           <section className="gloss-panel rounded-2xl p-4">
             <SectionTitle
               icon={BrainCircuit}
-              title="Limit AI per Tier"
-              subtitle="Mengatur kuota gabungan web dan Telegram berdasarkan paket pengguna."
+              title="Limit Penggunaan AI"
+              subtitle="Mengatur kuota AI web, scan, dan chat Telegram."
               tone="mint"
             />
             <div className="relative z-10 space-y-4">
@@ -608,11 +608,19 @@ export default function AdminPage({ user }) {
                 </FormRow>
               </div>
 
-              <div className="rounded-2xl bg-white/60 px-3 py-2 text-xs font-semibold leading-relaxed text-neutral-500">
-                Scan otomatis dihitung gabungan dari web, upload file, kamera, dan Telegram. Insight dihitung dari tombol Analisa Keuangan.
+              <div className="rounded-2xl border border-gold/20 bg-gold-light/60 p-3">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gold">Telegram AI</div>
+                <div>
+                  <label className={labelClass}>Chat AI / User / Hari</label>
+                  <input className={inputClass} type="number" min="0" value={aiQuota.telegram_chat_daily ?? 100} onChange={(e) => setAiQuota("telegram_chat_daily", Number(e.target.value))} />
+                </div>
               </div>
 
-              <SaveButton label="Simpan Limit Tier" saving={savingKey === "ai_quota"} onClick={() => saveSetting("ai_quota", aiQuota)} tone="mint" />
+              <div className="rounded-2xl bg-white/60 px-3 py-2 text-xs font-semibold leading-relaxed text-neutral-500">
+                Scan otomatis dihitung gabungan dari web, upload file, kamera, dan Telegram. Insight dihitung dari tombol Analisa Keuangan. Chat AI Telegram dihitung per pengguna setiap hari saat pesan teks memicu AI.
+              </div>
+
+              <SaveButton label="Simpan Limit AI" saving={savingKey === "ai_quota"} onClick={() => saveSetting("ai_quota", aiQuota)} tone="mint" />
             </div>
           </section>
 

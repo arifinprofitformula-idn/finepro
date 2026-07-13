@@ -1,4 +1,5 @@
-const API_BASE = "/api";
+import { API_BASE } from "./apiClient.js";
+
 const ADMIN_TOKEN_KEY = "finepro_admin_token";
 
 let _adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
@@ -27,13 +28,22 @@ async function adminFetch(path, options = {}) {
     ...options,
     headers,
   });
-  const data = await res.json();
+  const text = await res.text();
+  let data = {};
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: text };
+    }
+  }
 
   if (res.status === 401 && _adminToken) {
     setAdminToken(null);
   }
   if (!res.ok) {
-    throw new Error(data.error || "Terjadi kesalahan");
+    throw new Error(data.error || `Request admin gagal (${res.status})`);
   }
   return data;
 }

@@ -19,7 +19,7 @@ import { generateChatText, isAiConfigured } from '../services/aiProvider.js';
 import { normalizeTransactionCategory } from '../services/categoryMatcher.js';
 import { extractText, tryRegexExtraction, parseReceiptText, sanitizeDate } from '../services/receiptExtraction.js';
 import { checkBudgetThreshold } from '../services/transactionEffects.js';
-import { assertQuotaAvailable, recordAiUsage } from '../services/aiUsage.js';
+import { assertQuotaAvailable, recordAiUsage, reserveUserDailyAiUsage } from '../services/aiUsage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'telegram');
@@ -414,6 +414,15 @@ router.post('/chat', telegramServiceMiddleware, async (req, res) => {
       });
     }
 
+    const householdId = await getUserHouseholdId(user.id);
+    if (!householdId) {
+      return res.json({
+        reply: `Hai ${user.name || user.email}! Akun kamu belum tergabung di household manapun.\n\nBuka https://finepro.my.id dulu untuk membuat atau bergabung ke household, lalu chat AI Telegram bisa dipakai lagi 😊`,
+        linked: true,
+        ai_available: false,
+      });
+    }
+
     // Cek AI config
     const aiConfig = await getSetting('ai');
     if (!isAiConfigured(aiConfig)) {
@@ -422,6 +431,34 @@ router.post('/chat', telegramServiceMiddleware, async (req, res) => {
         reply: `Hai ${user.name || user.email}! Saat ini asisten AI belum dikonfigurasi.\n\nYang bisa kamu lakukan:\n📸 Kirim foto struk/bukti transfer untuk otomatis dicatat\n📊 Buka https://finepro.my.id untuk kelola keuangan lengkap\n\nAda pertanyaan lain?`,
         linked: true,
         ai_available: false,
+      });
+    }
+
+    let chatQuota;
+    try {
+      chatQuota = await reserveUserDailyAiUsage({
+        householdId,
+        userId: user.id,
+        feature: 'telegram_chat',
+        source: 'telegram',
+        usedAi: true,
+        provider: aiConfig.provider || null,
+        model: aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null,
+        metadata: {
+          status: 'accepted',
+          telegram_id,
+          telegram_username: telegram_username || null,
+          text_length: String(text || '').length,
+        },
+        label: 'Kuota chat AI Telegram',
+      });
+    } catch (quotaErr) {
+      return res.json({
+        reply: `${quotaErr.message || 'Kuota chat AI Telegram hari ini sudah habis.'}\n\nBatas ini membantu menjaga layanan tetap stabil untuk semua pengguna. Kamu masih bisa kirim foto struk/bukti transfer jika kuota scan masih tersedia, atau coba chat lagi besok 😊`,
+        linked: true,
+        ai_available: true,
+        rateLimited: true,
+        quota: quotaErr.quota,
       });
     }
 
@@ -567,6 +604,7 @@ router.post('/chat', telegramServiceMiddleware, async (req, res) => {
       reply: reply || 'Ada kendala nih. Coba lagi ya 🙏',
       linked: true,
       ai_available: true,
+      quota: chatQuota,
       ...(edited ? { edited: true } : {}),
     });
   } catch (err) {

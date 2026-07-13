@@ -222,7 +222,7 @@ CREATE TABLE IF NOT EXISTS ai_usage_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  feature TEXT NOT NULL CHECK (feature IN ('receipt_scan','ai_insight')),
+  feature TEXT NOT NULL CHECK (feature IN ('receipt_scan','ai_insight','telegram_chat')),
   source TEXT NOT NULL CHECK (source IN ('web','telegram')),
   used_ai BOOLEAN NOT NULL DEFAULT false,
   provider TEXT,
@@ -447,6 +447,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_insights_household ON ai_insights (household_i
 CREATE INDEX IF NOT EXISTS idx_receipt_scans_household_month ON receipt_scans (household_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_household_feature_created ON ai_usage_events (household_id, feature, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_source_created ON ai_usage_events (source, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_user_feature_created ON ai_usage_events (user_id, feature, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_savings_goals_household_status ON savings_goals (household_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_savings_goal_contributions_goal_date ON savings_goal_contributions (goal_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_metal_price_cache_fetched_at ON metal_price_cache (fetched_at DESC);
@@ -467,7 +468,7 @@ VALUES
   ('midtrans', '{"enabled": false, "is_production": false, "server_key": "", "client_key": ""}', true),
   ('manual_payment', '{"enabled": false, "bank_name": "", "account_number": "", "account_name": "", "instructions": ""}', false),
   ('ai', '{"enabled": false, "provider": "sumopod", "sumopod_api_key": "", "sumopod_base_url": "https://ai.sumopod.com/v1", "sumopod_model": "gpt-4o-mini", "anthropic_api_key": "", "anthropic_model": "claude-sonnet-4-5", "insights_daily_limit": 3, "receipt_scan_monthly_limit": 30}', true),
-  ('ai_quota', '{"trial_insight_total": 3, "trial_scan_total": 5, "free_insight_monthly": 1, "free_scan_monthly": 3, "paid_insight_daily": 3, "paid_scan_monthly": 30}', false),
+  ('ai_quota', '{"trial_insight_total": 3, "trial_scan_total": 5, "free_insight_monthly": 1, "free_scan_monthly": 3, "paid_insight_daily": 3, "paid_scan_monthly": 30, "telegram_chat_daily": 100}', false),
   ('ape_epi', '{"enabled": false, "base_url": "https://ape.bisnisemasperak.com/api/v1", "api_key": "", "level": "konsumen", "gold_brand": "GOLDGRAM", "silver_brand": "SILVERGRAM", "cache_ttl_minutes": 30, "max_daily_requests": 3}', true),
   ('web_push', '{"enabled": true, "vapid_public_key": "", "vapid_private_key": "", "vapid_subject": "mailto:admin@finepro.my.id"}', true),
   ('telegram', '{"enabled": false, "bot_token": "", "bot_username": "", "n8n_shared_secret": ""}', true)
