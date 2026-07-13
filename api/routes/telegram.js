@@ -15,7 +15,7 @@ import multer from 'multer';
 import pool from '../db.js';
 import { authMiddleware, telegramServiceMiddleware } from '../middleware/auth.js';
 import { getSetting } from '../services/appSettings.js';
-import { isAiConfigured } from '../services/aiProvider.js';
+import { generateChatText, isAiConfigured } from '../services/aiProvider.js';
 import { normalizeTransactionCategory } from '../services/categoryMatcher.js';
 import { extractText, tryRegexExtraction, parseReceiptText, sanitizeDate } from '../services/receiptExtraction.js';
 import { checkBudgetThreshold } from '../services/transactionEffects.js';
@@ -364,5 +364,133 @@ async function processReceipt(req, res) {
       res.status(500).json({ error: 'Gagal memproses foto', message: 'Terjadi kesalahan, coba lagi beberapa saat.' });
     }
 }
+
+// POST /api/telegram/chat — dipanggil n8n untuk setiap pesan teks yang bukan
+// /start (link) dan bukan foto. Endpoint ini membalas secara kontekstual
+// menggunakan AI untuk user yang sudah terhubung, atau mengirim panduan
+// untuk user yang belum terhubung.
+const CHAT_SYSTEM_PROMPT = `Kamu adalah asisten AI untuk Finepro, aplikasi keuangan keluarga Indonesia.
+
+ATURAN:
+- Bahasa Indonesia, nada hangat, membantu, dan memberdayakan — bukan menggurui.
+- Jawab singkat, maksimal 3-4 kalimat per respons, kecuali user minta penjelasan detail.
+- Gunakan informasi HANYA dari konteks di bawah. Jika tidak tahu, akui dan arahkan ke web.
+- Jangan mengarang data keuangan user. Kamu tidak punya akses ke data transaksi user.
+- Untuk masalah teknis (scan gagal, error), berikan langkah troubleshooting praktis.
+- Akhiri dengan ajakan positif yang singkat.
+
+KONTEKS APLIKASI FINEPRO:
+Finepro adalah aplikasi pencatat keuangan keluarga.
+Fitur utama:
+- Tambah transaksi pemasukan & pengeluaran
+- Scan struk belanja & bukti transfer lewat bot Telegram
+- Budget bulanan per kategori
+- Tagihan berulang (listrik, air, dll)
+- Target tabungan (uang, emas, perak)
+- Household — kelola keuangan bersama pasangan/keluarga
+- Dashboard & analisa keuangan
+- Multi-wallet (dompet, rekening, dll)
+- Laporan bulanan lewat email
+- Web: https://finepro.my.id
+
+Cara kerja bot Telegram:
+- Kirim foto struk → otomatis dicatat sebagai pengeluaran
+- Kirim foto bukti transfer → otomatis dicatat sebagai pemasukan
+- Ketik /start diikuti kode dari web → hubungkan akun
+- Ketik teks apapun → kamu (AI) yang akan menjawab
+
+Masalah umum & solusinya:
+- "Scan gagal / nominal tidak terbaca": foto kurang jelas. Coba pencahayaan lebih terang, pastikan total terlihat.
+- "Kuota scan habis": upgrade paket di web, atau catat manual.
+- "Belum punya household": buat household baru atau minta undangan dari pasangan/keluarga.
+- "Akun belum terhubung": buka web finepro.my.id → Akun → Hubungkan Telegram.
+- "Ganti budget": buka web → menu Budget → edit.
+- "Cara hapus transaksi": buka web → menu Transaksi → klik transaksi → hapus.`;
+
+router.post('/chat', telegramServiceMiddleware, async (req, res) => {
+  try {
+    const { telegram_id, text, telegram_username } = req.body;
+    if (!telegram_id || !text) {
+      return res.status(400).json({ error: 'telegram_id dan text wajib diisi' });
+    }
+
+    // Cari user berdasarkan telegram_id
+    const userResult = await pool.query(
+      'SELECT id, name, email FROM users WHERE telegram_id = $1',
+      [telegram_id]
+    );
+    const user = userResult.rows[0];
+
+    if (!user) {
+      // User belum terhubung — kasih panduan
+      return res.json({
+        reply: `Halo! 👋 Akun Telegram kamu belum terhubung ke Finepro.\n\nUntuk menghubungkan:\n1. Buka https://finepro.my.id\n2. Login ke akun kamu\n3. Buka menu Akun\n4. Klik "Hubungkan Telegram" dan ikuti langkahnya\n\nSetelah terhubung, kirim foto struk atau bukti transfer untuk otomatis dicatat 📸`,
+        linked: false,
+      });
+    }
+
+    // Cek AI config
+    const aiConfig = await getSetting('ai');
+    if (!isAiConfigured(aiConfig)) {
+      // AI belum dikonfigurasi — fallback ke pesan bantuan statis
+      return res.json({
+        reply: `Hai ${user.name || user.email}! Saat ini asisten AI belum dikonfigurasi.\n\nYang bisa kamu lakukan:\n📸 Kirim foto struk/bukti transfer untuk otomatis dicatat\n📊 Buka https://finepro.my.id untuk kelola keuangan lengkap\n\nAda pertanyaan lain?`,
+        linked: true,
+        ai_available: false,
+      });
+    }
+
+    // Bangun riwayat chat singkat dari telegram_receipts untuk beri konteks
+    const recentResult = await pool.query(
+      `SELECT doc_type, to_char(created_at, 'YYYY-MM-DD HH24:MI') as scan_time, status
+       FROM telegram_receipts
+       WHERE telegram_id = $1
+       ORDER BY created_at DESC LIMIT 3`,
+      [telegram_id]
+    );
+    const recentScans = recentResult.rows;
+
+    let scanContext = '';
+    if (recentScans.length > 0) {
+      const successCount = recentScans.filter(s => s.status === 'success').length;
+      const failCount = recentScans.filter(s => s.status === 'failed').length;
+      scanContext = `\n\nRiwayat scan terakhir user: ${recentScans.length} scan (${successCount} berhasil, ${failCount} gagal).`;
+      if (failCount > 0) {
+        const lastFail = recentScans.find(s => s.status === 'failed');
+        scanContext += ` Scan terakhir gagal pada ${lastFail?.scan_time}.`;
+      }
+    }
+
+    const userName = user.name || user.email?.split('@')[0] || 'Pengguna';
+
+    const aiResponse = await generateChatText({
+      config: aiConfig,
+      maxTokens: 400,
+      temperature: 0.7,
+      system: CHAT_SYSTEM_PROMPT,
+      messages: [{
+        role: 'user',
+        content: `User: ${userName}${scanContext}\n\nPertanyaan user: ${text}`,
+      }],
+    });
+
+    const reply = aiResponse?.trim() ||
+      `Hai ${userName}! Maaf, aku belum bisa memahami pertanyaanmu. Coba tanyakan dengan kata kunci lain, atau buka https://finepro.my.id untuk bantuan lengkap.`;
+
+    res.json({
+      reply,
+      linked: true,
+      ai_available: true,
+    });
+  } catch (err) {
+    console.error('Telegram chat error:', err);
+    // Fallback graceful — jangan return 500 ke n8n
+    res.json({
+      reply: 'Ada kendala teknis nih. Coba lagi sebentar ya, atau buka https://finepro.my.id untuk bantuan.',
+      linked: false,
+      ai_available: false,
+    });
+  }
+});
 
 export default router;
