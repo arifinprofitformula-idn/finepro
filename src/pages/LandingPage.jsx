@@ -887,6 +887,7 @@ function Footer({ onLogin }) {
         <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-semibold text-neutral-500" aria-label="Navigasi footer">
           <a href="#fitur" className="hover:text-violet">Fitur</a>
           <a href="#faq" className="hover:text-violet">FAQ</a>
+          <a href="/privacy" className="hover:text-violet">Kebijakan Privasi</a>
           <a href="mailto:hello@finepro.my.id" className="hover:text-violet">Kontak</a>
           <button type="button" onClick={onLogin} className="hover:text-violet">Masuk</button>
         </nav>

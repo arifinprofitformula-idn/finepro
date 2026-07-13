@@ -14,6 +14,7 @@ import { addTransaction } from "./api/transactions.js";
 import { planLabel } from "./api/subscriptions.js";
 import AuthPage from "./pages/AuthPage.jsx";
 import LandingPage from "./pages/LandingPage.jsx";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import HistoryPage from "./pages/HistoryPage.jsx";
@@ -65,6 +66,7 @@ export default function App() {
   });
   const dashboard = useDashboard(household?.id, selectedMonthKey);
   const paymentStatus = usePaymentStatus();
+  const isPrivacyPath = ["/privacy", "/kebijakan-privasi"].includes(window.location.pathname);
 
   function setSelectedMonthKey(next) {
     setSelectedMonthKeyState(next);
@@ -94,6 +96,9 @@ export default function App() {
   }, []);
 
   if (initializing) return <SplashScreen />;
+  if (isPrivacyPath) {
+    return <PrivacyPolicyPage />;
+  }
   if (!user) {
     if (!showAuth) {
       return (

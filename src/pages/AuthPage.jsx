@@ -523,6 +523,15 @@ export default function AuthPage({ onBack, initialMode } = {}) {
                 Akun baru otomatis mendapat masa coba 14 hari gratis.
               </p>
             )}
+            {mode === "signup" && (
+              <p className="mt-4 text-center text-[11px] font-medium leading-relaxed text-neutral-500">
+                Dengan mendaftar, kamu menyetujui{" "}
+                <a href="/privacy" className="font-bold text-violet hover:underline">
+                  Kebijakan Privasi Fine Pro
+                </a>
+                .
+              </p>
+            )}
           </div>
         </div>
       </div>
