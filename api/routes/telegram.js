@@ -369,50 +369,28 @@ async function processReceipt(req, res) {
 // /start (link) dan bukan foto. Endpoint ini membalas secara kontekstual
 // menggunakan AI untuk user yang sudah terhubung, atau mengirim panduan
 // untuk user yang belum terhubung.
-const CHAT_SYSTEM_PROMPT = `Kamu adalah asisten AI untuk Finepro, aplikasi keuangan keluarga Indonesia. Kamu sedang mengobrol santai dengan pengguna lewat Telegram.
+const CHAT_SYSTEM_PROMPT = `Kamu adalah asisten AI untuk Finepro, aplikasi keuangan keluarga Indonesia. Kamu mengobrol santai dengan pengguna lewat Telegram DAN bisa mengoreksi transaksi hasil scan.
 
-GAYA PENULISAN WAJIB:
-- Panggil pengguna dengan "Kak <nama>" di awal respons (nama sudah disediakan di konteks user).
-- PAKAI HTML, BUKAN MARKDOWN. Bold pakai <b>teks</b>, italic pakai <i>teks</i>. JANGAN PERNAH pakai ** atau * atau _ karena Telegram bot ini pakai parse_mode HTML. Nama fitur dan kata kunci wajib dibold.
-- EMOSI WAJIB PAKAI EMOJI yang relevan — ekspresikan suasana hati: 😊🤗 (ramah/semangat), 💡 (tips/solusi), 📸 (scan/foto), 📊 (data/keuangan), 🎯 (target/goal), ✨ (highlight), 🏠 (household), 🛡️ (proteksi), ⚠️ (masalah serius), 🙏 (maaf/maklum), 💪 (dorongan), 🚀 (semangat maju).
-- JANGAN pelit emoji — setiap 1-2 kalimat sisipkan minimal 1 emoji yang relate.
-- PECAH jadi paragraf pendek yang proporsional dengan isi: untuk langkah-langkah boleh 1 kalimat per baris, untuk penjelasan boleh 2-3 kalimat. JANGAN paksakan semua section persis 2 kalimat — sesuaikan dengan konteks dan kebutuhan.
-- JANGAN balas dalam satu paragraf panjang. Buat ritme percakapan yang enak dibaca.
-- Nada hangat, ceria, dan memberdayakan — seperti teman ngobrol, BUKAN customer service kaku.
-- Akhiri selalu dengan 1 kalimat semangat atau ajakan positif pakai emoji.
+FORMAT WAJIB — selalu respons sebagai JSON 1 baris:
+{"action":"chat","reply":"<balasan HTML>"}
 
-ATURAN LAIN:
-- Gunakan informasi HANYA dari konteks di bawah. Jika tidak tahu, akui dengan rendah hati dan arahkan ke web.
-- Jangan mengarang data keuangan user. Kamu tidak punya akses ke data transaksi user.
-- Untuk masalah teknis, berikan langkah troubleshooting praktis langkah demi langkah.
+JIKA pengguna minta KOREKSI transaksi (nominal salah, kategori salah, tanggal, tipe, catatan) dan ada "Transaksi terakhir" di konteks, gunakan:
+{"action":"edit","transaction_id":"<id>","changes":{...},"reply":"<konfirmasi HTML>"}
+- changes hanya berisi field yang dikoreksi. Valid key: amount (angka), category (string), date (YYYY-MM-DD), type (income/expense), note (string).
+- JANGAN mengarang transaction_id — pakai yang ada di konteks. Kalau tidak ada transaksi terakhir, arahkan ke web.
+- Contoh: user bilang "nominalnya 50rb" → {"action":"edit","transaction_id":"abc-123","changes":{"amount":50000},"reply":"Siap Kak! Nominal sudah dikoreksi jadi <b>Rp50.000</b> ya ✅"}
+
+GAYA PENULISAN (untuk field reply):
+- Panggil "Kak <nama>". HTML: <b>bold</b>, <i>italic</i>. JANGAN pakai ** atau *.
+- Emoji wajib: 😊🤗💡📸📊🎯✨🏠🛡️⚠️🙏💪🚀✅✏️ — tiap 1-2 kalimat.
+- Paragraf pendek proporsional, nada hangat seperti teman ngobrol, akhiri semangat.
 
 KONTEKS APLIKASI FINEPRO:
-Finepro adalah aplikasi pencatat keuangan keluarga.
-Fitur utama:
-- Tambah transaksi pemasukan & pengeluaran
-- Scan struk belanja & bukti transfer lewat bot Telegram
-- Budget bulanan per kategori
-- Tagihan berulang (listrik, air, dll)
-- Target tabungan (uang, emas, perak)
-- Household — kelola keuangan bersama pasangan/keluarga
-- Dashboard & analisa keuangan
-- Multi-wallet (dompet, rekening, dll)
-- Laporan bulanan lewat email
-- Web: https://finepro.my.id
+Finepro — aplikasi keuangan keluarga. Fitur: tambah transaksi, scan struk lewat bot, budget, tagihan, target tabungan (emas/perak), household, dashboard, multi-wallet, laporan bulanan. Web: https://finepro.my.id
 
-Cara kerja bot Telegram:
-- Kirim foto struk → otomatis dicatat sebagai pengeluaran
-- Kirim foto bukti transfer → otomatis dicatat sebagai pemasukan
-- Ketik /start diikuti kode dari web → hubungkan akun
-- Ketik teks apapun → kamu (AI) yang akan menjawab
+Cara kerja bot: foto struk → pengeluaran, foto transfer → pemasukan, /start kode → hubungkan akun, teks → kamu jawab.
 
-Masalah umum & solusinya:
-- "Scan gagal / nominal tidak terbaca": foto kurang jelas. Coba pencahayaan lebih terang, pastikan total terlihat.
-- "Kuota scan habis": upgrade paket di web, atau catat manual.
-- "Belum punya household": buat household baru atau minta undangan dari pasangan/keluarga.
-- "Akun belum terhubung": buka web finepro.my.id → Akun → Hubungkan Telegram.
-- "Ganti budget": buka web → menu Budget → edit.
-- "Cara hapus transaksi": buka web → menu Transaksi → klik transaksi → hapus.`;
+Masalah umum: scan gagal → pencahayaan lebih terang. Kuota habis → upgrade/web. Belum ada household → buat di web.`;
 
 router.post('/chat', telegramServiceMiddleware, async (req, res) => {
   try {
@@ -447,25 +425,41 @@ router.post('/chat', telegramServiceMiddleware, async (req, res) => {
       });
     }
 
-    // Bangun riwayat chat singkat dari telegram_receipts untuk beri konteks
-    const recentResult = await pool.query(
-      `SELECT doc_type, to_char(created_at, 'YYYY-MM-DD HH24:MI') as scan_time, status
-       FROM telegram_receipts
-       WHERE telegram_id = $1
-       ORDER BY created_at DESC LIMIT 3`,
-      [telegram_id]
-    );
+    // Bangun riwayat scan + transaksi terakhir untuk konteks edit
+    const [recentResult, lastTxResult] = await Promise.all([
+      pool.query(
+        `SELECT doc_type, to_char(created_at, 'YYYY-MM-DD HH24:MI') as scan_time, status
+         FROM telegram_receipts
+         WHERE telegram_id = $1
+         ORDER BY created_at DESC LIMIT 3`,
+        [telegram_id]
+      ),
+      pool.query(
+        `SELECT t.id, t.amount, t.category, t.type, to_char(t.date, 'YYYY-MM-DD') as date, t.note
+         FROM transactions t
+         JOIN telegram_receipts tr ON tr.transaction_id = t.id
+         WHERE tr.telegram_id = $1 AND tr.status = 'success'
+         ORDER BY t.created_at DESC LIMIT 1`,
+        [telegram_id]
+      ),
+    ]);
     const recentScans = recentResult.rows;
 
     let scanContext = '';
     if (recentScans.length > 0) {
       const successCount = recentScans.filter(s => s.status === 'success').length;
       const failCount = recentScans.filter(s => s.status === 'failed').length;
-      scanContext = `\n\nRiwayat scan terakhir user: ${recentScans.length} scan (${successCount} berhasil, ${failCount} gagal).`;
+      scanContext = `\n\nRiwayat scan: ${recentScans.length} scan (${successCount} berhasil, ${failCount} gagal).`;
       if (failCount > 0) {
         const lastFail = recentScans.find(s => s.status === 'failed');
         scanContext += ` Scan terakhir gagal pada ${lastFail?.scan_time}.`;
       }
+    }
+
+    const lastTx = lastTxResult.rows[0];
+    if (lastTx) {
+      const amountStr = new Intl.NumberFormat('id-ID').format(Number(lastTx.amount));
+      scanContext += `\n\nTransaksi terakhir: ID=${lastTx.id}, ${lastTx.type === 'income' ? 'Pemasukan' : 'Pengeluaran'} Rp${amountStr}, ${lastTx.category}, ${lastTx.date}${lastTx.note ? ', catatan: ' + lastTx.note : ''}. Gunakan ID ini jika user minta koreksi.`;
     }
 
     const userName = user.name || user.email?.split('@')[0] || 'Pengguna';
@@ -481,7 +475,7 @@ router.post('/chat', telegramServiceMiddleware, async (req, res) => {
       }],
     });
 
-    // Post-process: konversi Markdown ke HTML (AI sering abaikan instruksi HTML)
+    // Post-process: parse JSON action, konversi Markdown → HTML
     const toHtml = (raw) => {
       let s = raw || '';
       s = s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
@@ -491,13 +485,89 @@ router.post('/chat', telegramServiceMiddleware, async (req, res) => {
       return s;
     };
 
-    const reply = toHtml(aiResponse?.trim()) ||
-      `Hai ${userName}! Maaf, aku belum bisa memahami pertanyaanmu. Coba tanyakan dengan kata kunci lain, atau buka https://finepro.my.id untuk bantuan lengkap.`;
+    const raw = aiResponse?.trim() || '';
+    let reply;
+    let action = null;
+
+    // Coba parse baris pertama sebagai JSON action
+    const firstLine = raw.split('\n')[0].trim();
+    try {
+      const parsed = JSON.parse(firstLine);
+      if (parsed.action && parsed.reply) {
+        action = parsed;
+        reply = toHtml(parsed.reply);
+      }
+    } catch {
+      // Bukan JSON — fallback ke plain text
+    }
+
+    // Jika bukan JSON action, perlakukan seluruh respons sebagai chat
+    if (!action) {
+      reply = toHtml(raw) || `Hai ${userName}! Maaf, aku belum bisa memahami pertanyaanmu. Coba tanyakan dengan kata kunci lain, atau buka https://finepro.my.id untuk bantuan lengkap.`;
+    }
+
+    // Eksekusi action edit
+    let edited = false;
+    if (action?.action === 'edit' && action.transaction_id && action.changes) {
+      const txId = action.transaction_id;
+      const changes = action.changes;
+
+      // Validasi: transaksi milik user ini?
+      const ownerCheck = await pool.query(
+        `SELECT t.id FROM transactions t
+         JOIN telegram_receipts tr ON tr.transaction_id = t.id
+         WHERE t.id = $1 AND tr.telegram_id = $2`,
+        [txId, telegram_id]
+      );
+
+      if (ownerCheck.rows.length > 0) {
+        const setClauses = [];
+        const values = [];
+        let idx = 1;
+
+        if (changes.amount !== undefined) {
+          const amt = Number(changes.amount);
+          if (amt > 0) {
+            setClauses.push(`amount = $${idx++}`);
+            values.push(amt);
+          }
+        }
+        if (changes.category !== undefined && String(changes.category).trim()) {
+          setClauses.push(`category = $${idx++}`);
+          values.push(String(changes.category).trim());
+        }
+        if (changes.date !== undefined) {
+          const d = new Date(changes.date);
+          if (!isNaN(d.getTime())) {
+            setClauses.push(`date = $${idx++}`);
+            values.push(changes.date);
+          }
+        }
+        if (changes.type !== undefined && ['income', 'expense'].includes(changes.type)) {
+          setClauses.push(`type = $${idx++}`);
+          values.push(changes.type);
+        }
+        if (changes.note !== undefined) {
+          setClauses.push(`note = $${idx++}`);
+          values.push(String(changes.note));
+        }
+
+        if (setClauses.length > 0) {
+          values.push(txId);
+          await pool.query(
+            `UPDATE transactions SET ${setClauses.join(', ')} WHERE id = $${idx}`,
+            values
+          );
+          edited = true;
+        }
+      }
+    }
 
     res.json({
-      reply,
+      reply: reply || 'Ada kendala nih. Coba lagi ya 🙏',
       linked: true,
       ai_available: true,
+      ...(edited ? { edited: true } : {}),
     });
   } catch (err) {
     console.error('Telegram chat error:', err);
