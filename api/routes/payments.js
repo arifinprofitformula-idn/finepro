@@ -31,12 +31,26 @@ async function getUserHouseholdId(userId) {
 
 // Rumus signature Midtrans: SHA512(order_id + status_code + gross_amount + ServerKey)
 // https://docs.midtrans.com/docs/https-notification-webhooks
-async function getMidtransSnap() {
+async function getMidtransConfig() {
   const config = await getSetting('midtrans');
   if (!config.enabled || !config.server_key || !config.client_key) {
     throw new Error('Midtrans belum dikonfigurasi');
   }
+  return config;
+}
+
+async function getMidtransSnap() {
+  const config = await getMidtransConfig();
   return new midtransClient.Snap({
+    isProduction: config.is_production === true,
+    serverKey: config.server_key,
+    clientKey: config.client_key,
+  });
+}
+
+async function getMidtransCoreApi() {
+  const config = await getMidtransConfig();
+  return new midtransClient.CoreApi({
     isProduction: config.is_production === true,
     serverKey: config.server_key,
     clientKey: config.client_key,
@@ -55,6 +69,81 @@ async function verifyMidtransSignature(body) {
     return crypto.timingSafeEqual(Buffer.from(signature_key), Buffer.from(expected));
   } catch {
     return false;
+  }
+}
+
+function mapMidtransStatus(transactionStatus, fraudStatus) {
+  const isPaid = transactionStatus === 'settlement' ||
+    (transactionStatus === 'capture' && fraudStatus === 'accept');
+  const isFailed = ['deny', 'cancel', 'expire', 'failure'].includes(transactionStatus);
+
+  if (isPaid) return 'paid';
+  if (isFailed) return 'failed';
+  return 'pending';
+}
+
+async function applyPaymentStatus(payment, nextStatus) {
+  if (!payment || payment.status === 'paid' || nextStatus === 'pending') {
+    return payment?.status || 'pending';
+  }
+
+  if (nextStatus === 'paid') {
+    const planConfig = PLANS[payment.plan];
+    if (!planConfig) throw new Error(`Plan pembayaran tidak valid: ${payment.plan}`);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE payments SET status = 'paid', paid_at = COALESCE(paid_at, now()) WHERE order_id = $1`,
+        [payment.order_id]
+      );
+      // Kalau masih ada sisa masa aktif, perpanjang dari situ; kalau tidak, mulai dari sekarang.
+      await client.query(
+        `UPDATE subscriptions
+         SET plan = $1,
+             status = 'active',
+             current_period_end = GREATEST(COALESCE(current_period_end, CURRENT_DATE), CURRENT_DATE) + ($2 || ' months')::interval,
+             updated_at = now()
+         WHERE household_id = $3`,
+        [payment.plan, planConfig.months, payment.household_id]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    return 'paid';
+  }
+
+  if (nextStatus === 'failed') {
+    await pool.query(`UPDATE payments SET status = 'failed' WHERE order_id = $1`, [payment.order_id]);
+    return 'failed';
+  }
+
+  return payment.status;
+}
+
+async function syncPaymentFromMidtrans(payment) {
+  if (!payment || payment.status !== 'pending') return payment;
+
+  try {
+    const coreApi = await getMidtransCoreApi();
+    const status = await coreApi.transaction.status(payment.order_id);
+    const nextStatus = mapMidtransStatus(status.transaction_status, status.fraud_status);
+    const appliedStatus = await applyPaymentStatus(payment, nextStatus);
+    return {
+      ...payment,
+      status: appliedStatus,
+      paid_at: appliedStatus === 'paid' ? (payment.paid_at || new Date().toISOString()) : payment.paid_at,
+    };
+  } catch (err) {
+    // Status API bisa belum mengenali order beberapa detik pertama. Polling frontend
+    // tetap berjalan, dan webhook masih menjadi sumber kebenaran utama.
+    console.warn(`[payments status] Gagal sinkron ke Midtrans untuk ${payment.order_id}:`, err.message);
+    return payment;
   }
 }
 
@@ -100,7 +189,7 @@ router.post('/create', authMiddleware, async (req, res) => {
         name: `Langganan Keuangan Keluarga — ${planConfig.label}`,
       }],
       callbacks: process.env.APP_BASE_URL ? {
-        finish: `${process.env.APP_BASE_URL}/?order_id=${orderId}`,
+        finish: `${process.env.APP_BASE_URL}/payment/finish?order_id=${orderId}`,
       } : undefined,
     });
 
@@ -120,13 +209,15 @@ router.get('/status/:orderId', authMiddleware, async (req, res) => {
   try {
     const householdId = await getUserHouseholdId(req.user.userId);
     const result = await pool.query(
-      'SELECT order_id, plan, amount, status, created_at, paid_at FROM payments WHERE order_id = $1 AND household_id = $2',
+      'SELECT household_id, order_id, plan, amount, status, created_at, paid_at FROM payments WHERE order_id = $1 AND household_id = $2',
       [req.params.orderId, householdId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Transaksi tidak ditemukan' });
     }
-    res.json({ payment: result.rows[0] });
+    const payment = await syncPaymentFromMidtrans(result.rows[0]);
+    delete payment.household_id;
+    res.json({ payment });
   } catch (err) {
     res.status(500).json({ error: 'Gagal mengambil status pembayaran' });
   }
@@ -159,9 +250,17 @@ router.get('/methods', authMiddleware, async (req, res) => {
       getSetting('midtrans'),
       getSetting('manual_payment'),
     ]);
+    const midtransEnabled = Boolean(midtrans.enabled && midtrans.server_key && midtrans.client_key);
     res.json({
       methods: {
-        midtrans: { enabled: Boolean(midtrans.enabled && midtrans.server_key && midtrans.client_key) },
+        midtrans: {
+          enabled: midtransEnabled,
+          clientKey: midtransEnabled ? midtrans.client_key : '',
+          isProduction: midtrans.is_production === true,
+          snapUrl: midtrans.is_production === true
+            ? 'https://app.midtrans.com/snap/snap.js'
+            : 'https://app.sandbox.midtrans.com/snap/snap.js',
+        },
         manual: {
           enabled: Boolean(manual.enabled),
           bank_name: manual.bank_name || '',
@@ -176,13 +275,10 @@ router.get('/methods', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/payments/webhook — dipanggil server-to-server oleh Midtrans, TANPA authMiddleware
-// (Midtrans tidak mengirim Bearer token kita). Signature WAJIB diverifikasi
-// sebelum payload dipercaya — jangan proses apa pun kalau gagal.
-router.post('/webhook', async (req, res) => {
+async function handleMidtransNotification(req, res) {
   try {
     if (!(await verifyMidtransSignature(req.body))) {
-      console.warn('[payments webhook] Signature tidak valid, payload ditolak.');
+      console.warn('[payments notification] Signature tidak valid, payload ditolak.');
       return res.status(403).json({ error: 'Invalid signature' });
     }
 
@@ -200,48 +296,39 @@ router.post('/webhook', async (req, res) => {
       return res.json({ received: true, alreadyProcessed: true });
     }
 
-    const isPaid = transaction_status === 'settlement' ||
-      (transaction_status === 'capture' && fraud_status === 'accept');
-    const isFailed = ['deny', 'cancel', 'expire', 'failure'].includes(transaction_status);
+    const nextStatus = mapMidtransStatus(transaction_status, fraud_status);
+    const appliedStatus = await applyPaymentStatus(payment, nextStatus);
 
-    if (isPaid) {
-      const planConfig = PLANS[payment.plan];
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(
-          `UPDATE payments SET status = 'paid', paid_at = now() WHERE order_id = $1`,
-          [order_id]
-        );
-        // Kalau masih ada sisa masa aktif, perpanjang dari situ; kalau tidak, mulai dari sekarang.
-        await client.query(
-          `UPDATE subscriptions
-           SET plan = $1,
-               status = 'active',
-               current_period_end = GREATEST(COALESCE(current_period_end, CURRENT_DATE), CURRENT_DATE) + ($2 || ' months')::interval,
-               updated_at = now()
-           WHERE household_id = $3`,
-          [payment.plan, planConfig.months, payment.household_id]
-        );
-        await client.query('COMMIT');
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-      } finally {
-        client.release();
-      }
-      console.log(`[payments webhook] OK: ${order_id} -> paid, household ${payment.household_id}`);
-    } else if (isFailed) {
-      await pool.query(`UPDATE payments SET status = 'failed' WHERE order_id = $1`, [order_id]);
-      console.log(`[payments webhook] ${order_id} -> failed (${transaction_status})`);
+    if (appliedStatus === 'paid') {
+      console.log(`[payments notification] OK: ${order_id} -> paid, household ${payment.household_id}`);
+    } else if (appliedStatus === 'failed') {
+      console.log(`[payments notification] ${order_id} -> failed (${transaction_status})`);
     }
     // transaction_status 'pending' -> tidak diapa-apakan, tunggu notifikasi berikutnya
 
     res.json({ received: true });
   } catch (err) {
-    console.error('[payments webhook] Error:', err);
+    console.error('[payments notification] Error:', err);
     res.status(500).json({ error: 'Gagal memproses webhook' });
   }
+}
+
+// GET /api/payments/notification — health/info endpoint untuk dicek dari browser.
+// Midtrans tetap akan memakai POST ke URL yang sama.
+router.get('/notification', async (_req, res) => {
+  res.json({
+    ok: true,
+    endpoint: '/api/payments/notification',
+    method: 'POST',
+    purpose: 'Midtrans payment notification webhook',
+  });
 });
+
+// POST /api/payments/notification — dipanggil server-to-server oleh Midtrans,
+// TANPA authMiddleware. Signature WAJIB diverifikasi sebelum payload dipercaya.
+router.post('/notification', handleMidtransNotification);
+
+// Alias lama agar konfigurasi existing tetap jalan.
+router.post('/webhook', handleMidtransNotification);
 
 export default router;

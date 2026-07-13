@@ -115,11 +115,15 @@ function envFallback(key) {
     };
   }
   if (key === 'midtrans') {
+    const serverKey = process.env.MIDTRANS_SERVER_KEY || '';
+    const clientKey = process.env.MIDTRANS_CLIENT_KEY || '';
+    const hasServerKey = Boolean(serverKey && serverKey !== 'isi-server-key-midtrans');
+    const hasClientKey = Boolean(clientKey && clientKey !== 'isi-client-key-midtrans');
     return {
-      enabled: Boolean(process.env.MIDTRANS_SERVER_KEY && process.env.MIDTRANS_CLIENT_KEY),
+      enabled: hasServerKey && hasClientKey,
       is_production: process.env.MIDTRANS_IS_PRODUCTION === 'true',
-      server_key: process.env.MIDTRANS_SERVER_KEY || '',
-      client_key: process.env.MIDTRANS_CLIENT_KEY || '',
+      server_key: serverKey,
+      client_key: clientKey,
     };
   }
   if (key === 'ai') {

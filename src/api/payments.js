@@ -16,6 +16,11 @@ export async function createPayment(plan) {
   });
 }
 
+export async function getPaymentMethods() {
+  const data = await apiFetch('/payments/methods');
+  return data.methods || {};
+}
+
 export async function getPaymentStatus(orderId) {
   const data = await apiFetch(`/payments/status/${orderId}`);
   return data.payment;

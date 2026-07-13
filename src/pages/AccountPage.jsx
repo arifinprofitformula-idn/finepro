@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { HOUSEHOLD_TYPE_LABELS } from "../api/households.js";
 import { createInvite, acceptInvite } from "../api/invites.js";
-import { createPayment, getPaymentHistory, PAYMENT_STATUS_LABELS, PLANS } from "../api/payments.js";
+import { createPayment, getPaymentHistory, getPaymentMethods, PAYMENT_STATUS_LABELS, PLANS } from "../api/payments.js";
 import { uploadAvatar, updateProfile } from "../api/auth.js";
 import { planLabel } from "../api/subscriptions.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
@@ -13,6 +13,7 @@ import {
   Crown,
   Mail,
   Receipt,
+  ShieldCheck,
   User,
   UserPlus
 } from "lucide-react";
@@ -28,6 +29,34 @@ const TONE_CLASS = {
   mint: "bg-mint-light text-mint",
   coral: "bg-coral-light text-coral"
 };
+
+let snapScriptPromise = null;
+
+function loadSnapScript({ snapUrl, clientKey }) {
+  if (!snapUrl || !clientKey) {
+    return Promise.reject(new Error("Konfigurasi Midtrans belum lengkap."));
+  }
+
+  if (window.snap?.pay) return Promise.resolve(window.snap);
+
+  const existing = document.querySelector(`script[src="${snapUrl}"]`);
+  if (existing && snapScriptPromise) return snapScriptPromise;
+
+  snapScriptPromise = new Promise((resolve, reject) => {
+    const script = existing || document.createElement("script");
+    script.src = snapUrl;
+    script.setAttribute("data-client-key", clientKey);
+    script.async = true;
+    script.onload = () => {
+      if (window.snap?.pay) resolve(window.snap);
+      else reject(new Error("Midtrans Snap gagal dimuat."));
+    };
+    script.onerror = () => reject(new Error("Tidak dapat memuat Midtrans Snap."));
+    if (!existing) document.body.appendChild(script);
+  });
+
+  return snapScriptPromise;
+}
 
 function SectionHeader({ icon: Icon, tone, title }) {
   return (
@@ -69,6 +98,7 @@ export default function AccountPage({
   const [acceptingId, setAcceptingId] = useState(null);
   const [payingPlan, setPayingPlan] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState(null);
   const [pushPermission, setPushPermission] = useState("default");
   const [pushSubscribing, setPushSubscribing] = useState(false);
   const [pushMsg, setPushMsg] = useState("");
@@ -77,6 +107,7 @@ export default function AccountPage({
 
   useEffect(() => {
     getPaymentHistory().then(setPaymentHistory).catch(() => setPaymentHistory([]));
+    getPaymentMethods().then(setPaymentMethods).catch(() => setPaymentMethods({ midtrans: { enabled: false } }));
     getPushPermissionState().then(setPushPermission);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -165,8 +196,37 @@ export default function AccountPage({
   async function handleUpgrade(planId) {
     setPayingPlan(planId);
     try {
-      const { redirectUrl } = await createPayment(planId);
-      window.location.href = redirectUrl;
+      if (!paymentMethods?.midtrans?.enabled) {
+        throw new Error("Metode pembayaran Midtrans belum aktif. Hubungi admin Fine Pro.");
+      }
+
+      const { orderId, token, redirectUrl } = await createPayment(planId);
+      const snap = await loadSnapScript(paymentMethods.midtrans);
+
+      snap.pay(token, {
+        onSuccess: () => {
+          window.location.href = `/payment/finish?order_id=${encodeURIComponent(orderId)}`;
+        },
+        onPending: () => {
+          window.location.href = `/payment/finish?order_id=${encodeURIComponent(orderId)}`;
+        },
+        onError: () => {
+          alert("Pembayaran gagal diproses oleh Midtrans. Silakan coba lagi.");
+          setPayingPlan(null);
+        },
+        onClose: async () => {
+          setPayingPlan(null);
+          try {
+            setPaymentHistory(await getPaymentHistory());
+          } catch {
+            // Tidak kritis; riwayat akan dimuat ulang saat halaman dibuka kembali.
+          }
+        }
+      });
+
+      if (!window.snap?.pay && redirectUrl) {
+        window.location.href = redirectUrl;
+      }
     } catch (err) {
       alert("Gagal memulai pembayaran: " + err.message);
       setPayingPlan(null);
@@ -243,6 +303,18 @@ export default function AccountPage({
         <div className="gloss-panel mb-4 rounded-2xl p-4">
           <SectionHeader icon={Crown} tone="gold" title="Upgrade Paket" />
           <p className="mb-2 text-xs text-neutral-500">Pembayaran diproses via Midtrans, otomatis aktif setelah bayar.</p>
+          <div className={`mb-3 flex items-start gap-2 rounded-2xl p-3 text-xs font-semibold ${
+            paymentMethods?.midtrans?.enabled ? "bg-mint-light text-mint" : "bg-gold-light text-gold"
+          }`}>
+            <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" />
+            <span>
+              {paymentMethods === null
+                ? "Memeriksa konfigurasi Midtrans..."
+                : paymentMethods?.midtrans?.enabled
+                ? "Midtrans Snap aktif. Pilih paket untuk membuka metode pembayaran."
+                : "Midtrans belum aktif. Admin perlu mengisi Server Key dan Client Key di Admin Console."}
+            </span>
+          </div>
           <div className="flex flex-col gap-2">
             {PLANS.map((p) => (
               <div key={p.id} className="flex items-center justify-between rounded-2xl bg-white/70 p-3">
@@ -253,10 +325,10 @@ export default function AccountPage({
                 <button
                   type="button"
                   onClick={() => handleUpgrade(p.id)}
-                  disabled={payingPlan === p.id}
+                  disabled={payingPlan === p.id || !paymentMethods?.midtrans?.enabled}
                   className="flex h-10 items-center justify-center rounded-full bg-gold px-4 text-xs font-bold text-white disabled:opacity-60"
                 >
-                  Pilih
+                  {payingPlan === p.id ? "Membuka..." : "Pilih"}
                 </button>
               </div>
             ))}

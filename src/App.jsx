@@ -9,7 +9,6 @@ import { useHousehold } from "./hooks/useHousehold.js";
 import { useCategories } from "./hooks/useCategories.js";
 import { useInvites } from "./hooks/useInvites.js";
 import { useDashboard } from "./hooks/useDashboard.js";
-import { usePaymentStatus } from "./hooks/usePaymentStatus.js";
 import { addTransaction } from "./api/transactions.js";
 import { planLabel } from "./api/subscriptions.js";
 import AuthPage from "./pages/AuthPage.jsx";
@@ -20,7 +19,8 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import HistoryPage from "./pages/HistoryPage.jsx";
 import AccountPage from "./pages/AccountPage.jsx";
 import SettingPage from "./pages/SettingPage.jsx";
-import PaymentStatusPage from "./pages/PaymentStatusPage.jsx";
+import PaymentFinishPage from "./pages/PaymentFinishPage.jsx";
+import PaymentNotificationPage from "./pages/PaymentNotificationPage.jsx";
 import AppHeader from "./components/AppHeader.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import InstallPrompt from "./components/InstallPrompt.jsx";
@@ -65,8 +65,9 @@ export default function App() {
     return /^\d{4}-\d{2}$/.test(saved || "") ? saved : currentMonthKey();
   });
   const dashboard = useDashboard(household?.id, selectedMonthKey);
-  const paymentStatus = usePaymentStatus();
   const isPrivacyPath = ["/privacy", "/kebijakan-privasi"].includes(window.location.pathname);
+  const isPaymentFinishPath = window.location.pathname === "/payment/finish";
+  const isPaymentNotificationPath = window.location.pathname === "/payment/notification";
 
   function setSelectedMonthKey(next) {
     setSelectedMonthKeyState(next);
@@ -78,13 +79,11 @@ export default function App() {
     if (!household) return;
     const params = new URLSearchParams(window.location.search);
     const orderId = params.get("order_id");
-    if (!orderId) return;
+    if (!orderId || isPaymentFinishPath) return;
 
-    window.history.replaceState({}, "", window.location.pathname);
-    setPage("payment-status");
-    paymentStatus.poll(orderId, refreshHousehold);
+    window.location.replace(`/payment/finish?order_id=${encodeURIComponent(orderId)}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [household?.id]);
+  }, [household?.id, isPaymentFinishPath]);
 
   // Deteksi reset_token dari URL — langsung buka AuthPage mode reset
   useEffect(() => {
@@ -98,6 +97,9 @@ export default function App() {
   if (initializing) return <SplashScreen />;
   if (isPrivacyPath) {
     return <PrivacyPolicyPage />;
+  }
+  if (isPaymentNotificationPath) {
+    return <PaymentNotificationPage />;
   }
   if (!user) {
     if (!showAuth) {
@@ -114,6 +116,22 @@ export default function App() {
 
   if (!household) {
     return <OnboardingPage onCreateHousehold={createHousehold} onInviteAccepted={refreshHousehold} />;
+  }
+
+  if (isPaymentFinishPath) {
+    return (
+      <PaymentFinishPage
+        onPaid={refreshHousehold}
+        onGoDashboard={() => {
+          window.history.replaceState({}, "", "/");
+          setPage("dashboard");
+        }}
+        onGoAccount={() => {
+          window.history.replaceState({}, "", "/");
+          setPage("account");
+        }}
+      />
+    );
   }
 
   const subscriptionExpired = household.subscription_status === "expired";
@@ -163,14 +181,6 @@ export default function App() {
           categoriesIncome={categoriesIncome}
           onDataChanged={dashboard.refresh}
           selectedMonthKey={selectedMonthKey}
-        />
-      )}
-
-      {page === "payment-status" && (
-        <PaymentStatusPage
-          polling={paymentStatus.polling}
-          statusMsg={paymentStatus.statusMsg}
-          onDone={() => setPage("account")}
         />
       )}
 
