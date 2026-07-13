@@ -8,18 +8,23 @@ import {
   ArrowRight,
   BarChart3,
   Bell,
+  BrainCircuit,
   CalendarClock,
+  Camera,
   Check,
   ChevronDown,
   Download,
   FileText,
   Gift,
   HandCoins,
+  HandHeart,
   HeartPulse,
   Home as HomeIcon,
   Layers,
   LineChart,
+  LogIn,
   Menu,
+  MessageCircle,
   Moon,
   Music2,
   PiggyBank,
@@ -31,6 +36,7 @@ import {
   Sparkles,
   Sun,
   Target,
+  Users,
   X
 } from "lucide-react";
 
@@ -126,6 +132,72 @@ const FEATURES = [
     tone: "mint",
     title: "Dark & Light Mode",
     desc: "Catat kapan saja, siang atau malam, dengan tampilan yang tetap nyaman di mata."
+  },
+  {
+    icon: LineChart,
+    tone: "mint",
+    title: "Grafik Arus Kas Lengkap",
+    desc: "Analisis harian, bulanan, dan per kategori dalam satu tampilan grafik — gampang lihat tren pemasukan dan pengeluaran dari waktu ke waktu."
+  },
+  {
+    icon: Bell,
+    tone: "coral",
+    title: "Reminder Budget Otomatis",
+    desc: "Notifikasi otomatis masuk ke HP saat pengeluaran kategori tertentu mulai mendekati atau melewati batas budget bulan ini."
+  },
+  {
+    icon: PiggyBank,
+    tone: "gold",
+    title: "Target Tabungan, Emas & Perak",
+    desc: "Tetapkan target menabung dalam Rupiah, emas, atau perak — lengkap harga pasar real-time dan estimasi nilai asetmu."
+  },
+  {
+    icon: BrainCircuit,
+    tone: "violet",
+    title: "Analisa Keuangan AI",
+    desc: "Minta analisa keuangan berbasis AI kapan saja, lengkap rekomendasi personal dan koneksi langsung ke target tabunganmu."
+  },
+  {
+    icon: Download,
+    tone: "mint",
+    title: "Export & Backup Data",
+    desc: "Unduh transaksi ke CSV atau PDF rapi, atau backup penuh datamu kapan saja untuk arsip pribadi."
+  }
+];
+
+const SMART_FEATURES = [
+  {
+    icon: Camera,
+    tone: "violet",
+    title: "Scan Struk Otomatis",
+    desc: "Foto struk belanja atau bukti transfer, AI langsung baca nominal dan kategori lalu isi form transaksi — tinggal cek dan simpan."
+  },
+  {
+    icon: MessageCircle,
+    tone: "mint",
+    title: "Integrasi Telegram",
+    desc: "Hubungkan akun Telegram, lalu kirim foto struk ke bot — transaksi tercatat otomatis tanpa perlu buka aplikasi."
+  }
+];
+
+const EXTRA_FEATURES = [
+  {
+    icon: CalendarClock,
+    tone: "gold",
+    title: "Tagihan & Pengingat Jatuh Tempo",
+    desc: "Catat tagihan rutin dan dapat pengingat begitu jatuh temponya tinggal 5 hari lagi, supaya tidak ada yang kelewat bayar."
+  },
+  {
+    icon: Users,
+    tone: "violet",
+    title: "Arisan",
+    desc: "Kelola grup arisan, peserta, riwayat setoran, sampai giliran menerima — semua tercatat rapi di satu tempat."
+  },
+  {
+    icon: HandHeart,
+    tone: "mint",
+    title: "Zakat & Sedekah",
+    desc: "Pencatatan zakat dan sedekah otomatis terpisah dari pengeluaran biasa, lengkap pelacakan konsistensi tiap bulan."
   }
 ];
 
@@ -146,12 +218,7 @@ const HOW_IT_WORKS = [
 ];
 
 const ROADMAP_ITEMS = [
-  { icon: FileText, title: "Laporan Bulanan", desc: "Ringkasan keuangan otomatis tiap akhir bulan." },
-  { icon: LineChart, title: "Grafik Arus Kas", desc: "Visualisasi tren pemasukan dan pengeluaran dari waktu ke waktu." },
-  { icon: Bell, title: "Reminder Budget", desc: "Pengingat otomatis saat budget kategori mulai hampir habis." },
-  { icon: Target, title: "Target Tabungan", desc: "Bantu menetapkan dan mengejar target nabung dengan lebih terarah." },
-  { icon: Sparkles, title: "Insight Pengeluaran AI", desc: "Analisa ringkas berbasis data transaksimu sendiri, dipicu manual kapan pun dibutuhkan." },
-  { icon: Download, title: "Export Laporan", desc: "Unduh catatan keuangan untuk kebutuhan pribadi atau diskusi keluarga." }
+  { icon: FileText, title: "Laporan Bulanan", desc: "Ringkasan keuangan otomatis dikirim ke email tiap akhir bulan." }
 ];
 
 const FAQ_ITEMS = [
@@ -608,6 +675,80 @@ function PreviewApp() {
   );
 }
 
+function SmartAutomation() {
+  return (
+    <section className="py-14 md:py-20">
+      <Container>
+        <div className="mx-auto max-w-xl text-center">
+          <SectionEyebrow>Otomatis, bukan manual</SectionEyebrow>
+          <h2 className="text-2xl font-bold text-navy md:text-3xl">Catat Transaksi Tanpa Ribet</h2>
+          <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500 md:text-base">
+            Tidak perlu ketik satu-satu — cukup foto, sisanya dibantu AI.
+          </p>
+        </div>
+
+        <div className="mt-10 grid gap-4 sm:grid-cols-2">
+          {SMART_FEATURES.map((f) => {
+            const Icon = f.icon;
+            return (
+              <div key={f.title} className="gloss-panel rounded-3xl p-6">
+                <div className={`flex h-11 w-11 items-center justify-center rounded-full ${TONE_BG[f.tone]}`}>
+                  <Icon size={20} />
+                </div>
+                <h3 className="mt-4 text-base font-bold text-navy">{f.title}</h3>
+                <p className="mt-1.5 text-sm font-medium leading-relaxed text-neutral-500">{f.desc}</p>
+              </div>
+            );
+          })}
+        </div>
+      </Container>
+    </section>
+  );
+}
+
+function ExtraFeatures() {
+  return (
+    <section className="py-14 md:py-20">
+      <Container>
+        <div className="mx-auto max-w-xl text-center">
+          <SectionEyebrow>Kebutuhan sehari-hari</SectionEyebrow>
+          <h2 className="text-2xl font-bold text-navy md:text-3xl">Fitur Tambahan untuk Hidup yang Lebih Rapi</h2>
+        </div>
+
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {EXTRA_FEATURES.map((f) => {
+            const Icon = f.icon;
+            return (
+              <div key={f.title} className="gloss-panel rounded-3xl p-5">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${TONE_BG[f.tone]}`}>
+                  <Icon size={18} />
+                </div>
+                <h3 className="mt-4 text-sm font-bold text-navy">{f.title}</h3>
+                <p className="mt-1.5 text-xs font-medium leading-relaxed text-neutral-500">{f.desc}</p>
+              </div>
+            );
+          })}
+        </div>
+      </Container>
+    </section>
+  );
+}
+
+function QuickFacts() {
+  return (
+    <section className="pb-2">
+      <Container className="flex flex-wrap items-center justify-center gap-3">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-3.5 py-2 text-xs font-bold text-navy">
+          <LogIn size={13} className="text-violet" /> Masuk cepat dengan Google
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-3.5 py-2 text-xs font-bold text-navy">
+          <Download size={13} className="text-mint" /> Bisa diinstall sebagai aplikasi (PWA)
+        </span>
+      </Container>
+    </section>
+  );
+}
+
 function Roadmap() {
   return (
     <section className="py-14 md:py-20">
@@ -778,6 +919,9 @@ export default function LandingPage({ onGetStarted, onLogin }) {
       <BudgetCategorySection />
       <HowItWorks />
       <PreviewApp />
+      <SmartAutomation />
+      <ExtraFeatures />
+      <QuickFacts />
       <Roadmap />
       <CtaSection onGetStarted={onGetStarted} />
       <Faq />
