@@ -16,7 +16,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { getSetting } from '../services/appSettings.js';
 import { isAiConfigured } from '../services/aiProvider.js';
 import { normalizeTransactionCategory } from '../services/categoryMatcher.js';
-import { extractText, tryRegexExtraction, parseReceiptText } from '../services/receiptExtraction.js';
+import { extractText, tryRegexExtraction, parseReceiptText, sanitizeDate } from '../services/receiptExtraction.js';
 import { assertQuotaAvailable, getQuotaStatus, recordAiUsage } from '../services/aiUsage.js';
 
 const router = Router();
@@ -135,7 +135,7 @@ router.post('/scan', (req, res) => {
       );
 
       res.json({
-        date: parsed.date || null,
+        date: sanitizeDate(parsed.date, rawText),
         amount: Number(parsed.amount) || 0,
         type,
         suggested_category: category,

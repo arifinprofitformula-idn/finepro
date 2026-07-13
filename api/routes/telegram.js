@@ -17,7 +17,7 @@ import { authMiddleware, telegramServiceMiddleware } from '../middleware/auth.js
 import { getSetting } from '../services/appSettings.js';
 import { isAiConfigured } from '../services/aiProvider.js';
 import { normalizeTransactionCategory } from '../services/categoryMatcher.js';
-import { extractText, tryRegexExtraction, parseReceiptText } from '../services/receiptExtraction.js';
+import { extractText, tryRegexExtraction, parseReceiptText, sanitizeDate } from '../services/receiptExtraction.js';
 import { checkBudgetThreshold } from '../services/transactionEffects.js';
 import { assertQuotaAvailable, recordAiUsage } from '../services/aiUsage.js';
 
@@ -279,7 +279,7 @@ async function processReceipt(req, res) {
       }
 
       const amount = Number(parsed.amount) || 0;
-      const date = parsed.date || new Date().toISOString().slice(0, 10);
+      const date = sanitizeDate(parsed.date, rawText);
       const type = parsed.type === 'income' ? 'income' : 'expense';
       const docType = parsed.document_type === 'transfer' ? 'transfer' : 'receipt';
       const category = await normalizeTransactionCategory(

@@ -66,6 +66,32 @@ function findDate(rawText) {
   return null;
 }
 
+/**
+ * Koreksi tahun pada tanggal hasil parsing AI/regex.
+ * Kalau tahun tidak sesuai tahun sekarang dan teks OCR tidak
+ * mengandung tahun tersebut secara eksplisit, ganti ke tahun sekarang.
+ */
+export function sanitizeDate(parsedDate, rawText) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!parsedDate) return today;
+
+  const match = parsedDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return today; // format aneh, fallback hari ini
+
+  const parsedYear = parseInt(match[1], 10);
+  const currentYear = new Date().getFullYear();
+
+  // Tahun cocok — aman
+  if (parsedYear === currentYear) return parsedDate;
+
+  // Cek apakah teks OCR secara eksplisit menyebut tahun yang terparsing
+  // (mis. struk lama dari tahun lalu memang ada tulisan "2025")
+  if (rawText && rawText.includes(String(parsedYear))) return parsedDate;
+
+  // Tahun tidak cocok dan tidak ada di teks OCR → koreksi ke tahun sekarang
+  return `${currentYear}-${match[2]}-${match[3]}`;
+}
+
 const TOTAL_LINE_RE = /(GRAND\s*TOTAL|TOTAL)\s*[:\-]?\s*(?:Rp\.?\s*)?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)\b/i;
 
 function findTotal(rawText) {
@@ -106,8 +132,12 @@ export function tryRegexExtraction(rawText) {
 }
 
 function receiptPrompt(rawText) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const today = now.toISOString().slice(0, 10);
   return 'Ini hasil OCR dari foto struk belanja ATAU bukti transfer bank/e-wallet ' +
-    '(mungkin ada noise/typo dari OCR):\n\n"""\n' +
+    `(mungkin ada noise/typo dari OCR). TAHUN SEKARANG ADALAH ${currentYear}, TANGGAL HARI INI ${today}.` +
+    '\n\n"""\n' +
     rawText +
     '\n"""\n\nEkstrak informasinya dan balas HANYA dengan JSON valid (tanpa markdown/teks lain) ' +
     'persis format ini: {"date":"YYYY-MM-DD","amount":<angka nominal tanpa titik/koma>,' +
@@ -115,7 +145,9 @@ function receiptPrompt(rawText) {
     '"note":"<nama toko/warung/pengirim kalau ada>",' +
     '"type":"<\\"expense\\" kalau struk belanja/pembayaran keluar, \\"income\\" kalau bukti transfer/dana masuk>",' +
     '"document_type":"<\\"receipt\\" untuk struk belanja, \\"transfer\\" untuk bukti transfer/mutasi masuk>"}. ' +
-    'Kalau tanggal tidak terbaca, pakai null. Kalau nominal tidak terbaca, pakai 0.';
+    'PENTING: jika di teks OCR hanya ada tanggal dan bulan TANPA tahun (mis. "15 Juli" atau "15/07"), ' +
+    `gunakan tahun ${currentYear}. Jangan pakai tahun lain kecuali teks OCR secara eksplisit menyebutkan tahun tersebut. ` +
+    'Kalau tanggal benar-benar tidak terbaca sama sekali, pakai null. Kalau nominal tidak terbaca, pakai 0.';
 }
 
 function fallbackConfig(providerName) {
