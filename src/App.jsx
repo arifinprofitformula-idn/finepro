@@ -18,6 +18,7 @@ import OnboardingPage from "./pages/OnboardingPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import HistoryPage from "./pages/HistoryPage.jsx";
 import AccountPage from "./pages/AccountPage.jsx";
+import SettingPage from "./pages/SettingPage.jsx";
 import PaymentStatusPage from "./pages/PaymentStatusPage.jsx";
 import AppHeader from "./components/AppHeader.jsx";
 import BottomNav from "./components/BottomNav.jsx";
@@ -133,7 +134,6 @@ export default function App() {
         pendingInviteCount={invites.length}
         onNavigateAccount={() => setPage("account")}
         onNavigateAdmin={() => { window.location.href = "/admin"; }}
-        onLogout={logout}
       />
 
       {page === "dashboard" && (
@@ -174,15 +174,23 @@ export default function App() {
           user={user}
           household={household}
           invites={invites}
+          onUserUpdated={updateUser}
+          onDataChanged={dashboard.refresh}
+          onInvitesChanged={refreshInvites}
+        />
+      )}
+
+      {page === "setting" && (
+        <SettingPage
+          user={user}
+          household={household}
           categoriesExpense={categoriesExpense}
           categoriesIncome={categoriesIncome}
           onCreateCategory={categories.createCategory}
           onRenameCategory={categories.renameCategory}
           onDeleteCategory={categories.deleteCategory}
           onUserUpdated={updateUser}
-          onDataChanged={dashboard.refresh}
           onHouseholdUpdated={setHousehold}
-          onInvitesChanged={refreshInvites}
           onLogout={logout}
         />
       )}

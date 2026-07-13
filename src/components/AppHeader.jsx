@@ -4,10 +4,10 @@
 // yang sudah ada di versi Alpine dan dipertahankan di sini supaya tidak
 // hilang diam-diam saat migrasi.
 
-import { Bell, LogOut, ShieldCheck } from "lucide-react";
+import { Bell, ShieldCheck } from "lucide-react";
 import { mediaUrl } from "../utils/media.js";
 
-export default function AppHeader({ user, planLabel, pendingInviteCount, onNavigateAccount, onNavigateAdmin, onLogout }) {
+export default function AppHeader({ user, planLabel, pendingInviteCount, onNavigateAccount, onNavigateAdmin }) {
   const name = user?.name || user?.email?.split("@")[0] || "";
   const firstName = name.split(" ")[0];
   const initial = (user?.name || user?.email || "?").charAt(0).toUpperCase();
@@ -42,14 +42,6 @@ export default function AppHeader({ user, planLabel, pendingInviteCount, onNavig
               <ShieldCheck size={17} strokeWidth={2.3} />
             </button>
           )}
-          <button
-            type="button"
-            onClick={onLogout}
-            className="gloss-button flex h-9 w-9 items-center justify-center rounded-full text-navy"
-            title="Keluar"
-          >
-            <LogOut size={17} strokeWidth={2.2} />
-          </button>
           <button
             type="button"
             onClick={onNavigateAccount}
