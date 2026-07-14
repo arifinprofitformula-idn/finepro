@@ -39,6 +39,7 @@ import {
   testApeEpiConnection
 } from "../api/admin.js";
 import { fmtRp } from "../utils/format.js";
+import { mediaUrl } from "../utils/media.js";
 
 const tabs = [
   { id: "overview", label: "Overview", icon: Activity },
@@ -76,10 +77,18 @@ const toneMap = {
 };
 
 const inputClass =
-  "h-11 w-full rounded-lg border border-transparent bg-[#eff4ff] px-3 text-sm font-semibold text-[#0b1c30] outline-none transition placeholder:text-[#777587] focus:border-[#3525cd] focus:bg-white focus:shadow-[0_0_0_4px_rgba(53,37,205,0.10)]";
+  "h-11 w-full rounded-lg border border-white/30 bg-white/35 px-3 text-sm font-semibold text-[#0b1c30] shadow-[inset_1px_1px_0_rgba(255,255,255,0.55),inset_-1px_-1px_0_rgba(53,37,205,0.06)] outline-none backdrop-blur-xl transition placeholder:text-[#464555]/70 focus:border-white/60 focus:bg-white/55 focus:shadow-[0_0_0_4px_rgba(53,37,205,0.12),inset_1px_1px_0_rgba(255,255,255,0.72)]";
 const areaClass =
-  "min-h-24 w-full rounded-lg border border-transparent bg-[#eff4ff] px-3 py-2 text-sm font-semibold text-[#0b1c30] outline-none transition placeholder:text-[#777587] focus:border-[#3525cd] focus:bg-white focus:shadow-[0_0_0_4px_rgba(53,37,205,0.10)]";
+  "min-h-24 w-full rounded-lg border border-white/30 bg-white/35 px-3 py-2 text-sm font-semibold text-[#0b1c30] shadow-[inset_1px_1px_0_rgba(255,255,255,0.55),inset_-1px_-1px_0_rgba(53,37,205,0.06)] outline-none backdrop-blur-xl transition placeholder:text-[#464555]/70 focus:border-white/60 focus:bg-white/55 focus:shadow-[0_0_0_4px_rgba(53,37,205,0.12),inset_1px_1px_0_rgba(255,255,255,0.72)]";
 const labelClass = "mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[#464555]";
+const glassPanel =
+  "relative overflow-hidden rounded-xl border border-white/30 bg-white/20 shadow-[0_24px_70px_rgba(27,36,84,0.18),inset_1px_1px_0_rgba(255,255,255,0.72),inset_-1px_-1px_0_rgba(53,37,205,0.08)] backdrop-blur-2xl";
+const glassCard =
+  "relative overflow-hidden rounded-xl border border-white/25 bg-white/18 shadow-[0_18px_55px_rgba(27,36,84,0.14),inset_1px_1px_0_rgba(255,255,255,0.62),inset_-1px_-1px_0_rgba(53,37,205,0.08)] backdrop-blur-xl";
+const glassSoft =
+  "rounded-lg border border-white/25 bg-white/28 shadow-[inset_1px_1px_0_rgba(255,255,255,0.58),0_10px_28px_rgba(27,36,84,0.08)] backdrop-blur-xl";
+const glassButton =
+  "border border-white/35 bg-white/30 shadow-[0_14px_32px_rgba(27,36,84,0.12),inset_1px_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl";
 
 function Toggle({ checked, onChange }) {
   return (
@@ -88,8 +97,8 @@ function Toggle({ checked, onChange }) {
       onClick={() => onChange(!checked)}
       className={`group relative flex h-9 w-[74px] flex-shrink-0 items-center rounded-full border px-1 outline-none transition-all duration-300 ease-out focus:shadow-[0_0_0_4px_rgba(111,85,242,0.14)] active:scale-[0.98] ${
         checked
-          ? "border-mint bg-mint shadow-[0_12px_24px_rgba(24,197,148,0.22)]"
-          : "border-neutral-border bg-white/90 shadow-[inset_0_1px_2px_rgba(15,31,61,0.08)] hover:border-violet/40"
+          ? "border-white/45 bg-[#006c49]/80 shadow-[0_14px_28px_rgba(0,108,73,0.24),inset_1px_1px_0_rgba(255,255,255,0.38)] backdrop-blur-xl"
+          : "border-white/35 bg-white/32 shadow-[inset_1px_1px_0_rgba(255,255,255,0.65),inset_-1px_-1px_0_rgba(27,36,84,0.08)] backdrop-blur-xl hover:border-white/55"
       }`}
       aria-pressed={checked}
       aria-label={checked ? "Status aktif" : "Status nonaktif"}
@@ -102,7 +111,7 @@ function Toggle({ checked, onChange }) {
         {checked ? "ON" : "OFF"}
       </span>
       <span
-        className={`absolute top-1 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-soft transition-all duration-300 ease-out ${
+        className={`absolute top-1 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 shadow-[0_8px_18px_rgba(27,36,84,0.20),inset_1px_1px_0_rgba(255,255,255,0.8)] backdrop-blur-xl transition-all duration-300 ease-out ${
           checked ? "translate-x-[39px]" : "translate-x-0"
         }`}
       >
@@ -114,7 +123,7 @@ function Toggle({ checked, onChange }) {
 
 function StatusBadge({ children, tone = "violet" }) {
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${toneMap[tone].badge}`}>
+    <span className={`inline-flex items-center rounded-full border border-white/25 px-2.5 py-1 text-[11px] font-bold shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl ${toneMap[tone].badge}`}>
       {children}
     </span>
   );
@@ -139,7 +148,8 @@ function SectionTitle({ icon: Icon, title, subtitle, tone = "violet", action }) 
 
 function StatCard({ label, value, icon: Icon, tone = "violet" }) {
   return (
-    <div className="group relative min-h-[150px] overflow-hidden rounded-xl border border-[#c7c4d8] bg-white p-5 shadow-[0_4px_20px_rgba(53,37,205,0.04)] transition hover:-translate-y-0.5 hover:border-[#3525cd] hover:shadow-[0_12px_34px_rgba(53,37,205,0.10)]">
+    <div className={`group min-h-[150px] p-5 transition hover:-translate-y-1 hover:border-white/55 hover:bg-white/28 hover:shadow-[0_28px_80px_rgba(27,36,84,0.22),inset_1px_1px_0_rgba(255,255,255,0.78)] ${glassCard}`}>
+      <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
       <div className={`absolute left-0 top-0 h-full w-1 ${toneMap[tone].line}`} />
       <div className="relative z-10 flex h-full flex-col justify-between">
         <div className="flex items-start justify-between gap-3">
@@ -170,7 +180,8 @@ function SecretHint({ configured }) {
 
 function IntegrationCard({ icon: Icon, title, description, tone = "violet", enabled, onToggle, children, footer }) {
   return (
-    <section className="rounded-xl border border-[#c7c4d8] bg-white p-5 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+    <section className={`p-5 ${glassCard}`}>
+      <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
       <SectionTitle
         icon={Icon}
         title={title}
@@ -197,14 +208,15 @@ function IntegrationTile({
   onConfigure
 }) {
   return (
-    <article className="group flex min-h-[286px] flex-col rounded-xl border border-[#c7c4d8] bg-white p-5 shadow-[0_4px_20px_rgba(53,37,205,0.04)] transition hover:-translate-y-0.5 hover:border-[#3525cd] hover:shadow-[0_4px_24px_rgba(53,37,205,0.08)]">
+    <article className={`group flex min-h-[286px] flex-col p-5 transition hover:-translate-y-1 hover:border-white/55 hover:bg-white/28 ${glassCard}`}>
+      <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl ${toneMap[tone].icon}`}>
           <Icon size={24} />
         </div>
         <div className="flex flex-col items-end gap-2">
           <Toggle checked={Boolean(enabled)} onChange={onToggle} />
-          <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${enabled ? toneMap.mint.badge : "bg-[#eff4ff] text-[#777587]"}`}>
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] ${enabled ? toneMap.mint.badge : "bg-white/35 text-[#464555]"}`}>
             {enabled ? "Connected" : "Inactive"}
           </span>
         </div>
@@ -215,12 +227,12 @@ function IntegrationTile({
         <p className="mt-2 h-12 overflow-hidden text-sm font-medium leading-6 text-[#464555]">{description}</p>
       </div>
 
-      <div className="mt-5 border-t border-[#c7c4d8] pt-4">
+      <div className="mt-5 border-t border-white/25 pt-4">
         <div className="mb-2 flex items-center justify-between text-xs font-bold">
           <span className="text-[#777587]">{detailLabel}</span>
           <span className="text-[#0b1c30]">{detailValue}</span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-[#eff4ff]">
+        <div className="h-2 overflow-hidden rounded-full bg-white/35 shadow-[inset_0_1px_2px_rgba(27,36,84,0.12)]">
           <div className={`h-full rounded-full ${toneMap[tone].line}`} style={{ width: `${Math.min(Math.max(progress, 8), 100)}%` }} />
         </div>
       </div>
@@ -228,7 +240,7 @@ function IntegrationTile({
       <button
         type="button"
         onClick={onConfigure}
-        className="mt-5 flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-[#eff4ff] px-4 text-sm font-extrabold text-[#3525cd] transition hover:bg-[#e2dfff]"
+        className={`mt-5 flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-extrabold text-[#3525cd] transition hover:bg-white/45 ${glassButton}`}
       >
         Configure
         <ChevronRight size={16} />
@@ -260,7 +272,8 @@ function TechnicalPanel({ midtrans, telegram, apeEpi }) {
   ];
 
   return (
-    <section className="rounded-xl border border-[#c7c4d8] bg-white p-5 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+    <section className={`p-5 ${glassPanel}`}>
+      <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
       <SectionTitle
         icon={History}
         title="Recent Webhook Deliveries"
@@ -270,7 +283,7 @@ function TechnicalPanel({ midtrans, telegram, apeEpi }) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[420px] text-left">
           <thead>
-            <tr className="border-b border-[#c7c4d8] text-[11px] font-extrabold uppercase tracking-wide text-[#777587]">
+            <tr className="border-b border-white/25 text-[11px] font-extrabold uppercase tracking-wide text-[#464555]">
               <th className="pb-3">Event</th>
               <th className="pb-3">Service</th>
               <th className="pb-3 text-right">Status</th>
@@ -278,7 +291,7 @@ function TechnicalPanel({ midtrans, telegram, apeEpi }) {
           </thead>
           <tbody>
             {deliveries.map((item) => (
-              <tr key={item.event} className="border-b border-[#eff4ff] text-sm font-bold last:border-0">
+              <tr key={item.event} className="border-b border-white/15 text-sm font-bold last:border-0">
                 <td className="py-3 text-[#0b1c30]">{item.event}</td>
                 <td className="py-3 text-[#464555]">{item.service}</td>
                 <td className="py-3 text-right">
@@ -302,6 +315,23 @@ function getInitials(nameOrEmail = "") {
     .split(/[\s._-]+/)
     .filter(Boolean);
   return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : name.slice(0, 2)).toUpperCase();
+}
+
+function AdminAvatar({ user }) {
+  const label = user?.name || user?.email || "Admin";
+  return (
+    <div
+      className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/40 bg-white/35 text-sm font-extrabold text-[#3525cd] shadow-[0_14px_30px_rgba(27,36,84,0.16),inset_1px_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl"
+      title={label}
+      aria-label={label}
+    >
+      {user?.avatar_url ? (
+        <img src={mediaUrl(user.avatar_url)} alt="" className="h-full w-full object-cover" />
+      ) : (
+        getInitials(label)
+      )}
+    </div>
+  );
 }
 
 function auditTone(log) {
@@ -349,7 +379,8 @@ function AuditDashboard({ logs }) {
           {metrics.map((item) => {
             const Icon = item.icon;
             return (
-              <div key={item.label} className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+              <div key={item.label} className={`p-6 ${glassCard}`}>
+                <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
                 <div className="mb-5 flex items-center gap-4">
                   <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${toneMap[item.tone].icon}`}>
                     <Icon size={26} />
@@ -359,14 +390,15 @@ function AuditDashboard({ logs }) {
                     <p className="mt-1 text-3xl font-extrabold text-[#0b1c30]">{item.value}</p>
                   </div>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-[#dce9ff]">
+                <div className="h-2 overflow-hidden rounded-full bg-white/35 shadow-[inset_0_1px_2px_rgba(27,36,84,0.12)]">
                   <div className={`h-full rounded-full ${toneMap[item.tone].line}`} style={{ width: `${item.progress}%` }} />
                 </div>
               </div>
             );
           })}
 
-          <div className="relative overflow-hidden rounded-xl bg-[#4f46e5] p-6 text-[#dad7ff] shadow-[0_20px_44px_rgba(53,37,205,0.18)] sm:col-span-2">
+          <div className="relative overflow-hidden rounded-xl border border-white/25 bg-[#4f46e5]/75 p-6 text-[#dad7ff] shadow-[0_26px_70px_rgba(53,37,205,0.28),inset_1px_1px_0_rgba(255,255,255,0.32)] backdrop-blur-2xl sm:col-span-2">
+            <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white/60" />
             <div className="relative z-10">
               <h3 className="text-xl font-bold text-white">Data Residency Compliant</h3>
               <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-[#dad7ff]/85">
@@ -378,20 +410,20 @@ function AuditDashboard({ logs }) {
         </section>
       </div>
 
-      <section className="overflow-hidden rounded-xl border border-[#c7c4d8] bg-white shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
-        <div className="flex flex-col gap-3 border-b border-[#c7c4d8] bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+      <section className={glassPanel}>
+        <div className="flex flex-col gap-3 border-b border-white/25 bg-white/18 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-bold text-[#0b1c30]">Recent Activity Items</h2>
             <p className="mt-1 text-xs font-semibold text-[#777587]">Showing last {Math.min(logs.length, 100)} events</p>
           </div>
         </div>
 
-        <div className="divide-y divide-[#c7c4d8]">
+        <div>
           {logs.map((log) => {
             const Icon = auditIcon(log);
             const tone = auditTone(log);
             return (
-              <div key={log.id} className="flex flex-col gap-4 p-5 transition hover:bg-[#eff4ff] lg:flex-row lg:items-start">
+              <div key={log.id} className="flex flex-col gap-4 border-b border-white/20 p-5 transition last:border-b-0 hover:bg-white/18 lg:flex-row lg:items-start">
                 <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full ${toneMap[tone].icon}`}>
                   <Icon size={20} />
                 </div>
@@ -405,7 +437,7 @@ function AuditDashboard({ logs }) {
                     {log.target_type ? ` melakukan perubahan pada ${log.target_type}.` : " menjalankan aktivitas sistem."}
                   </p>
                   {log.metadata && (
-                    <pre className="mt-3 max-h-36 overflow-auto rounded-lg border border-[#c7c4d8]/70 bg-white p-3 text-[11px] font-semibold leading-relaxed text-[#464555]">
+                    <pre className="mt-3 max-h-36 overflow-auto rounded-lg border border-white/30 bg-white/38 p-3 text-[11px] font-semibold leading-relaxed text-[#26344a] shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
                       {JSON.stringify(log.metadata, null, 2)}
                     </pre>
                   )}
@@ -425,13 +457,13 @@ function AuditDashboard({ logs }) {
 }
 
 function SaveButton({ label, saving, onClick, tone = "violet" }) {
-  const bg = tone === "mint" ? "bg-[#006c49]" : tone === "gold" ? "bg-[#8b1b34]" : tone === "navy" ? "bg-[#213145]" : "bg-[#3525cd]";
+  const bg = tone === "mint" ? "from-[#006c49] to-[#4edea3]" : tone === "gold" ? "from-[#8b1b34] to-[#ffb2b9]" : tone === "navy" ? "from-[#213145] to-[#4f6685]" : "from-[#3525cd] to-[#6f66ff]";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={saving}
-      className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-bold text-white shadow-[0_12px_24px_rgba(53,37,205,0.14)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60 sm:w-auto ${bg}`}
+      className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-lg border border-white/25 bg-gradient-to-br px-4 text-sm font-bold text-white shadow-[0_18px_42px_rgba(27,36,84,0.18),inset_1px_1px_0_rgba(255,255,255,0.34)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60 sm:w-auto ${bg}`}
     >
       <Save size={15} />
       {saving ? "Menyimpan..." : label}
@@ -686,11 +718,17 @@ export default function AdminPage({ user, onLogout }) {
   ];
 
   return (
-    <main className="min-h-screen bg-[#f8f9ff] font-['Plus_Jakarta_Sans',system-ui,sans-serif] text-[#0b1c30]">
-      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-64 flex-col border-r border-[#c7c4d8] bg-white px-3 py-6 lg:flex">
-        <button type="button" onClick={() => { window.location.href = "/"; }} className="mb-10 px-5 text-left">
-          <div className="text-xl font-extrabold tracking-tight text-[#3525cd]">FinePro</div>
-          <div className="mt-1 text-xs font-semibold text-[#464555]">Admin Dashboard</div>
+    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_8%_5%,rgba(108,248,187,0.42),transparent_28%),radial-gradient(circle_at_90%_10%,rgba(226,223,255,0.78),transparent_30%),radial-gradient(circle_at_78%_82%,rgba(255,218,220,0.62),transparent_32%),linear-gradient(135deg,#f8f9ff_0%,#dce9ff_48%,#f8f9ff_100%)] font-['Plus_Jakarta_Sans',system-ui,sans-serif] text-[#0b1c30]">
+      <div className="pointer-events-none fixed -left-24 top-24 h-72 w-72 rounded-full bg-[#6cf8bb]/30 blur-3xl" />
+      <div className="pointer-events-none fixed right-0 top-20 h-96 w-96 rounded-full bg-[#3525cd]/18 blur-3xl" />
+      <div className="pointer-events-none fixed bottom-0 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-[#ffb2b9]/30 blur-3xl" />
+      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-64 flex-col border-r border-white/25 bg-white/18 px-3 py-6 shadow-[18px_0_60px_rgba(27,36,84,0.12),inset_-1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-2xl lg:flex">
+        <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/75" />
+        <button type="button" onClick={() => { window.location.href = "/"; }} className="mb-10 px-4 text-left">
+          <div className="inline-flex rounded-xl border border-white/30 bg-white/28 px-3 py-2 shadow-[inset_1px_1px_0_rgba(255,255,255,0.66),0_14px_32px_rgba(27,36,84,0.10)] backdrop-blur-xl">
+            <img src="/images/fine-pro-header.png" alt="FinePro" className="h-8 w-auto object-contain" />
+          </div>
+          <div className="mt-2 px-1 text-xs font-semibold text-[#464555]">Admin Dashboard</div>
         </button>
         <nav className="flex-1 space-y-2">
           {tabs.map((tab) => {
@@ -703,8 +741,8 @@ export default function AdminPage({ user, onLogout }) {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex min-h-[46px] w-full items-center gap-3 rounded-lg border-l-4 px-4 text-sm font-bold transition active:scale-[0.98] ${
                   active
-                    ? "border-[#3525cd] bg-[#e5eeff] text-[#3525cd]"
-                    : "border-transparent text-[#464555] hover:bg-[#eff4ff] hover:text-[#3525cd]"
+                    ? "border-white/70 bg-white/35 text-[#3525cd] shadow-[0_14px_34px_rgba(53,37,205,0.16),inset_1px_1px_0_rgba(255,255,255,0.68)]"
+                    : "border-transparent text-[#26344a] hover:bg-white/24 hover:text-[#3525cd]"
                 }`}
               >
                 <Icon size={18} />
@@ -713,11 +751,11 @@ export default function AdminPage({ user, onLogout }) {
             );
           })}
         </nav>
-        <div className="border-t border-[#c7c4d8] pt-4">
+        <div className="border-t border-white/25 pt-4">
           <button
             type="button"
             onClick={onLogout}
-            className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-4 text-sm font-bold text-[#ba1a1a] transition hover:bg-[#ffdad6]"
+            className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-4 text-sm font-bold text-[#ba1a1a] transition hover:bg-white/28"
           >
             <LogOut size={18} />
             Keluar
@@ -725,30 +763,34 @@ export default function AdminPage({ user, onLogout }) {
         </div>
       </aside>
 
-      <header className="fixed left-0 right-0 top-0 z-20 flex h-16 items-center justify-end border-b border-[#c7c4d8] bg-white/80 px-4 backdrop-blur-xl lg:left-64 lg:px-10">
-        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
-          <StatusBadge tone={canManageRoles ? "mint" : "violet"}>{user?.role || "admin"}</StatusBadge>
+      <header className="fixed left-0 right-0 top-0 z-20 flex h-16 items-center justify-between border-b border-white/25 bg-white/20 px-4 shadow-[0_18px_50px_rgba(27,36,84,0.10),inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-2xl lg:left-64 lg:px-10">
+        <button
+          type="button"
+          onClick={() => { window.location.href = "/"; }}
+          className="inline-flex items-center rounded-xl border border-white/30 bg-white/28 px-3 py-1.5 shadow-[inset_1px_1px_0_rgba(255,255,255,0.66)] backdrop-blur-xl lg:hidden"
+          aria-label="FinePro"
+        >
+          <img src="/images/fine-pro-header.png" alt="FinePro" className="h-7 w-auto object-contain" />
+        </button>
+        <div className="flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={loadAll}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#c7c4d8] bg-white px-3 text-sm font-bold text-[#3525cd] transition hover:bg-[#eff4ff]"
+            className={`flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold text-[#3525cd] transition hover:bg-white/45 ${glassButton}`}
             title="Refresh"
           >
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             Refresh
           </button>
-          <div className="hidden text-right sm:block">
-            <div className="text-sm font-bold text-[#0b1c30]">{user?.name || user?.email?.split("@")[0] || "Admin"}</div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#777587]">System Admin</div>
-          </div>
+          <AdminAvatar user={user} />
         </div>
       </header>
 
-      <section className="min-h-screen px-4 pb-20 pt-20 sm:px-6 lg:ml-64 lg:px-10">
+      <section className="relative z-10 min-h-screen px-4 pb-20 pt-20 sm:px-6 lg:ml-64 lg:px-10">
         <div className="mx-auto max-w-7xl space-y-6">
           <section className="flex flex-col gap-4">
             <div>
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-[#e2dfff] px-3 py-1 text-[11px] font-bold text-[#3525cd]">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/35 bg-white/30 px-3 py-1 text-[11px] font-bold text-[#3525cd] shadow-[inset_1px_1px_0_rgba(255,255,255,0.65)] backdrop-blur-xl">
                 <ShieldCheck size={13} />
                 Admin Console
               </div>
@@ -762,12 +804,12 @@ export default function AdminPage({ user, onLogout }) {
           </section>
 
       {message && (
-        <div className="rounded-xl border border-[#c7c4d8] bg-white p-3 text-sm font-bold text-[#0b1c30] shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+        <div className={`p-3 text-sm font-bold text-[#0b1c30] ${glassPanel}`}>
           {message}
         </div>
       )}
 
-      <div className="sticky top-16 z-10 -mx-4 border-y border-[#c7c4d8] bg-white/80 px-4 py-2 backdrop-blur-xl sm:mx-0 sm:rounded-xl sm:border lg:hidden">
+      <div className="sticky top-16 z-10 -mx-4 border-y border-white/25 bg-white/20 px-4 py-2 shadow-[0_14px_38px_rgba(27,36,84,0.10)] backdrop-blur-2xl sm:mx-0 sm:rounded-xl sm:border lg:hidden">
         <div className="grid grid-cols-4 gap-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -778,7 +820,7 @@ export default function AdminPage({ user, onLogout }) {
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex min-h-[48px] items-center justify-center gap-1.5 rounded-2xl px-2 text-xs font-bold transition active:scale-[0.98] sm:text-sm ${
-                  active ? "bg-[#3525cd] text-white shadow-[0_12px_24px_rgba(53,37,205,0.18)]" : "text-[#464555] hover:bg-[#eff4ff] hover:text-[#3525cd]"
+                  active ? "bg-[#3525cd]/90 text-white shadow-[0_12px_24px_rgba(53,37,205,0.20)]" : "text-[#26344a] hover:bg-white/28 hover:text-[#3525cd]"
                 }`}
               >
                 <Icon size={16} />
@@ -822,7 +864,8 @@ export default function AdminPage({ user, onLogout }) {
 
           <TechnicalPanel apeEpi={apeEpi} midtrans={midtrans} telegram={telegram} />
 
-          <section id="integration-settings" className="scroll-mt-28 rounded-xl border border-[#c7c4d8] bg-white/70 p-4 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+          <section id="integration-settings" className={`scroll-mt-28 p-4 ${glassPanel}`}>
+            <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
             <SectionTitle
               icon={Database}
               title="Configuration Workspace"
@@ -869,7 +912,7 @@ export default function AdminPage({ user, onLogout }) {
               <SaveButton label="Simpan Midtrans" saving={savingKey === "midtrans"} onClick={() => saveSetting("midtrans", midtrans)} tone="navy" />
             }
           >
-            <div className="flex items-center justify-between rounded-2xl border border-neutral-border/70 bg-white/65 px-3 py-2">
+            <div className={`flex items-center justify-between px-3 py-2 ${glassSoft}`}>
               <span className="text-sm font-bold text-navy">Production Mode</span>
               <Toggle checked={Boolean(midtrans.is_production)} onChange={(v) => setMidtrans("is_production", v)} />
             </div>
@@ -960,7 +1003,8 @@ export default function AdminPage({ user, onLogout }) {
             </div>
           </IntegrationCard>
 
-          <section className="gloss-panel rounded-2xl p-4">
+          <section className={`p-4 ${glassCard}`}>
+            <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
             <SectionTitle
               icon={BrainCircuit}
               title="Limit Penggunaan AI"
@@ -968,7 +1012,7 @@ export default function AdminPage({ user, onLogout }) {
               tone="mint"
             />
             <div className="relative z-10 space-y-4">
-              <div className="rounded-2xl border border-mint/15 bg-mint-light/70 p-3">
+              <div className="rounded-xl border border-white/25 bg-[#6cf8bb]/18 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
                 <div className="mb-2 text-xs font-bold uppercase tracking-wide text-mint">Trial</div>
                 <FormRow>
                   <div>
@@ -982,7 +1026,7 @@ export default function AdminPage({ user, onLogout }) {
                 </FormRow>
               </div>
 
-              <div className="rounded-2xl border border-neutral-border/70 bg-white/65 p-3">
+              <div className={`${glassSoft} p-3`}>
                 <div className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Free / Expired</div>
                 <FormRow>
                   <div>
@@ -996,7 +1040,7 @@ export default function AdminPage({ user, onLogout }) {
                 </FormRow>
               </div>
 
-              <div className="rounded-2xl border border-violet/15 bg-violet-light/60 p-3">
+              <div className="rounded-xl border border-white/25 bg-[#e2dfff]/35 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
                 <div className="mb-2 text-xs font-bold uppercase tracking-wide text-violet">Paid: Monthly / 6 Bulan / Annual</div>
                 <FormRow>
                   <div>
@@ -1010,7 +1054,7 @@ export default function AdminPage({ user, onLogout }) {
                 </FormRow>
               </div>
 
-              <div className="rounded-2xl border border-gold/20 bg-gold-light/60 p-3">
+              <div className="rounded-xl border border-white/25 bg-[#ffdadc]/35 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
                 <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gold">Telegram AI</div>
                 <div>
                   <label className={labelClass}>Chat AI / User / Hari</label>
@@ -1018,7 +1062,7 @@ export default function AdminPage({ user, onLogout }) {
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-white/60 px-3 py-2 text-xs font-semibold leading-relaxed text-neutral-500">
+              <div className={`${glassSoft} px-3 py-2 text-xs font-semibold leading-relaxed text-[#464555]`}>
                 Scan otomatis dihitung gabungan dari web, upload file, kamera, dan Telegram. Insight dihitung dari tombol Analisa Keuangan. Chat AI Telegram dihitung per pengguna setiap hari saat pesan teks memicu AI.
               </div>
 
@@ -1040,7 +1084,7 @@ export default function AdminPage({ user, onLogout }) {
                   type="button"
                   onClick={testApeEpi}
                   disabled={savingKey === "ape_epi_test"}
-                  className="flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-full bg-white px-4 text-sm font-bold text-violet shadow-soft transition active:scale-[0.98] disabled:opacity-60 sm:w-auto"
+                  className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-bold text-[#3525cd] transition active:scale-[0.98] disabled:opacity-60 sm:w-auto ${glassButton}`}
                 >
                   <RefreshCw size={15} className={savingKey === "ape_epi_test" ? "animate-spin" : ""} />
                   {savingKey === "ape_epi_test" ? "Menguji..." : "Test Koneksi"}
@@ -1175,7 +1219,8 @@ export default function AdminPage({ user, onLogout }) {
       {activeTab === "data" && (
         <div className="space-y-6">
           <div className="grid gap-5 lg:grid-cols-2">
-            <section className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+            <section className={`p-6 ${glassPanel}`}>
+              <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#e2dfff] text-[#3525cd]">
@@ -1188,7 +1233,7 @@ export default function AdminPage({ user, onLogout }) {
                 </div>
                 <form onSubmit={searchUsers} className="flex min-w-0 gap-2">
                   <input
-                    className="h-10 min-w-0 rounded-full border-0 bg-[#eff4ff] px-4 text-sm font-semibold text-[#0b1c30] outline-none transition placeholder:text-[#777587] focus:bg-white focus:shadow-[0_0_0_3px_rgba(53,37,205,0.12)]"
+                    className="h-10 min-w-0 rounded-full border border-white/30 bg-white/35 px-4 text-sm font-semibold text-[#0b1c30] shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] outline-none backdrop-blur-xl transition placeholder:text-[#464555]/70 focus:bg-white/55 focus:shadow-[0_0_0_3px_rgba(53,37,205,0.12)]"
                     value={userQuery}
                     onChange={(e) => setUserQuery(e.target.value)}
                     placeholder="Cari user"
@@ -1201,7 +1246,7 @@ export default function AdminPage({ user, onLogout }) {
 
               <div className="max-h-[500px] space-y-3 overflow-y-auto pr-1">
                 {users.map((u, index) => (
-                  <div key={u.id} className="group flex flex-col gap-3 rounded-lg p-3 transition hover:bg-[#eff4ff] sm:flex-row sm:items-center sm:justify-between">
+                  <div key={u.id} className="group flex flex-col gap-3 rounded-lg border border-transparent p-3 transition hover:border-white/25 hover:bg-white/20 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-4">
                       <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-extrabold ${index % 3 === 0 ? "bg-[#e2dfff] text-[#3525cd]" : index % 3 === 1 ? "bg-[#ffdadc] text-[#8b1b34]" : "bg-[#d3e4fe] text-[#464555]"}`}>
                         {getInitials(u.name || u.email)}
@@ -1230,7 +1275,8 @@ export default function AdminPage({ user, onLogout }) {
               </div>
             </section>
 
-            <section className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+            <section className={`p-6 ${glassPanel}`}>
+              <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
               <div className="mb-6 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#e2dfff] text-[#3525cd]">
@@ -1250,7 +1296,7 @@ export default function AdminPage({ user, onLogout }) {
                     .filter((p) => p.household_name === h.name)
                     .reduce((sum, p) => sum + Number(p.amount || 0), 0);
                   return (
-                    <div key={h.id} className="flex items-center justify-between gap-4 rounded-xl border border-[#c7c4d8]/40 bg-[#eff4ff] p-5">
+                    <div key={h.id} className={`flex items-center justify-between gap-4 p-5 ${glassSoft}`}>
                       <div className="min-w-0">
                         <h3 className="truncate text-sm font-bold text-[#0b1c30]">{h.name}</h3>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1272,11 +1318,12 @@ export default function AdminPage({ user, onLogout }) {
             </section>
           </div>
 
-          <section className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+          <section className={`p-6 ${glassPanel}`}>
+            <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
             <SectionTitle icon={WalletCards} title="Payment Activity" subtitle={`${payments.length} transaksi pembayaran terakhir`} tone="gold" />
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {payments.map((p) => (
-                <div key={p.order_id} className="rounded-xl border border-[#c7c4d8]/60 bg-[#eff4ff] p-4">
+                <div key={p.order_id} className={`${glassSoft} p-4`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-bold text-[#0b1c30]">{p.household_name}</div>
