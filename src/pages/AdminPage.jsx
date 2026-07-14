@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  AlertTriangle,
+  Archive,
   BellRing,
   BrainCircuit,
   Building2,
@@ -12,13 +14,16 @@ import {
   History,
   KeyRound,
   Landmark,
+  LogOut,
   Mail,
   MessageCircle,
   RefreshCw,
   Save,
   Search,
   ShieldCheck,
+  Settings,
   UserCog,
+  UserPlus,
   Users,
   WalletCards
 } from "lucide-react";
@@ -44,37 +49,37 @@ const tabs = [
 
 const toneMap = {
   violet: {
-    icon: "bg-violet-light text-violet",
-    badge: "bg-violet-light text-violet",
-    line: "bg-violet"
+    icon: "bg-[#e2dfff] text-[#3525cd]",
+    badge: "bg-[#e2dfff] text-[#3525cd]",
+    line: "bg-[#3525cd]"
   },
   mint: {
-    icon: "bg-mint-light text-mint",
-    badge: "bg-mint-light text-mint",
-    line: "bg-mint"
+    icon: "bg-[#6cf8bb] text-[#006c49]",
+    badge: "bg-[#6cf8bb]/40 text-[#006c49]",
+    line: "bg-[#006c49]"
   },
   gold: {
-    icon: "bg-gold-light/75 text-gold",
-    badge: "bg-gold-light/75 text-gold",
-    line: "bg-gold"
+    icon: "bg-[#ffdadc] text-[#8b1b34]",
+    badge: "bg-[#ffdadc] text-[#8b1b34]",
+    line: "bg-[#8b1b34]"
   },
   navy: {
-    icon: "bg-navy text-white",
-    badge: "bg-navy text-white",
-    line: "bg-navy"
+    icon: "bg-[#213145] text-[#eaf1ff]",
+    badge: "bg-[#213145] text-[#eaf1ff]",
+    line: "bg-[#213145]"
   },
   coral: {
-    icon: "bg-coral-light text-coral",
-    badge: "bg-coral-light text-coral",
-    line: "bg-coral"
+    icon: "bg-[#ffdad6] text-[#ba1a1a]",
+    badge: "bg-[#ffdad6] text-[#93000a]",
+    line: "bg-[#ba1a1a]"
   }
 };
 
 const inputClass =
-  "h-11 w-full rounded-2xl border border-neutral-border bg-white px-3 text-sm font-semibold text-navy shadow-[inset_0_1px_2px_rgba(15,31,61,0.06)] outline-none transition placeholder:text-neutral-400 focus:border-violet focus:shadow-[0_0_0_4px_rgba(111,85,242,0.12),inset_0_1px_2px_rgba(15,31,61,0.04)]";
+  "h-11 w-full rounded-lg border border-transparent bg-[#eff4ff] px-3 text-sm font-semibold text-[#0b1c30] outline-none transition placeholder:text-[#777587] focus:border-[#3525cd] focus:bg-white focus:shadow-[0_0_0_4px_rgba(53,37,205,0.10)]";
 const areaClass =
-  "min-h-24 w-full rounded-2xl border border-neutral-border bg-white px-3 py-2 text-sm font-semibold text-navy shadow-[inset_0_1px_2px_rgba(15,31,61,0.06)] outline-none transition placeholder:text-neutral-400 focus:border-violet focus:shadow-[0_0_0_4px_rgba(111,85,242,0.12),inset_0_1px_2px_rgba(15,31,61,0.04)]";
-const labelClass = "mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-neutral-500";
+  "min-h-24 w-full rounded-lg border border-transparent bg-[#eff4ff] px-3 py-2 text-sm font-semibold text-[#0b1c30] outline-none transition placeholder:text-[#777587] focus:border-[#3525cd] focus:bg-white focus:shadow-[0_0_0_4px_rgba(53,37,205,0.10)]";
+const labelClass = "mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[#464555]";
 
 function Toggle({ checked, onChange }) {
   return (
@@ -119,12 +124,12 @@ function SectionTitle({ icon: Icon, title, subtitle, tone = "violet", action }) 
   return (
     <div className="mb-3 flex items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-2.5">
-        <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl ${toneMap[tone].icon}`}>
+        <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${toneMap[tone].icon}`}>
           <Icon size={17} />
         </div>
         <div className="min-w-0">
-          <h2 className="truncate text-base font-bold text-navy">{title}</h2>
-          {subtitle && <p className="mt-0.5 text-xs font-medium leading-relaxed text-neutral-500">{subtitle}</p>}
+          <h2 className="truncate text-base font-bold text-[#0b1c30]">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs font-medium leading-relaxed text-[#464555]">{subtitle}</p>}
         </div>
       </div>
       {action}
@@ -134,17 +139,20 @@ function SectionTitle({ icon: Icon, title, subtitle, tone = "violet", action }) 
 
 function StatCard({ label, value, icon: Icon, tone = "violet" }) {
   return (
-    <div className="gloss-panel min-h-[116px] rounded-2xl p-4">
+    <div className="group relative min-h-[150px] overflow-hidden rounded-xl border border-[#c7c4d8] bg-white p-5 shadow-[0_4px_20px_rgba(53,37,205,0.04)] transition hover:-translate-y-0.5 hover:border-[#3525cd] hover:shadow-[0_12px_34px_rgba(53,37,205,0.10)]">
+      <div className={`absolute left-0 top-0 h-full w-1 ${toneMap[tone].line}`} />
       <div className="relative z-10 flex h-full flex-col justify-between">
         <div className="flex items-start justify-between gap-3">
-          <div className={`flex h-9 w-9 items-center justify-center rounded-2xl ${toneMap[tone].icon}`}>
-            <Icon size={17} />
+          <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${toneMap[tone].icon}`}>
+            <Icon size={20} />
           </div>
-          <div className={`h-1.5 w-8 rounded-full ${toneMap[tone].line}`} />
+          <div className={`rounded-full px-2 py-1 text-[11px] font-bold ${toneMap[tone].badge}`}>
+            Live
+          </div>
         </div>
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{label}</div>
-          <div className="mt-1 truncate text-xl font-bold text-navy">{value}</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#464555]">{label}</div>
+          <div className="mt-2 truncate text-2xl font-extrabold tracking-tight text-[#0b1c30]">{value}</div>
         </div>
       </div>
     </div>
@@ -162,7 +170,7 @@ function SecretHint({ configured }) {
 
 function IntegrationCard({ icon: Icon, title, description, tone = "violet", enabled, onToggle, children, footer }) {
   return (
-    <section className="gloss-panel rounded-2xl p-4">
+    <section className="rounded-xl border border-[#c7c4d8] bg-white p-5 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
       <SectionTitle
         icon={Icon}
         title={title}
@@ -176,14 +184,254 @@ function IntegrationCard({ icon: Icon, title, description, tone = "violet", enab
   );
 }
 
+function IntegrationTile({
+  icon: Icon,
+  title,
+  description,
+  tone = "violet",
+  enabled,
+  onToggle,
+  detailLabel,
+  detailValue,
+  progress = 70,
+  onConfigure
+}) {
+  return (
+    <article className="group flex min-h-[286px] flex-col rounded-xl border border-[#c7c4d8] bg-white p-5 shadow-[0_4px_20px_rgba(53,37,205,0.04)] transition hover:-translate-y-0.5 hover:border-[#3525cd] hover:shadow-[0_4px_24px_rgba(53,37,205,0.08)]">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl ${toneMap[tone].icon}`}>
+          <Icon size={24} />
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <Toggle checked={Boolean(enabled)} onChange={onToggle} />
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${enabled ? toneMap.mint.badge : "bg-[#eff4ff] text-[#777587]"}`}>
+            {enabled ? "Connected" : "Inactive"}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex-1">
+        <h3 className="text-xl font-extrabold tracking-tight text-[#0b1c30]">{title}</h3>
+        <p className="mt-2 h-12 overflow-hidden text-sm font-medium leading-6 text-[#464555]">{description}</p>
+      </div>
+
+      <div className="mt-5 border-t border-[#c7c4d8] pt-4">
+        <div className="mb-2 flex items-center justify-between text-xs font-bold">
+          <span className="text-[#777587]">{detailLabel}</span>
+          <span className="text-[#0b1c30]">{detailValue}</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-[#eff4ff]">
+          <div className={`h-full rounded-full ${toneMap[tone].line}`} style={{ width: `${Math.min(Math.max(progress, 8), 100)}%` }} />
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onConfigure}
+        className="mt-5 flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-[#eff4ff] px-4 text-sm font-extrabold text-[#3525cd] transition hover:bg-[#e2dfff]"
+      >
+        Configure
+        <ChevronRight size={16} />
+      </button>
+    </article>
+  );
+}
+
+function TechnicalPanel({ midtrans, telegram, apeEpi }) {
+  const deliveries = [
+    {
+      event: "payment.notification",
+      service: "Midtrans",
+      status: midtrans.enabled ? "Delivered" : "Paused",
+      tone: midtrans.enabled ? "mint" : "gold"
+    },
+    {
+      event: "telegram.chat.ai",
+      service: "Telegram Bot",
+      status: telegram.enabled ? "Ready" : "Inactive",
+      tone: telegram.enabled ? "violet" : "gold"
+    },
+    {
+      event: "price.refresh",
+      service: "APE-EPI",
+      status: apeEpi.enabled ? "Cached" : "Paused",
+      tone: apeEpi.enabled ? "mint" : "gold"
+    }
+  ];
+
+  return (
+    <section className="rounded-xl border border-[#c7c4d8] bg-white p-5 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+      <SectionTitle
+        icon={History}
+        title="Recent Webhook Deliveries"
+        subtitle="Ringkasan event teknis dari integrasi utama."
+        tone="violet"
+      />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[420px] text-left">
+          <thead>
+            <tr className="border-b border-[#c7c4d8] text-[11px] font-extrabold uppercase tracking-wide text-[#777587]">
+              <th className="pb-3">Event</th>
+              <th className="pb-3">Service</th>
+              <th className="pb-3 text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {deliveries.map((item) => (
+              <tr key={item.event} className="border-b border-[#eff4ff] text-sm font-bold last:border-0">
+                <td className="py-3 text-[#0b1c30]">{item.event}</td>
+                <td className="py-3 text-[#464555]">{item.service}</td>
+                <td className="py-3 text-right">
+                  <StatusBadge tone={item.tone}>{item.status}</StatusBadge>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function getInitials(nameOrEmail = "") {
+  const cleaned = String(nameOrEmail).trim();
+  if (!cleaned) return "FP";
+  const name = cleaned.includes("@") ? cleaned.split("@")[0] : cleaned;
+  const parts = name
+    .replace(/[^a-zA-Z0-9\s._-]/g, " ")
+    .split(/[\s._-]+/)
+    .filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : name.slice(0, 2)).toUpperCase();
+}
+
+function auditTone(log) {
+  const text = `${log.action || ""} ${log.target_type || ""}`.toLowerCase();
+  if (text.includes("fail") || text.includes("error") || text.includes("delete")) return "coral";
+  if (text.includes("user") || text.includes("role")) return "mint";
+  if (text.includes("setting") || text.includes("config")) return "violet";
+  return "navy";
+}
+
+function auditIcon(log) {
+  const text = `${log.action || ""} ${log.target_type || ""}`.toLowerCase();
+  if (text.includes("fail") || text.includes("error") || text.includes("delete")) return AlertTriangle;
+  if (text.includes("user") || text.includes("role")) return UserPlus;
+  if (text.includes("backup") || text.includes("storage")) return Archive;
+  if (text.includes("setting") || text.includes("config")) return Settings;
+  return ShieldCheck;
+}
+
+function AuditDashboard({ logs }) {
+  const configCount = logs.filter((log) => auditTone(log) === "violet").length;
+  const actorCount = new Set(logs.map((log) => log.admin_email).filter(Boolean)).size;
+
+  const metrics = [
+    {
+      label: "Active Sessions",
+      value: actorCount || 1,
+      icon: Users,
+      tone: "violet",
+      progress: Math.min(92, 44 + actorCount * 12)
+    },
+    {
+      label: "Config Events",
+      value: configCount,
+      icon: Settings,
+      tone: "mint",
+      progress: Math.min(95, 30 + configCount * 14)
+    }
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-12">
+        <section className="grid gap-6 sm:grid-cols-2 xl:col-span-12">
+          {metrics.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div key={item.label} className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+                <div className="mb-5 flex items-center gap-4">
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${toneMap[item.tone].icon}`}>
+                    <Icon size={26} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-[#464555]">{item.label}</p>
+                    <p className="mt-1 text-3xl font-extrabold text-[#0b1c30]">{item.value}</p>
+                  </div>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-[#dce9ff]">
+                  <div className={`h-full rounded-full ${toneMap[item.tone].line}`} style={{ width: `${item.progress}%` }} />
+                </div>
+              </div>
+            );
+          })}
+
+          <div className="relative overflow-hidden rounded-xl bg-[#4f46e5] p-6 text-[#dad7ff] shadow-[0_20px_44px_rgba(53,37,205,0.18)] sm:col-span-2">
+            <div className="relative z-10">
+              <h3 className="text-xl font-bold text-white">Data Residency Compliant</h3>
+              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-[#dad7ff]/85">
+                Audit log tersimpan dengan kontrol akses admin dan riwayat aktivitas bisa ditelusuri dari feed ini.
+              </p>
+            </div>
+            <ShieldCheck className="absolute -right-8 top-1/2 -translate-y-1/2 text-white/10" size={150} />
+          </div>
+        </section>
+      </div>
+
+      <section className="overflow-hidden rounded-xl border border-[#c7c4d8] bg-white shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+        <div className="flex flex-col gap-3 border-b border-[#c7c4d8] bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-[#0b1c30]">Recent Activity Items</h2>
+            <p className="mt-1 text-xs font-semibold text-[#777587]">Showing last {Math.min(logs.length, 100)} events</p>
+          </div>
+        </div>
+
+        <div className="divide-y divide-[#c7c4d8]">
+          {logs.map((log) => {
+            const Icon = auditIcon(log);
+            const tone = auditTone(log);
+            return (
+              <div key={log.id} className="flex flex-col gap-4 p-5 transition hover:bg-[#eff4ff] lg:flex-row lg:items-start">
+                <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full ${toneMap[tone].icon}`}>
+                  <Icon size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <h3 className={`text-sm font-extrabold ${tone === "coral" ? "text-[#ba1a1a]" : "text-[#0b1c30]"}`}>{log.action}</h3>
+                    <span className="text-xs font-semibold text-[#777587]">{new Date(log.created_at).toLocaleString("id-ID")}</span>
+                  </div>
+                  <p className="mt-2 text-sm font-medium leading-6 text-[#464555]">
+                    Admin <span className="font-bold text-[#3525cd]">{log.admin_email || "system"}</span>
+                    {log.target_type ? ` melakukan perubahan pada ${log.target_type}.` : " menjalankan aktivitas sistem."}
+                  </p>
+                  {log.metadata && (
+                    <pre className="mt-3 max-h-36 overflow-auto rounded-lg border border-[#c7c4d8]/70 bg-white p-3 text-[11px] font-semibold leading-relaxed text-[#464555]">
+                      {JSON.stringify(log.metadata, null, 2)}
+                    </pre>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  <StatusBadge tone={tone}>{log.target_type || "System"}</StatusBadge>
+                  <StatusBadge tone={tone === "coral" ? "coral" : "mint"}>{tone === "coral" ? "Review" : "Success"}</StatusBadge>
+                </div>
+              </div>
+            );
+          })}
+          {logs.length === 0 && <div className="py-10 text-center text-sm font-semibold text-[#777587]">Belum ada audit log.</div>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SaveButton({ label, saving, onClick, tone = "violet" }) {
-  const bg = tone === "mint" ? "bg-mint" : tone === "gold" ? "bg-gold" : tone === "navy" ? "bg-navy" : "bg-violet";
+  const bg = tone === "mint" ? "bg-[#006c49]" : tone === "gold" ? "bg-[#8b1b34]" : tone === "navy" ? "bg-[#213145]" : "bg-[#3525cd]";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={saving}
-      className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-full px-4 text-sm font-bold text-white shadow-soft transition active:scale-[0.98] disabled:opacity-60 sm:w-auto ${bg}`}
+      className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-bold text-white shadow-[0_12px_24px_rgba(53,37,205,0.14)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60 sm:w-auto ${bg}`}
     >
       <Save size={15} />
       {saving ? "Menyimpan..." : label}
@@ -219,7 +467,7 @@ function formatFetchedAt(value) {
   }).format(new Date(value));
 }
 
-export default function AdminPage({ user }) {
+export default function AdminPage({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [overview, setOverview] = useState(null);
   const [settings, setSettings] = useState(null);
@@ -344,48 +592,182 @@ export default function AdminPage({ user }) {
   }, [payments]);
 
   const activeTabLabel = tabs.find((tab) => tab.id === activeTab)?.label || "Overview";
+  const pageTitle = activeTab === "overview" ? "Overview Dashboard" : activeTab === "integrations" ? "Integrations" : activeTab === "data" ? "Data Management" : activeTab === "audit" ? "System Activity Feed" : activeTabLabel;
+  const pageSubtitle = activeTab === "overview"
+    ? "Real-time performance metrics dan ringkasan operasional FinePro."
+    : activeTab === "integrations"
+    ? "Connect and manage your third-party tools and internal automation engines."
+    : activeTab === "data"
+    ? "Configure user profiles, household asset structures, and monitor system integrity."
+    : activeTab === "audit"
+    ? "Real-time audit records and security event monitoring."
+    : "Kelola integrasi, pengguna, pembayaran, dan jejak aktivitas sistem.";
+  const scrollToIntegrationSettings = () => {
+    document.getElementById("integration-settings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const integrationTiles = [
+    {
+      icon: BrainCircuit,
+      title: "AI Limit Controller",
+      description: "Batas harian AI, scan receipt, insight keuangan, dan chat Telegram per pengguna.",
+      tone: "mint",
+      enabled: ai.enabled,
+      onToggle: (v) => setAi("enabled", v),
+      detailLabel: "Telegram chat/user",
+      detailValue: `${aiQuota.telegram_chat_daily ?? 100}/hari`,
+      progress: 78
+    },
+    {
+      icon: Gem,
+      title: "Auto Price Engine",
+      description: "Sinkronisasi harga GOLDGRAM dan SILVERGRAM melalui APE-EPI untuk target aset.",
+      tone: "gold",
+      enabled: apeEpi.enabled,
+      onToggle: (v) => setApeEpi("enabled", v),
+      detailLabel: "Cache refresh",
+      detailValue: `${apeEpi.cache_ttl_minutes ?? 30} menit`,
+      progress: 64
+    },
+    {
+      icon: Landmark,
+      title: "Manual Transfer",
+      description: "Jalur pembayaran bank alternatif untuk pengguna yang belum memakai payment gateway.",
+      tone: "navy",
+      enabled: manualPayment.enabled,
+      onToggle: (v) => setManualPayment("enabled", v),
+      detailLabel: "Account",
+      detailValue: manualPayment.bank_name || "Belum diatur",
+      progress: manualPayment.account_number ? 82 : 28
+    },
+    {
+      icon: CreditCard,
+      title: "Midtrans",
+      description: "Payment gateway untuk subscription, notifikasi transaksi, dan mode produksi.",
+      tone: "violet",
+      enabled: midtrans.enabled,
+      onToggle: (v) => setMidtrans("enabled", v),
+      detailLabel: "Mode",
+      detailValue: midtrans.is_production ? "Production" : "Sandbox",
+      progress: midtrans.server_key_configured ? 86 : 38
+    },
+    {
+      icon: Mail,
+      title: "Mailketing",
+      description: "Email transactional untuk reset password, laporan, dan komunikasi otomatis.",
+      tone: "coral",
+      enabled: mailketing.enabled,
+      onToggle: (v) => setMailketing("enabled", v),
+      detailLabel: "Sender",
+      detailValue: mailketing.from_email || "Belum diatur",
+      progress: mailketing.api_token_configured ? 74 : 35
+    },
+    {
+      icon: MessageCircle,
+      title: "Telegram Bot",
+      description: "Bot chat, upload struk, workflow n8n, dan automation entry point dari Telegram.",
+      tone: "violet",
+      enabled: telegram.enabled,
+      onToggle: (v) => setTelegram("enabled", v),
+      detailLabel: "Bot",
+      detailValue: telegram.bot_username || "Belum diatur",
+      progress: telegram.bot_token_configured ? 80 : 30
+    },
+    {
+      icon: BellRing,
+      title: "Web Push",
+      description: "Notifikasi budget dan reminder langsung ke browser pengguna.",
+      tone: "gold",
+      enabled: webPush.enabled,
+      onToggle: (v) => setWebPush("enabled", v),
+      detailLabel: "Subject",
+      detailValue: webPush.vapid_subject || "Belum diatur",
+      progress: webPush.vapid_private_key_configured ? 70 : 24
+    }
+  ];
 
   return (
-    <main className="mx-auto max-w-6xl px-4 pb-28 sm:px-5">
-      <section className="gloss-panel mb-4 rounded-[28px] p-4 sm:p-5">
-        <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <img
-              src="/images/fine-pro-header.jpg"
-              alt="FinePro"
-              className="mb-3 h-9 w-auto max-w-[190px] rounded-xl object-contain sm:h-10"
-            />
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-violet-light px-3 py-1 text-[11px] font-bold text-violet">
-              <ShieldCheck size={13} />
-              Admin Console
-            </div>
-            <h1 className="text-2xl font-bold leading-tight text-navy sm:text-3xl">Pengaturan Sistem FinePro</h1>
-            <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-neutral-500">
-              Kelola integrasi, pengguna, pembayaran, dan jejak aktivitas dari satu ruang kerja yang ringkas.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <StatusBadge tone={canManageRoles ? "mint" : "violet"}>{user?.role || "admin"}</StatusBadge>
-            <button
-              type="button"
-              onClick={loadAll}
-              className="gloss-button flex h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-bold text-violet"
-              title="Refresh"
-            >
-              <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
-              Refresh
-            </button>
+    <main className="min-h-screen bg-[#f8f9ff] font-['Plus_Jakarta_Sans',system-ui,sans-serif] text-[#0b1c30]">
+      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-64 flex-col border-r border-[#c7c4d8] bg-white px-3 py-6 lg:flex">
+        <button type="button" onClick={() => { window.location.href = "/"; }} className="mb-10 px-5 text-left">
+          <div className="text-xl font-extrabold tracking-tight text-[#3525cd]">FinePro</div>
+          <div className="mt-1 text-xs font-semibold text-[#464555]">Admin Dashboard</div>
+        </button>
+        <nav className="flex-1 space-y-2">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex min-h-[46px] w-full items-center gap-3 rounded-lg border-l-4 px-4 text-sm font-bold transition active:scale-[0.98] ${
+                  active
+                    ? "border-[#3525cd] bg-[#e5eeff] text-[#3525cd]"
+                    : "border-transparent text-[#464555] hover:bg-[#eff4ff] hover:text-[#3525cd]"
+                }`}
+              >
+                <Icon size={18} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="border-t border-[#c7c4d8] pt-4">
+          <button
+            type="button"
+            onClick={onLogout}
+            className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-4 text-sm font-bold text-[#ba1a1a] transition hover:bg-[#ffdad6]"
+          >
+            <LogOut size={18} />
+            Keluar
+          </button>
+        </div>
+      </aside>
+
+      <header className="fixed left-0 right-0 top-0 z-20 flex h-16 items-center justify-end border-b border-[#c7c4d8] bg-white/80 px-4 backdrop-blur-xl lg:left-64 lg:px-10">
+        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+          <StatusBadge tone={canManageRoles ? "mint" : "violet"}>{user?.role || "admin"}</StatusBadge>
+          <button
+            type="button"
+            onClick={loadAll}
+            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#c7c4d8] bg-white px-3 text-sm font-bold text-[#3525cd] transition hover:bg-[#eff4ff]"
+            title="Refresh"
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            Refresh
+          </button>
+          <div className="hidden text-right sm:block">
+            <div className="text-sm font-bold text-[#0b1c30]">{user?.name || user?.email?.split("@")[0] || "Admin"}</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#777587]">System Admin</div>
           </div>
         </div>
-      </section>
+      </header>
+
+      <section className="min-h-screen px-4 pb-20 pt-20 sm:px-6 lg:ml-64 lg:px-10">
+        <div className="mx-auto max-w-7xl space-y-6">
+          <section className="flex flex-col gap-4">
+            <div>
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-[#e2dfff] px-3 py-1 text-[11px] font-bold text-[#3525cd]">
+                <ShieldCheck size={13} />
+                Admin Console
+              </div>
+              <h1 className="text-2xl font-extrabold tracking-tight text-[#0b1c30] sm:text-3xl">
+                {pageTitle}
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[#464555]">
+                {pageSubtitle}
+              </p>
+            </div>
+          </section>
 
       {message && (
-        <div className="gloss-panel mb-4 rounded-2xl p-3 text-sm font-bold text-navy">
+        <div className="rounded-xl border border-[#c7c4d8] bg-white p-3 text-sm font-bold text-[#0b1c30] shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
           {message}
         </div>
       )}
 
-      <div className="sticky top-[73px] z-10 mb-4 -mx-4 border-y border-white/70 bg-white/55 px-4 py-2 backdrop-blur-xl sm:mx-0 sm:rounded-3xl sm:border">
+      <div className="sticky top-16 z-10 -mx-4 border-y border-[#c7c4d8] bg-white/80 px-4 py-2 backdrop-blur-xl sm:mx-0 sm:rounded-xl sm:border lg:hidden">
         <div className="grid grid-cols-4 gap-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -396,7 +778,7 @@ export default function AdminPage({ user }) {
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex min-h-[48px] items-center justify-center gap-1.5 rounded-2xl px-2 text-xs font-bold transition active:scale-[0.98] sm:text-sm ${
-                  active ? "bg-navy text-white shadow-soft" : "text-neutral-500 hover:bg-white/70 hover:text-violet"
+                  active ? "bg-[#3525cd] text-white shadow-[0_12px_24px_rgba(53,37,205,0.18)]" : "text-[#464555] hover:bg-[#eff4ff] hover:text-[#3525cd]"
                 }`}
               >
                 <Icon size={16} />
@@ -407,10 +789,10 @@ export default function AdminPage({ user }) {
         </div>
       </div>
 
-      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#464555]">
         <span>{activeTabLabel}</span>
         <ChevronRight size={13} />
-        <span className="text-violet">{loading ? "Memuat" : "Siap"}</span>
+        <span className="text-[#3525cd]">{loading ? "Memuat" : "Siap"}</span>
       </div>
 
       {activeTab === "overview" && (
@@ -427,7 +809,27 @@ export default function AdminPage({ user }) {
       )}
 
       {activeTab === "integrations" && settings && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-6">
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {integrationTiles.map((item) => (
+              <IntegrationTile
+                key={item.title}
+                {...item}
+                onConfigure={scrollToIntegrationSettings}
+              />
+            ))}
+          </div>
+
+          <TechnicalPanel apeEpi={apeEpi} midtrans={midtrans} telegram={telegram} />
+
+          <section id="integration-settings" className="scroll-mt-28 rounded-xl border border-[#c7c4d8] bg-white/70 p-4 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+            <SectionTitle
+              icon={Database}
+              title="Configuration Workspace"
+              subtitle="Atur kredensial, mode produksi, limit AI, dan automation detail untuk setiap integrasi."
+              tone="violet"
+            />
+            <div className="grid gap-4 xl:grid-cols-2">
           <IntegrationCard
             icon={Mail}
             title="Mailketing"
@@ -761,128 +1163,144 @@ export default function AdminPage({ user }) {
               <div>
                 <label className={labelClass}>Shared Secret n8n</label>
                 <input className={inputClass} type="password" value={telegram.n8n_shared_secret || ""} onChange={(e) => setTelegram("n8n_shared_secret", e.target.value)} placeholder={telegram.n8n_shared_secret_masked || "Secret acak"} />
-                <SecretHint configured={telegram.n8n_shared_secret_configured} />
+              <SecretHint configured={telegram.n8n_shared_secret_configured} />
               </div>
             </FormRow>
           </IntegrationCard>
+            </div>
+          </section>
         </div>
       )}
 
       {activeTab === "data" && (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <section className="gloss-panel rounded-2xl p-4">
-            <SectionTitle
-              icon={UserCog}
-              title="Users"
-              subtitle={`${users.length} akun ditampilkan`}
-              tone="violet"
-              action={
+        <div className="space-y-6">
+          <div className="grid gap-5 lg:grid-cols-2">
+            <section className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#e2dfff] text-[#3525cd]">
+                    <UserCog size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-[#0b1c30]">System Users</h2>
+                    <p className="mt-1 text-xs font-semibold text-[#464555]">{users.length} akun ditampilkan</p>
+                  </div>
+                </div>
                 <form onSubmit={searchUsers} className="flex min-w-0 gap-2">
-                  <input className="h-10 min-w-0 rounded-full border border-neutral-border bg-white px-3 text-sm font-semibold text-navy outline-none" value={userQuery} onChange={(e) => setUserQuery(e.target.value)} placeholder="Cari user" />
-                  <button className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-violet text-white" type="submit" title="Cari">
+                  <input
+                    className="h-10 min-w-0 rounded-full border-0 bg-[#eff4ff] px-4 text-sm font-semibold text-[#0b1c30] outline-none transition placeholder:text-[#777587] focus:bg-white focus:shadow-[0_0_0_3px_rgba(53,37,205,0.12)]"
+                    value={userQuery}
+                    onChange={(e) => setUserQuery(e.target.value)}
+                    placeholder="Cari user"
+                  />
+                  <button className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#3525cd] text-white transition hover:brightness-110" type="submit" title="Cari">
                     <Search size={15} />
                   </button>
                 </form>
-              }
-            />
-            <div className="relative z-10 max-h-[560px] overflow-y-auto">
-              {users.map((u) => (
-                <div key={u.id} className="grid gap-2 border-b border-neutral-border/60 py-3 last:border-0 sm:grid-cols-[1fr_auto] sm:items-center">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-bold text-navy">{u.name || u.email}</div>
-                    <div className="truncate text-xs font-medium text-neutral-500">{u.email}</div>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
+              </div>
+
+              <div className="max-h-[500px] space-y-3 overflow-y-auto pr-1">
+                {users.map((u, index) => (
+                  <div key={u.id} className="group flex flex-col gap-3 rounded-lg p-3 transition hover:bg-[#eff4ff] sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-extrabold ${index % 3 === 0 ? "bg-[#e2dfff] text-[#3525cd]" : index % 3 === 1 ? "bg-[#ffdadc] text-[#8b1b34]" : "bg-[#d3e4fe] text-[#464555]"}`}>
+                        {getInitials(u.name || u.email)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-bold text-[#0b1c30]">{u.name || u.email}</div>
+                        <div className="truncate text-xs font-semibold text-[#777587]">{u.email}</div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                       <StatusBadge tone={u.effective_role === "super_admin" ? "navy" : u.effective_role === "admin" ? "violet" : "mint"}>
                         {u.effective_role || u.role}
                       </StatusBadge>
                       <StatusBadge tone="gold">{u.household_name || "Tanpa household"}</StatusBadge>
+                      {canManageRoles && (
+                        <select className={`${inputClass} h-9 sm:w-40`} value={u.role} onChange={(e) => changeRole(u.id, e.target.value)}>
+                          <option value="user">user</option>
+                          <option value="admin">admin</option>
+                          <option value="super_admin">super_admin</option>
+                        </select>
+                      )}
                     </div>
                   </div>
-                  {canManageRoles && (
-                    <select className={`${inputClass} sm:w-44`} value={u.role} onChange={(e) => changeRole(u.id, e.target.value)}>
-                      <option value="user">user</option>
-                      <option value="admin">admin</option>
-                      <option value="super_admin">super_admin</option>
-                    </select>
-                  )}
-                </div>
-              ))}
-              {users.length === 0 && <div className="py-8 text-center text-sm font-semibold text-neutral-500">Tidak ada user.</div>}
-            </div>
-          </section>
+                ))}
+                {users.length === 0 && <div className="py-8 text-center text-sm font-semibold text-[#777587]">Tidak ada user.</div>}
+              </div>
+            </section>
 
-          <section className="gloss-panel rounded-2xl p-4">
-            <SectionTitle icon={Building2} title="Households" subtitle={`${households.length} workspace aktif/tercatat`} tone="mint" />
-            <div className="relative z-10 max-h-[560px] overflow-y-auto">
-              {households.map((h) => (
-                <div key={h.id} className="border-b border-neutral-border/60 py-3 last:border-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-bold text-navy">{h.name}</div>
-                      <div className="truncate text-xs font-medium text-neutral-500">{h.owner_email}</div>
+            <section className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+              <div className="mb-6 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#e2dfff] text-[#3525cd]">
+                    <Building2 size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-[#0b1c30]">Household Portfolios</h2>
+                    <p className="mt-1 text-xs font-semibold text-[#464555]">{households.length} workspace aktif/tercatat</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {households.map((h) => {
+                  const memberCount = Number(h.member_count || 0);
+                  const paymentTotal = payments
+                    .filter((p) => p.household_name === h.name)
+                    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+                  return (
+                    <div key={h.id} className="flex items-center justify-between gap-4 rounded-xl border border-[#c7c4d8]/40 bg-[#eff4ff] p-5">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-bold text-[#0b1c30]">{h.name}</h3>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="text-xl font-extrabold text-[#3525cd]">{paymentTotal > 0 ? fmtRp(paymentTotal) : `${memberCount} anggota`}</span>
+                          <StatusBadge tone={h.subscription_status === "active" ? "mint" : "gold"}>
+                            {h.subscription_status || "unknown"}
+                          </StatusBadge>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <StatusBadge tone="violet">{h.household_type || "household"}</StatusBadge>
+                          <StatusBadge tone="navy">{h.plan || "trial"}</StatusBadge>
+                        </div>
+                      </div>
                     </div>
-                    <StatusBadge tone={h.subscription_status === "active" ? "mint" : "gold"}>{h.subscription_status || "unknown"}</StatusBadge>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <StatusBadge tone="violet">{h.household_type}</StatusBadge>
-                    <StatusBadge tone="navy">{h.member_count} anggota</StatusBadge>
-                    <StatusBadge tone="gold">{h.plan || "trial"}</StatusBadge>
-                  </div>
-                </div>
-              ))}
-              {households.length === 0 && <div className="py-8 text-center text-sm font-semibold text-neutral-500">Tidak ada household.</div>}
-            </div>
-          </section>
+                  );
+                })}
+                {households.length === 0 && <div className="py-8 text-center text-sm font-semibold text-[#777587]">Tidak ada household.</div>}
+              </div>
+            </section>
+          </div>
 
-          <section className="gloss-panel rounded-2xl p-4 xl:col-span-2">
-            <SectionTitle icon={WalletCards} title="Payments" subtitle={`${payments.length} transaksi pembayaran`} tone="gold" />
-            <div className="relative z-10 grid gap-2 md:grid-cols-2">
+          <section className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-[0_4px_20px_rgba(53,37,205,0.04)]">
+            <SectionTitle icon={WalletCards} title="Payment Activity" subtitle={`${payments.length} transaksi pembayaran terakhir`} tone="gold" />
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {payments.map((p) => (
-                <div key={p.order_id} className="rounded-2xl border border-neutral-border/60 bg-white/65 p-3">
+                <div key={p.order_id} className="rounded-xl border border-[#c7c4d8]/60 bg-[#eff4ff] p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-bold text-navy">{p.household_name}</div>
-                      <div className="truncate text-xs font-medium text-neutral-500">{p.owner_email}</div>
+                      <div className="truncate text-sm font-bold text-[#0b1c30]">{p.household_name}</div>
+                      <div className="truncate text-xs font-semibold text-[#777587]">{p.owner_email}</div>
                     </div>
                     <StatusBadge tone={paymentTone(p.status)}>{p.status}</StatusBadge>
                   </div>
-                  <div className="mt-3 flex items-end justify-between gap-3">
-                    <div className="text-xs font-bold uppercase tracking-wide text-neutral-500">{p.plan}</div>
-                    <div className="text-sm font-bold text-navy">{fmtRp(p.amount)}</div>
+                  <div className="mt-4 flex items-end justify-between gap-3">
+                    <div className="text-xs font-extrabold uppercase tracking-wide text-[#464555]">{p.plan}</div>
+                    <div className="text-base font-extrabold text-[#3525cd]">{fmtRp(p.amount)}</div>
                   </div>
                 </div>
               ))}
-              {payments.length === 0 && <div className="py-8 text-center text-sm font-semibold text-neutral-500 md:col-span-2">Belum ada payment.</div>}
+              {payments.length === 0 && <div className="py-8 text-center text-sm font-semibold text-[#777587] md:col-span-2 xl:col-span-3">Belum ada payment.</div>}
             </div>
           </section>
         </div>
       )}
 
       {activeTab === "audit" && (
-        <section className="gloss-panel rounded-2xl p-4">
-          <SectionTitle icon={History} title="Audit Log" subtitle={`${logs.length} aktivitas terakhir`} tone="navy" />
-          <div className="relative z-10">
-            {logs.map((log) => (
-              <div key={log.id} className="border-b border-neutral-border/60 py-3 last:border-0">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-sm font-bold text-navy">{log.action}</div>
-                  <div className="text-xs font-semibold text-neutral-500">{new Date(log.created_at).toLocaleString("id-ID")}</div>
-                </div>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  <StatusBadge tone="violet">{log.admin_email}</StatusBadge>
-                  <StatusBadge tone="gold">{log.target_type || "-"}</StatusBadge>
-                </div>
-                {log.metadata && (
-                  <pre className="mt-2 max-h-40 overflow-auto rounded-2xl border border-neutral-border/60 bg-white/70 p-3 text-[11px] font-semibold leading-relaxed text-neutral-700">
-                    {JSON.stringify(log.metadata, null, 2)}
-                  </pre>
-                )}
-              </div>
-            ))}
-            {logs.length === 0 && <div className="py-8 text-center text-sm font-semibold text-neutral-500">Belum ada audit log.</div>}
-          </div>
-        </section>
+        <AuditDashboard logs={logs} />
       )}
+        </div>
+      </section>
     </main>
   );
 }
