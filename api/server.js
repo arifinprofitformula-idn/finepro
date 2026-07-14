@@ -26,6 +26,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.API_PORT || 3001;
 
+// Trust reverse proxy (Caddy) agar express-rate-limit membaca IP asli pengguna
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

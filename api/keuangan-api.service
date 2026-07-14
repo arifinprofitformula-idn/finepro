@@ -1,0 +1,17 @@
+[Unit]
+Description=Finepro API — Express.js backend (port 3001)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/projects/finepro/api
+EnvironmentFile=/home/ubuntu/projects/finepro/.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

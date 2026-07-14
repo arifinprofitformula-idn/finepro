@@ -1,0 +1,17 @@
+[Unit]
+Description=Finepro GitHub Webhook Listener
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/projects/finepro/webhook
+EnvironmentFile=/home/ubuntu/projects/finepro/.env
+ExecStart=/usr/bin/node listener.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
