@@ -15,7 +15,6 @@ const adminLoginLimiter = rateLimit({
   limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  trustProxy: 1,
   message: { error: 'Terlalu banyak percobaan, coba lagi beberapa menit lagi' },
 });
 
