@@ -111,14 +111,33 @@ export async function updateAdminUserRole(id, role) {
   return data.user;
 }
 
-export async function getAdminHouseholds() {
-  const data = await adminFetch("/admin/households");
-  return data.households || [];
+export async function getAdminHouseholds(q = "", limit = 10, offset = 0) {
+  const params = new URLSearchParams({ limit, offset, ...(q ? { q } : {}) });
+  const data = await adminFetch(`/admin/households?${params}`);
+  return { households: data.households || [], total: data.total || 0 };
 }
 
-export async function getAdminPayments() {
-  const data = await adminFetch("/admin/payments");
-  return data.payments || [];
+export async function getAdminHouseholdDetail(id) {
+  return adminFetch(`/admin/households/${id}`);
+}
+
+export async function recordManualPayment(householdId, plan) {
+  const data = await adminFetch(`/admin/households/${householdId}/manual-payment`, {
+    method: "POST",
+    body: JSON.stringify({ plan }),
+  });
+  return data.payment;
+}
+
+export async function getAdminPayments(q = "", status = "", limit = 10, offset = 0) {
+  const params = new URLSearchParams({
+    limit,
+    offset,
+    ...(q ? { q } : {}),
+    ...(status ? { status } : {}),
+  });
+  const data = await adminFetch(`/admin/payments?${params}`);
+  return { payments: data.payments || [], total: data.total || 0 };
 }
 
 export async function getAdminAuditLogs() {

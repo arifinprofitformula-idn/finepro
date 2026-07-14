@@ -27,7 +27,7 @@ export default function AdminLoginPage({ onLoggedIn }) {
   }
 
   return (
-    <div className="app-glow-bg min-h-screen px-5 py-8">
+    <div className="app-glow-bg font-admin min-h-screen px-5 py-8">
       <div className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center gap-5 lg:grid-cols-[1.05fr_0.95fr]">
         <section className="gloss-panel rounded-[30px] p-5 sm:p-6">
           <div className="relative z-10">
@@ -45,11 +45,11 @@ export default function AdminLoginPage({ onLoggedIn }) {
               </div>
             </div>
 
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-mint-light px-3 py-1 text-[11px] font-bold text-mint">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-mint-light px-3 py-1 text-[11px] font-semibold text-mint">
               <ShieldCheck size={13} />
               Akses terbatas
             </div>
-            <h1 className="mt-3 text-2xl font-bold leading-tight text-navy sm:text-3xl">
+            <h1 className="mt-3 text-2xl font-semibold leading-tight text-navy sm:text-3xl">
               Masuk ke ruang kendali Finepro.
             </h1>
             <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
@@ -63,8 +63,8 @@ export default function AdminLoginPage({ onLoggedIn }) {
                 ["Audit", "Log admin"]
               ].map(([title, value]) => (
                 <div key={title} className="rounded-2xl border border-neutral-border/70 bg-white/60 p-3">
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{title}</div>
-                  <div className="mt-1 text-sm font-bold text-navy">{value}</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{title}</div>
+                  <div className="mt-1 text-sm font-semibold text-navy">{value}</div>
                 </div>
               ))}
             </div>
@@ -74,17 +74,17 @@ export default function AdminLoginPage({ onLoggedIn }) {
         <form onSubmit={handleSubmit} className="gloss-panel rounded-[30px] p-5 sm:p-6" noValidate>
           <div className="relative z-10">
             <div className="mb-4">
-              <div className="text-xs font-bold uppercase tracking-wide text-violet">Login Admin</div>
-              <h2 className="mt-1 text-xl font-bold text-navy">Verifikasi akun</h2>
+              <div className="text-xs font-semibold uppercase tracking-wide text-violet">Login Admin</div>
+              <h2 className="mt-1 text-xl font-semibold text-navy">Verifikasi akun</h2>
             </div>
 
             {message && (
-              <div className="mb-3 rounded-2xl bg-coral-light px-3 py-2 text-sm font-bold text-coral">
+              <div className="mb-3 rounded-2xl bg-coral-light px-3 py-2 text-sm font-semibold text-coral">
                 {message}
               </div>
             )}
 
-            <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-neutral-500">Email Admin</label>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Email Admin</label>
             <input
               className={inputClass}
               type="email"
@@ -94,7 +94,7 @@ export default function AdminLoginPage({ onLoggedIn }) {
               placeholder="owner@finepro.my.id"
             />
 
-            <label className="mb-1.5 mt-3 block text-[11px] font-bold uppercase tracking-wide text-neutral-500">Password</label>
+            <label className="mb-1.5 mt-3 block text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Password</label>
             <div className="relative">
               <input
                 className={`${inputClass} pr-12`}
@@ -118,7 +118,7 @@ export default function AdminLoginPage({ onLoggedIn }) {
             <button
               type="submit"
               disabled={loading}
-              className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-navy px-4 text-sm font-bold text-white shadow-[0_18px_34px_rgba(15,31,61,0.26)] transition active:scale-[0.98] disabled:opacity-60"
+              className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-navy px-4 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(15,31,61,0.26)] transition active:scale-[0.98] disabled:opacity-60"
             >
               {loading ? <LockKeyhole size={16} className="animate-pulse" /> : <ArrowRight size={16} />}
               {loading ? "Memverifikasi..." : "Masuk Admin"}
@@ -127,7 +127,7 @@ export default function AdminLoginPage({ onLoggedIn }) {
             <button
               type="button"
               onClick={() => { window.location.href = "/"; }}
-              className="mt-4 w-full text-center text-sm font-bold text-neutral-500 transition hover:text-violet"
+              className="mt-4 w-full text-center text-sm font-semibold text-neutral-500 transition hover:text-violet"
             >
               Kembali ke aplikasi
             </button>

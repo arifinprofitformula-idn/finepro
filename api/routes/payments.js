@@ -7,7 +7,7 @@ import { getSetting } from '../services/appSettings.js';
 
 const router = Router();
 
-const PLANS = {
+export const PLANS = {
   monthly: { amount: 29000, months: 1, label: 'Bulanan' },
   semiannual: { amount: 149000, months: 6, label: '6 Bulan' },
   annual: { amount: 249000, months: 12, label: 'Tahunan' },
@@ -82,7 +82,7 @@ function mapMidtransStatus(transactionStatus, fraudStatus) {
   return 'pending';
 }
 
-async function applyPaymentStatus(payment, nextStatus) {
+export async function applyPaymentStatus(payment, nextStatus) {
   if (!payment || payment.status === 'paid' || nextStatus === 'pending') {
     return payment?.status || 'pending';
   }

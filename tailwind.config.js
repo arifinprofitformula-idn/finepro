@@ -44,6 +44,9 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        admin: ["InterVariable", "Inter", "system-ui", "sans-serif"]
+      },
       boxShadow: {
         gloss: "0 20px 55px rgba(49, 77, 119, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.82)",
         soft: "0 12px 30px rgba(49, 77, 119, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.74)",

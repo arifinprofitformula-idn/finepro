@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import pool from '../db.js';
 import { authMiddleware, adminMiddleware, superAdminMiddleware, adminRoleForEmail, generateToken } from '../middleware/auth.js';
 import { auditAdminAction, getAllSettings, publicSetting, updateSetting } from '../services/appSettings.js';
 import { getCurrentMetalPrices } from '../services/apeEpi.js';
+import { PLANS, applyPaymentStatus } from './payments.js';
 
 const router = Router();
 
@@ -89,7 +91,8 @@ router.get('/overview', async (req, res) => {
         `SELECT
            COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0)::numeric AS revenue,
            COUNT(*)::int AS count,
-           COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count
+           COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count,
+           COUNT(*) FILTER (WHERE status = 'paid')::int AS paid_count
          FROM payments`
       ),
       pool.query(
@@ -115,6 +118,7 @@ router.get('/overview', async (req, res) => {
         payments: {
           total: payments.rows[0].count,
           pending: payments.rows[0].pending_count,
+          paid: payments.rows[0].paid_count,
         },
         subscriptions: subs.rows[0],
       }
@@ -234,38 +238,165 @@ router.patch('/users/:id/role', superAdminMiddleware, async (req, res) => {
 
 router.get('/households', async (req, res) => {
   try {
+    const q = String(req.query.q || '').trim();
+    const limit = Math.min(toInt(req.query.limit, 20), 100);
+    const offset = toInt(req.query.offset, 0);
+    const params = [];
+    let where = '';
+
+    if (q) {
+      params.push(`%${q}%`);
+      where = `WHERE h.name ILIKE $${params.length} OR u.email ILIKE $${params.length} OR COALESCE(u.name, '') ILIKE $${params.length}`;
+    }
+
+    params.push(limit, offset);
     const result = await pool.query(
       `SELECT h.id, h.name, h.household_type, h.created_at,
               u.email AS owner_email, u.name AS owner_name,
               s.plan, s.status AS subscription_status, s.current_period_end,
-              COUNT(hm.user_id)::int AS member_count
+              COUNT(DISTINCT hm.user_id)::int AS member_count,
+              COALESCE(SUM(p.amount) FILTER (WHERE p.status = 'paid'), 0)::numeric AS total_paid,
+              COUNT(*) OVER()::int AS total_count
        FROM households h
        JOIN users u ON u.id = h.owner_id
        LEFT JOIN subscriptions s ON s.household_id = h.id
        LEFT JOIN household_members hm ON hm.household_id = h.id
+       LEFT JOIN payments p ON p.household_id = h.id
+       ${where}
        GROUP BY h.id, u.email, u.name, s.plan, s.status, s.current_period_end
        ORDER BY h.created_at DESC
-       LIMIT 100`
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
     );
-    res.json({ households: result.rows });
+
+    const total = result.rows[0]?.total_count ?? 0;
+    res.json({
+      households: result.rows.map(({ total_count, ...row }) => row),
+      total,
+    });
   } catch (err) {
     console.error('Admin households error:', err);
     res.status(500).json({ error: 'Gagal mengambil household' });
   }
 });
 
+router.get('/households/:id', async (req, res) => {
+  try {
+    const householdResult = await pool.query(
+      `SELECT h.id, h.name, h.household_type, h.created_at,
+              u.email AS owner_email, u.name AS owner_name,
+              s.plan, s.status AS subscription_status, s.current_period_end
+       FROM households h
+       JOIN users u ON u.id = h.owner_id
+       LEFT JOIN subscriptions s ON s.household_id = h.id
+       WHERE h.id = $1`,
+      [req.params.id]
+    );
+    const household = householdResult.rows[0];
+    if (!household) return res.status(404).json({ error: 'Household tidak ditemukan' });
+
+    const [members, payments] = await Promise.all([
+      pool.query(
+        `SELECT u.id, u.name, u.email, hm.role
+         FROM household_members hm
+         JOIN users u ON u.id = hm.user_id
+         WHERE hm.household_id = $1
+         ORDER BY hm.joined_at ASC`,
+        [req.params.id]
+      ),
+      pool.query(
+        `SELECT order_id, plan, amount, status, created_at, paid_at
+         FROM payments
+         WHERE household_id = $1
+         ORDER BY created_at DESC
+         LIMIT 20`,
+        [req.params.id]
+      )
+    ]);
+
+    res.json({ household, members: members.rows, payments: payments.rows });
+  } catch (err) {
+    console.error('Admin household detail error:', err);
+    res.status(500).json({ error: 'Gagal mengambil detail household' });
+  }
+});
+
+router.post('/households/:id/manual-payment', async (req, res) => {
+  try {
+    const plan = req.body?.plan;
+    const planConfig = PLANS[plan];
+    if (!planConfig) {
+      return res.status(400).json({ error: 'Plan tidak valid' });
+    }
+
+    const householdResult = await pool.query('SELECT id FROM households WHERE id = $1', [req.params.id]);
+    if (!householdResult.rows[0]) {
+      return res.status(404).json({ error: 'Household tidak ditemukan' });
+    }
+
+    const orderId = `MANUAL-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    await pool.query(
+      `INSERT INTO payments (household_id, order_id, plan, amount, status)
+       VALUES ($1, $2, $3, $4, 'pending')`,
+      [req.params.id, orderId, plan, planConfig.amount]
+    );
+
+    const status = await applyPaymentStatus(
+      { order_id: orderId, plan, household_id: req.params.id, status: 'pending' },
+      'paid'
+    );
+
+    await auditAdminAction(req.admin.id, 'payments.manual.record', 'payments', orderId, {
+      household_id: req.params.id,
+      plan,
+      amount: planConfig.amount,
+    });
+
+    res.status(201).json({ payment: { order_id: orderId, plan, amount: planConfig.amount, status } });
+  } catch (err) {
+    console.error('Record manual payment error:', err);
+    res.status(500).json({ error: 'Gagal mencatat pembayaran manual' });
+  }
+});
+
 router.get('/payments', async (req, res) => {
   try {
+    const q = String(req.query.q || '').trim();
+    const status = String(req.query.status || '').trim();
+    const limit = Math.min(toInt(req.query.limit, 20), 100);
+    const offset = toInt(req.query.offset, 0);
+    const conditions = [];
+    const params = [];
+
+    if (q) {
+      params.push(`%${q}%`);
+      conditions.push(`(h.name ILIKE $${params.length} OR u.email ILIKE $${params.length})`);
+    }
+    if (['pending', 'paid', 'failed'].includes(status)) {
+      params.push(status);
+      conditions.push(`p.status = $${params.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    params.push(limit, offset);
     const result = await pool.query(
       `SELECT p.order_id, p.plan, p.amount, p.status, p.created_at, p.paid_at,
-              h.name AS household_name, u.email AS owner_email
+              h.name AS household_name, u.email AS owner_email,
+              COUNT(*) OVER()::int AS total_count
        FROM payments p
        JOIN households h ON h.id = p.household_id
        JOIN users u ON u.id = h.owner_id
+       ${where}
        ORDER BY p.created_at DESC
-       LIMIT 100`
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
     );
-    res.json({ payments: result.rows });
+
+    const total = result.rows[0]?.total_count ?? 0;
+    res.json({
+      payments: result.rows.map(({ total_count, ...row }) => row),
+      total,
+    });
   } catch (err) {
     console.error('Admin payments error:', err);
     res.status(500).json({ error: 'Gagal mengambil pembayaran' });

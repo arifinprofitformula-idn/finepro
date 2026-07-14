@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import {
   Activity,
   AlertTriangle,
@@ -25,21 +26,32 @@ import {
   UserCog,
   UserPlus,
   Users,
-  WalletCards
+  WalletCards,
+  X
 } from "lucide-react";
 import {
   getAdminAuditLogs,
+  getAdminHouseholdDetail,
   getAdminHouseholds,
   getAdminOverview,
   getAdminPayments,
   getAdminSettings,
   getAdminUsers,
+  recordManualPayment,
   updateAdminSetting,
   updateAdminUserRole,
   testApeEpiConnection
 } from "../api/admin.js";
 import { fmtRp } from "../utils/format.js";
 import { mediaUrl } from "../utils/media.js";
+
+const PAGE_SIZE = 10;
+
+const MANUAL_PAYMENT_PLANS = [
+  { value: "monthly", label: "Bulanan", amount: 29000 },
+  { value: "semiannual", label: "6 Bulan", amount: 149000 },
+  { value: "annual", label: "Tahunan", amount: 249000 }
+];
 
 const tabs = [
   { id: "overview", label: "Overview", icon: Activity },
@@ -80,7 +92,7 @@ const inputClass =
   "h-11 w-full rounded-lg border border-white/30 bg-white/35 px-3 text-sm font-semibold text-[#0b1c30] shadow-[inset_1px_1px_0_rgba(255,255,255,0.55),inset_-1px_-1px_0_rgba(53,37,205,0.06)] outline-none backdrop-blur-xl transition placeholder:text-[#464555]/70 focus:border-white/60 focus:bg-white/55 focus:shadow-[0_0_0_4px_rgba(53,37,205,0.12),inset_1px_1px_0_rgba(255,255,255,0.72)]";
 const areaClass =
   "min-h-24 w-full rounded-lg border border-white/30 bg-white/35 px-3 py-2 text-sm font-semibold text-[#0b1c30] shadow-[inset_1px_1px_0_rgba(255,255,255,0.55),inset_-1px_-1px_0_rgba(53,37,205,0.06)] outline-none backdrop-blur-xl transition placeholder:text-[#464555]/70 focus:border-white/60 focus:bg-white/55 focus:shadow-[0_0_0_4px_rgba(53,37,205,0.12),inset_1px_1px_0_rgba(255,255,255,0.72)]";
-const labelClass = "mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[#464555]";
+const labelClass = "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[#464555]";
 const glassPanel =
   "relative overflow-hidden rounded-xl border border-white/30 bg-white/20 shadow-[0_24px_70px_rgba(27,36,84,0.18),inset_1px_1px_0_rgba(255,255,255,0.72),inset_-1px_-1px_0_rgba(53,37,205,0.08)] backdrop-blur-2xl";
 const glassCard =
@@ -104,7 +116,7 @@ function Toggle({ checked, onChange }) {
       aria-label={checked ? "Status aktif" : "Status nonaktif"}
     >
       <span
-        className={`absolute text-[9px] font-black uppercase tracking-wide transition-all duration-300 ${
+        className={`absolute text-[9px] font-semibold-TMP uppercase tracking-wide transition-all duration-300 ${
           checked ? "left-2.5 text-white opacity-100" : "left-3 text-neutral-400 opacity-100"
         }`}
       >
@@ -123,9 +135,40 @@ function Toggle({ checked, onChange }) {
 
 function StatusBadge({ children, tone = "violet" }) {
   return (
-    <span className={`inline-flex items-center rounded-full border border-white/25 px-2.5 py-1 text-[11px] font-bold shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl ${toneMap[tone].badge}`}>
+    <span className={`inline-flex items-center rounded-full border border-white/25 px-2.5 py-1 text-[11px] font-semibold shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl ${toneMap[tone].badge}`}>
       {children}
     </span>
+  );
+}
+
+function PaginationControls({ page, pageSize, total, onPageChange }) {
+  const start = total === 0 ? 0 : page * pageSize + 1;
+  const end = Math.min(total, (page + 1) * pageSize);
+  const hasPrev = page > 0;
+  const hasNext = end < total;
+
+  return (
+    <div className="flex flex-col gap-2 pt-3 text-xs font-semibold text-[#464555] sm:flex-row sm:items-center sm:justify-between">
+      <span>{total === 0 ? "Tidak ada data" : `Menampilkan ${start}–${end} dari ${total}`}</span>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(page - 1)}
+          disabled={!hasPrev}
+          className="flex h-8 items-center justify-center rounded-lg border border-[#c7c4d8] bg-white px-3 text-xs font-semibold text-[#464555] transition hover:bg-[#eff4ff] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Sebelumnya
+        </button>
+        <button
+          type="button"
+          onClick={() => onPageChange(page + 1)}
+          disabled={!hasNext}
+          className="flex h-8 items-center justify-center rounded-lg border border-[#c7c4d8] bg-white px-3 text-xs font-semibold text-[#464555] transition hover:bg-[#eff4ff] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Berikutnya
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -137,7 +180,7 @@ function SectionTitle({ icon: Icon, title, subtitle, tone = "violet", action }) 
           <Icon size={17} />
         </div>
         <div className="min-w-0">
-          <h2 className="truncate text-base font-bold text-[#0b1c30]">{title}</h2>
+          <h2 className="truncate text-base font-semibold text-[#0b1c30]">{title}</h2>
           {subtitle && <p className="mt-0.5 text-xs font-medium leading-relaxed text-[#464555]">{subtitle}</p>}
         </div>
       </div>
@@ -156,13 +199,13 @@ function StatCard({ label, value, icon: Icon, tone = "violet" }) {
           <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${toneMap[tone].icon}`}>
             <Icon size={20} />
           </div>
-          <div className={`rounded-full px-2 py-1 text-[11px] font-bold ${toneMap[tone].badge}`}>
+          <div className={`rounded-full px-2 py-1 text-[11px] font-semibold ${toneMap[tone].badge}`}>
             Live
           </div>
         </div>
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#464555]">{label}</div>
-          <div className="mt-2 truncate text-2xl font-extrabold tracking-tight text-[#0b1c30]">{value}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#464555]">{label}</div>
+          <div className="mt-2 truncate text-2xl font-bold tracking-tight text-[#0b1c30]">{value}</div>
         </div>
       </div>
     </div>
@@ -171,7 +214,7 @@ function StatCard({ label, value, icon: Icon, tone = "violet" }) {
 
 function SecretHint({ configured }) {
   return (
-    <div className={`mt-1.5 flex items-center gap-1.5 text-[11px] font-bold ${configured ? "text-mint" : "text-neutral-500"}`}>
+    <div className={`mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold ${configured ? "text-mint" : "text-neutral-500"}`}>
       {configured ? <CheckCircle2 size={12} /> : <KeyRound size={12} />}
       {configured ? "Secret tersimpan. Biarkan kosong jika tidak diganti." : "Secret belum tersimpan."}
     </div>
@@ -216,19 +259,19 @@ function IntegrationTile({
         </div>
         <div className="flex flex-col items-end gap-2">
           <Toggle checked={Boolean(enabled)} onChange={onToggle} />
-          <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] ${enabled ? toneMap.mint.badge : "bg-white/35 text-[#464555]"}`}>
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] ${enabled ? toneMap.mint.badge : "bg-white/35 text-[#464555]"}`}>
             {enabled ? "Connected" : "Inactive"}
           </span>
         </div>
       </div>
 
       <div className="flex-1">
-        <h3 className="text-xl font-extrabold tracking-tight text-[#0b1c30]">{title}</h3>
+        <h3 className="text-xl font-semibold tracking-tight text-[#0b1c30]">{title}</h3>
         <p className="mt-2 h-12 overflow-hidden text-sm font-medium leading-6 text-[#464555]">{description}</p>
       </div>
 
       <div className="mt-5 border-t border-white/25 pt-4">
-        <div className="mb-2 flex items-center justify-between text-xs font-bold">
+        <div className="mb-2 flex items-center justify-between text-xs font-semibold">
           <span className="text-[#777587]">{detailLabel}</span>
           <span className="text-[#0b1c30]">{detailValue}</span>
         </div>
@@ -240,7 +283,7 @@ function IntegrationTile({
       <button
         type="button"
         onClick={onConfigure}
-        className={`mt-5 flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-extrabold text-[#3525cd] transition hover:bg-white/45 ${glassButton}`}
+        className={`mt-5 flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-[#3525cd] transition hover:bg-white/45 ${glassButton}`}
       >
         Configure
         <ChevronRight size={16} />
@@ -283,7 +326,7 @@ function TechnicalPanel({ midtrans, telegram, apeEpi }) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[420px] text-left">
           <thead>
-            <tr className="border-b border-white/25 text-[11px] font-extrabold uppercase tracking-wide text-[#464555]">
+            <tr className="border-b border-white/25 text-[11px] font-semibold uppercase tracking-wide text-[#464555]">
               <th className="pb-3">Event</th>
               <th className="pb-3">Service</th>
               <th className="pb-3 text-right">Status</th>
@@ -291,7 +334,7 @@ function TechnicalPanel({ midtrans, telegram, apeEpi }) {
           </thead>
           <tbody>
             {deliveries.map((item) => (
-              <tr key={item.event} className="border-b border-white/15 text-sm font-bold last:border-0">
+              <tr key={item.event} className="border-b border-white/15 text-sm font-semibold last:border-0">
                 <td className="py-3 text-[#0b1c30]">{item.event}</td>
                 <td className="py-3 text-[#464555]">{item.service}</td>
                 <td className="py-3 text-right">
@@ -321,7 +364,7 @@ function AdminAvatar({ user }) {
   const label = user?.name || user?.email || "Admin";
   return (
     <div
-      className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/40 bg-white/35 text-sm font-extrabold text-[#3525cd] shadow-[0_14px_30px_rgba(27,36,84,0.16),inset_1px_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl"
+      className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/40 bg-white/35 text-sm font-semibold text-[#3525cd] shadow-[0_14px_30px_rgba(27,36,84,0.16),inset_1px_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl"
       title={label}
       aria-label={label}
     >
@@ -387,7 +430,7 @@ function AuditDashboard({ logs }) {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-[#464555]">{item.label}</p>
-                    <p className="mt-1 text-3xl font-extrabold text-[#0b1c30]">{item.value}</p>
+                    <p className="mt-1 text-3xl font-bold text-[#0b1c30]">{item.value}</p>
                   </div>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-white/35 shadow-[inset_0_1px_2px_rgba(27,36,84,0.12)]">
@@ -400,7 +443,7 @@ function AuditDashboard({ logs }) {
           <div className="relative overflow-hidden rounded-xl border border-white/25 bg-[#4f46e5]/75 p-6 text-[#dad7ff] shadow-[0_26px_70px_rgba(53,37,205,0.28),inset_1px_1px_0_rgba(255,255,255,0.32)] backdrop-blur-2xl sm:col-span-2">
             <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white/60" />
             <div className="relative z-10">
-              <h3 className="text-xl font-bold text-white">Data Residency Compliant</h3>
+              <h3 className="text-xl font-semibold text-white">Data Residency Compliant</h3>
               <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-[#dad7ff]/85">
                 Audit log tersimpan dengan kontrol akses admin dan riwayat aktivitas bisa ditelusuri dari feed ini.
               </p>
@@ -413,7 +456,7 @@ function AuditDashboard({ logs }) {
       <section className={glassPanel}>
         <div className="flex flex-col gap-3 border-b border-white/25 bg-white/18 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-bold text-[#0b1c30]">Recent Activity Items</h2>
+            <h2 className="text-xl font-semibold text-[#0b1c30]">Recent Activity Items</h2>
             <p className="mt-1 text-xs font-semibold text-[#777587]">Showing last {Math.min(logs.length, 100)} events</p>
           </div>
         </div>
@@ -429,11 +472,11 @@ function AuditDashboard({ logs }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                    <h3 className={`text-sm font-extrabold ${tone === "coral" ? "text-[#ba1a1a]" : "text-[#0b1c30]"}`}>{log.action}</h3>
+                    <h3 className={`text-sm font-semibold ${tone === "coral" ? "text-[#ba1a1a]" : "text-[#0b1c30]"}`}>{log.action}</h3>
                     <span className="text-xs font-semibold text-[#777587]">{new Date(log.created_at).toLocaleString("id-ID")}</span>
                   </div>
                   <p className="mt-2 text-sm font-medium leading-6 text-[#464555]">
-                    Admin <span className="font-bold text-[#3525cd]">{log.admin_email || "system"}</span>
+                    Admin <span className="font-semibold text-[#3525cd]">{log.admin_email || "system"}</span>
                     {log.target_type ? ` melakukan perubahan pada ${log.target_type}.` : " menjalankan aktivitas sistem."}
                   </p>
                   {log.metadata && (
@@ -463,7 +506,7 @@ function SaveButton({ label, saving, onClick, tone = "violet" }) {
       type="button"
       onClick={onClick}
       disabled={saving}
-      className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-lg border border-white/25 bg-gradient-to-br px-4 text-sm font-bold text-white shadow-[0_18px_42px_rgba(27,36,84,0.18),inset_1px_1px_0_rgba(255,255,255,0.34)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60 sm:w-auto ${bg}`}
+      className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-lg border border-white/25 bg-gradient-to-br px-4 text-sm font-semibold text-white shadow-[0_18px_42px_rgba(27,36,84,0.18),inset_1px_1px_0_rgba(255,255,255,0.34)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60 sm:w-auto ${bg}`}
     >
       <Save size={15} />
       {saving ? "Menyimpan..." : label}
@@ -499,6 +542,167 @@ function formatFetchedAt(value) {
   }).format(new Date(value));
 }
 
+function formatDate(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+}
+
+function HouseholdDetailModal({ householdId, onClose, onChanged }) {
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState(MANUAL_PAYMENT_PLANS[0].value);
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!householdId) return;
+    let cancelled = false;
+    setDetail(null);
+    setError("");
+    setMessage("");
+    setConfirming(false);
+    setLoading(true);
+    getAdminHouseholdDetail(householdId)
+      .then((data) => { if (!cancelled) setDetail(data); })
+      .catch((err) => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [householdId]);
+
+  async function handleRecordPayment() {
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    setSubmitting(true);
+    setMessage("");
+    try {
+      await recordManualPayment(householdId, selectedPlan);
+      const refreshed = await getAdminHouseholdDetail(householdId);
+      setDetail(refreshed);
+      setMessage("Pembayaran manual berhasil dicatat.");
+      onChanged?.();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setSubmitting(false);
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <Dialog open={Boolean(householdId)} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-[#0b1c30]/40 backdrop-blur-sm" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <DialogPanel className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-[0_20px_60px_rgba(11,28,48,0.25)]">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <DialogTitle className="text-lg font-semibold text-[#0b1c30]">
+              {detail?.household?.name || "Detail Household"}
+            </DialogTitle>
+            <button type="button" onClick={onClose} className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[#777587] transition hover:bg-[#eff4ff]">
+              <X size={18} />
+            </button>
+          </div>
+
+          {loading && <div className="py-8 text-center text-sm font-semibold text-[#777587]">Memuat detail...</div>}
+          {error && <div className="rounded-lg bg-[#ffdad6] p-3 text-sm font-semibold text-[#ba1a1a]">{error}</div>}
+
+          {detail && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-[#777587]">Owner</div>
+                  <div className="font-semibold text-[#0b1c30]">{detail.household.owner_name || detail.household.owner_email}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-[#777587]">Plan</div>
+                  <div className="font-semibold text-[#0b1c30]">{detail.household.plan || "-"}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-[#777587]">Status Subscription</div>
+                  <StatusBadge tone={detail.household.subscription_status === "active" ? "mint" : "gold"}>
+                    {detail.household.subscription_status || "unknown"}
+                  </StatusBadge>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-[#777587]">Aktif Hingga</div>
+                  <div className="font-semibold text-[#0b1c30]">{formatDate(detail.household.current_period_end)}</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#777587]">
+                  Member ({detail.members.length})
+                </div>
+                <div className="space-y-2">
+                  {detail.members.map((m) => (
+                    <div key={m.id} className="flex items-center justify-between rounded-lg bg-[#eff4ff] px-3 py-2 text-sm">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-[#0b1c30]">{m.name || m.email}</div>
+                        <div className="truncate text-xs text-[#777587]">{m.email}</div>
+                      </div>
+                      <StatusBadge tone="violet">{m.role}</StatusBadge>
+                    </div>
+                  ))}
+                  {detail.members.length === 0 && <div className="text-sm text-[#777587]">Tidak ada member.</div>}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#777587]">
+                  Riwayat Payment ({detail.payments.length})
+                </div>
+                <div className="max-h-40 space-y-2 overflow-y-auto">
+                  {detail.payments.map((p) => (
+                    <div key={p.order_id} className="flex items-center justify-between rounded-lg bg-[#eff4ff] px-3 py-2 text-sm">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-[#0b1c30]">{p.plan} · {fmtRp(p.amount)}</div>
+                        <div className="text-xs text-[#777587]">{formatDate(p.created_at)}</div>
+                      </div>
+                      <StatusBadge tone={paymentTone(p.status)}>{p.status}</StatusBadge>
+                    </div>
+                  ))}
+                  {detail.payments.length === 0 && <div className="text-sm text-[#777587]">Belum ada payment.</div>}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#c7c4d8] bg-[#eff4ff]/60 p-4">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#777587]">Catat Pembayaran Manual</div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <select
+                    className={`${inputClass} sm:max-w-[220px]`}
+                    value={selectedPlan}
+                    onChange={(e) => { setSelectedPlan(e.target.value); setConfirming(false); }}
+                    disabled={submitting}
+                  >
+                    {MANUAL_PAYMENT_PLANS.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label} — {fmtRp(p.amount)}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleRecordPayment}
+                    disabled={submitting}
+                    className={`flex min-h-[42px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white transition disabled:opacity-60 ${
+                      confirming ? "bg-[#ba1a1a]" : "bg-[#3525cd]"
+                    }`}
+                  >
+                    <Save size={15} />
+                    {submitting ? "Menyimpan..." : confirming ? "Yakin? Klik untuk konfirmasi" : "Catat Pembayaran"}
+                  </button>
+                </div>
+                {message && <div className="mt-2 text-xs font-semibold text-[#464555]">{message}</div>}
+              </div>
+            </div>
+          )}
+        </DialogPanel>
+      </div>
+    </Dialog>
+  );
+}
+
 export default function AdminPage({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [overview, setOverview] = useState(null);
@@ -511,6 +715,14 @@ export default function AdminPage({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState("");
   const [message, setMessage] = useState("");
+  const [openHouseholdId, setOpenHouseholdId] = useState(null);
+  const [householdQuery, setHouseholdQuery] = useState("");
+  const [householdPage, setHouseholdPage] = useState(0);
+  const [householdTotal, setHouseholdTotal] = useState(0);
+  const [paymentQuery, setPaymentQuery] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [paymentPage, setPaymentPage] = useState(0);
+  const [paymentTotal, setPaymentTotal] = useState(0);
 
   const [mailketing, setMailketing] = useFormState(settings?.mailketing);
   const [midtrans, setMidtrans] = useFormState(settings?.midtrans);
@@ -533,15 +745,17 @@ export default function AdminPage({ user, onLogout }) {
         getAdminOverview(),
         getAdminSettings(),
         getAdminUsers(userQuery),
-        getAdminHouseholds(),
-        getAdminPayments(),
+        getAdminHouseholds(householdQuery, PAGE_SIZE, householdPage * PAGE_SIZE),
+        getAdminPayments(paymentQuery, paymentStatus, PAGE_SIZE, paymentPage * PAGE_SIZE),
         getAdminAuditLogs()
       ]);
       setOverview(overviewData);
       setSettings(settingsData);
       setUsers(usersData);
-      setHouseholds(householdsData);
-      setPayments(paymentsData);
+      setHouseholds(householdsData.households);
+      setHouseholdTotal(householdsData.total);
+      setPayments(paymentsData.payments);
+      setPaymentTotal(paymentsData.total);
       setLogs(logsData);
     } catch (err) {
       setMessage(err.message);
@@ -554,6 +768,43 @@ export default function AdminPage({ user, onLogout }) {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadHouseholds(page, query) {
+    try {
+      const data = await getAdminHouseholds(query, PAGE_SIZE, page * PAGE_SIZE);
+      setHouseholds(data.households);
+      setHouseholdTotal(data.total);
+      setHouseholdPage(page);
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function searchHouseholds(e) {
+    e.preventDefault();
+    await loadHouseholds(0, householdQuery);
+  }
+
+  async function loadPayments(page, query, status) {
+    try {
+      const data = await getAdminPayments(query, status, PAGE_SIZE, page * PAGE_SIZE);
+      setPayments(data.payments);
+      setPaymentTotal(data.total);
+      setPaymentPage(page);
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function searchPayments(e) {
+    e.preventDefault();
+    await loadPayments(0, paymentQuery, paymentStatus);
+  }
+
+  async function changePaymentStatus(status) {
+    setPaymentStatus(status);
+    await loadPayments(0, paymentQuery, status);
+  }
 
   async function saveSetting(key, form) {
     setSavingKey(key);
@@ -616,12 +867,6 @@ export default function AdminPage({ user, onLogout }) {
       setSavingKey("");
     }
   }
-
-  const paymentSummary = useMemo(() => {
-    const paid = payments.filter((p) => p.status === "paid").length;
-    const pending = payments.filter((p) => p.status === "pending").length;
-    return { paid, pending };
-  }, [payments]);
 
   const activeTabLabel = tabs.find((tab) => tab.id === activeTab)?.label || "Overview";
   const pageTitle = activeTab === "overview" ? "Overview Dashboard" : activeTab === "integrations" ? "Integrations" : activeTab === "data" ? "Data Management" : activeTab === "audit" ? "System Activity Feed" : activeTabLabel;
@@ -718,17 +963,17 @@ export default function AdminPage({ user, onLogout }) {
   ];
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_8%_5%,rgba(108,248,187,0.42),transparent_28%),radial-gradient(circle_at_90%_10%,rgba(226,223,255,0.78),transparent_30%),radial-gradient(circle_at_78%_82%,rgba(255,218,220,0.62),transparent_32%),linear-gradient(135deg,#f8f9ff_0%,#dce9ff_48%,#f8f9ff_100%)] font-['Plus_Jakarta_Sans',system-ui,sans-serif] text-[#0b1c30]">
+    <main className="font-admin relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_8%_5%,rgba(108,248,187,0.42),transparent_28%),radial-gradient(circle_at_90%_10%,rgba(226,223,255,0.78),transparent_30%),radial-gradient(circle_at_78%_82%,rgba(255,218,220,0.62),transparent_32%),linear-gradient(135deg,#f8f9ff_0%,#dce9ff_48%,#f8f9ff_100%)] text-[#0b1c30]">
       <div className="pointer-events-none fixed -left-24 top-24 h-72 w-72 rounded-full bg-[#6cf8bb]/30 blur-3xl" />
       <div className="pointer-events-none fixed right-0 top-20 h-96 w-96 rounded-full bg-[#3525cd]/18 blur-3xl" />
       <div className="pointer-events-none fixed bottom-0 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-[#ffb2b9]/30 blur-3xl" />
       <aside className="fixed left-0 top-0 z-30 hidden h-screen w-64 flex-col border-r border-white/25 bg-white/18 px-3 py-6 shadow-[18px_0_60px_rgba(27,36,84,0.12),inset_-1px_0_0_rgba(255,255,255,0.35)] backdrop-blur-2xl lg:flex">
         <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/75" />
-        <button type="button" onClick={() => { window.location.href = "/"; }} className="mb-10 px-4 text-left">
-          <div className="inline-flex rounded-xl border border-white/30 bg-white/28 px-3 py-2 shadow-[inset_1px_1px_0_rgba(255,255,255,0.66),0_14px_32px_rgba(27,36,84,0.10)] backdrop-blur-xl">
-            <img src="/images/fine-pro-header.png" alt="FinePro" className="h-8 w-auto object-contain" />
+        <button type="button" onClick={() => { window.location.href = "/"; }} className="mb-10 w-full px-2 text-left">
+          <div className="flex min-h-[72px] w-full items-center justify-center rounded-2xl border border-white/30 bg-white/30 px-5 py-4 shadow-[inset_1px_1px_0_rgba(255,255,255,0.66),0_18px_40px_rgba(27,36,84,0.12)] backdrop-blur-xl">
+            <img src="/images/fine-pro-header.png" alt="FinePro" className="h-12 w-full max-w-[178px] object-contain" />
           </div>
-          <div className="mt-2 px-1 text-xs font-semibold text-[#464555]">Admin Dashboard</div>
+          <div className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-[#464555]">Admin Dashboard</div>
         </button>
         <nav className="flex-1 space-y-2">
           {tabs.map((tab) => {
@@ -739,7 +984,7 @@ export default function AdminPage({ user, onLogout }) {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex min-h-[46px] w-full items-center gap-3 rounded-lg border-l-4 px-4 text-sm font-bold transition active:scale-[0.98] ${
+                className={`flex min-h-[46px] w-full items-center gap-3 rounded-lg border-l-4 px-4 text-sm font-semibold transition active:scale-[0.98] ${
                   active
                     ? "border-white/70 bg-white/35 text-[#3525cd] shadow-[0_14px_34px_rgba(53,37,205,0.16),inset_1px_1px_0_rgba(255,255,255,0.68)]"
                     : "border-transparent text-[#26344a] hover:bg-white/24 hover:text-[#3525cd]"
@@ -755,7 +1000,7 @@ export default function AdminPage({ user, onLogout }) {
           <button
             type="button"
             onClick={onLogout}
-            className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-4 text-sm font-bold text-[#ba1a1a] transition hover:bg-white/28"
+            className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-4 text-sm font-semibold text-[#ba1a1a] transition hover:bg-white/28"
           >
             <LogOut size={18} />
             Keluar
@@ -767,16 +1012,16 @@ export default function AdminPage({ user, onLogout }) {
         <button
           type="button"
           onClick={() => { window.location.href = "/"; }}
-          className="inline-flex items-center rounded-xl border border-white/30 bg-white/28 px-3 py-1.5 shadow-[inset_1px_1px_0_rgba(255,255,255,0.66)] backdrop-blur-xl lg:hidden"
+          className="inline-flex min-h-[44px] items-center rounded-xl border border-white/30 bg-white/28 px-3 py-1.5 shadow-[inset_1px_1px_0_rgba(255,255,255,0.66)] backdrop-blur-xl lg:hidden"
           aria-label="FinePro"
         >
-          <img src="/images/fine-pro-header.png" alt="FinePro" className="h-7 w-auto object-contain" />
+          <img src="/images/fine-pro-header.png" alt="FinePro" className="h-8 w-auto max-w-[128px] object-contain" />
         </button>
         <div className="flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={loadAll}
-            className={`flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold text-[#3525cd] transition hover:bg-white/45 ${glassButton}`}
+            className={`flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-[#3525cd] transition hover:bg-white/45 ${glassButton}`}
             title="Refresh"
           >
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
@@ -790,11 +1035,11 @@ export default function AdminPage({ user, onLogout }) {
         <div className="mx-auto max-w-7xl space-y-6">
           <section className="flex flex-col gap-4">
             <div>
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/35 bg-white/30 px-3 py-1 text-[11px] font-bold text-[#3525cd] shadow-[inset_1px_1px_0_rgba(255,255,255,0.65)] backdrop-blur-xl">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/35 bg-white/30 px-3 py-1 text-[11px] font-semibold text-[#3525cd] shadow-[inset_1px_1px_0_rgba(255,255,255,0.65)] backdrop-blur-xl">
                 <ShieldCheck size={13} />
                 Admin Console
               </div>
-              <h1 className="text-2xl font-extrabold tracking-tight text-[#0b1c30] sm:text-3xl">
+              <h1 className="text-2xl font-semibold tracking-tight text-[#0b1c30] sm:text-3xl">
                 {pageTitle}
               </h1>
               <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[#464555]">
@@ -804,7 +1049,7 @@ export default function AdminPage({ user, onLogout }) {
           </section>
 
       {message && (
-        <div className={`p-3 text-sm font-bold text-[#0b1c30] ${glassPanel}`}>
+        <div className={`p-3 text-sm font-semibold text-[#0b1c30] ${glassPanel}`}>
           {message}
         </div>
       )}
@@ -819,7 +1064,7 @@ export default function AdminPage({ user, onLogout }) {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex min-h-[48px] items-center justify-center gap-1.5 rounded-2xl px-2 text-xs font-bold transition active:scale-[0.98] sm:text-sm ${
+                className={`flex min-h-[48px] items-center justify-center gap-1.5 rounded-2xl px-2 text-xs font-semibold transition active:scale-[0.98] sm:text-sm ${
                   active ? "bg-[#3525cd]/90 text-white shadow-[0_12px_24px_rgba(53,37,205,0.20)]" : "text-[#26344a] hover:bg-white/28 hover:text-[#3525cd]"
                 }`}
               >
@@ -831,7 +1076,7 @@ export default function AdminPage({ user, onLogout }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#464555]">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#464555]">
         <span>{activeTabLabel}</span>
         <ChevronRight size={13} />
         <span className="text-[#3525cd]">{loading ? "Memuat" : "Siap"}</span>
@@ -845,8 +1090,8 @@ export default function AdminPage({ user, onLogout }) {
           <StatCard label="Revenue Paid" value={fmtRp(overview?.revenue || 0)} icon={CreditCard} tone="navy" />
           <StatCard label="Subscription Aktif" value={overview?.subscriptions?.active ?? "-"} icon={ShieldCheck} tone="mint" />
           <StatCard label="Subscription Expired" value={overview?.subscriptions?.expired ?? "-"} icon={History} tone="coral" />
-          <StatCard label="Payment Paid" value={paymentSummary.paid} icon={WalletCards} tone="violet" />
-          <StatCard label="Payment Pending" value={paymentSummary.pending} icon={CreditCard} tone="gold" />
+          <StatCard label="Payment Paid" value={overview?.payments?.paid ?? "-"} icon={WalletCards} tone="violet" />
+          <StatCard label="Payment Pending" value={overview?.payments?.pending ?? "-"} icon={CreditCard} tone="gold" />
         </div>
       )}
 
@@ -913,7 +1158,7 @@ export default function AdminPage({ user, onLogout }) {
             }
           >
             <div className={`flex items-center justify-between px-3 py-2 ${glassSoft}`}>
-              <span className="text-sm font-bold text-navy">Production Mode</span>
+              <span className="text-sm font-semibold text-navy">Production Mode</span>
               <Toggle checked={Boolean(midtrans.is_production)} onChange={(v) => setMidtrans("is_production", v)} />
             </div>
             <div>
@@ -1013,7 +1258,7 @@ export default function AdminPage({ user, onLogout }) {
             />
             <div className="relative z-10 space-y-4">
               <div className="rounded-xl border border-white/25 bg-[#6cf8bb]/18 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
-                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-mint">Trial</div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-mint">Trial</div>
                 <FormRow>
                   <div>
                     <label className={labelClass}>Insight total trial</label>
@@ -1027,7 +1272,7 @@ export default function AdminPage({ user, onLogout }) {
               </div>
 
               <div className={`${glassSoft} p-3`}>
-                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Free / Expired</div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Free / Expired</div>
                 <FormRow>
                   <div>
                     <label className={labelClass}>Insight / Bulan</label>
@@ -1041,7 +1286,7 @@ export default function AdminPage({ user, onLogout }) {
               </div>
 
               <div className="rounded-xl border border-white/25 bg-[#e2dfff]/35 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
-                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-violet">Paid: Monthly / 6 Bulan / Annual</div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet">Paid: Monthly / 6 Bulan / Annual</div>
                 <FormRow>
                   <div>
                     <label className={labelClass}>Insight / Hari</label>
@@ -1055,7 +1300,7 @@ export default function AdminPage({ user, onLogout }) {
               </div>
 
               <div className="rounded-xl border border-white/25 bg-[#ffdadc]/35 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
-                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gold">Telegram AI</div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gold">Telegram AI</div>
                 <div>
                   <label className={labelClass}>Chat AI / User / Hari</label>
                   <input className={inputClass} type="number" min="0" value={aiQuota.telegram_chat_daily ?? 100} onChange={(e) => setAiQuota("telegram_chat_daily", Number(e.target.value))} />
@@ -1084,7 +1329,7 @@ export default function AdminPage({ user, onLogout }) {
                   type="button"
                   onClick={testApeEpi}
                   disabled={savingKey === "ape_epi_test"}
-                  className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-bold text-[#3525cd] transition active:scale-[0.98] disabled:opacity-60 sm:w-auto ${glassButton}`}
+                  className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-[#3525cd] transition active:scale-[0.98] disabled:opacity-60 sm:w-auto ${glassButton}`}
                 >
                   <RefreshCw size={15} className={savingKey === "ape_epi_test" ? "animate-spin" : ""} />
                   {savingKey === "ape_epi_test" ? "Menguji..." : "Test Koneksi"}
@@ -1130,7 +1375,7 @@ export default function AdminPage({ user, onLogout }) {
             </div>
             {apeTestStatus && (
               <div
-                className={`rounded-2xl border px-3 py-2 text-xs font-bold leading-relaxed ${
+                className={`rounded-2xl border px-3 py-2 text-xs font-semibold leading-relaxed ${
                   apeTestStatus.tone === "success"
                     ? "border-mint/20 bg-mint-light/80 text-mint"
                     : apeTestStatus.tone === "warning"
@@ -1144,15 +1389,15 @@ export default function AdminPage({ user, onLogout }) {
             {apePreview?.enabled && Number(apePreview.gold?.price_per_gram || 0) > 0 && Number(apePreview.silver?.price_per_gram || 0) > 0 && (
               <div className="grid gap-2 rounded-2xl border border-gold/20 bg-gold-light/60 p-3 sm:grid-cols-2">
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-gold">GOLDGRAM</div>
-                  <div className="mt-1 text-sm font-bold text-navy">{fmtRp(Number(apePreview.gold?.price_per_gram || 0))} / gram</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-gold">GOLDGRAM</div>
+                  <div className="mt-1 text-sm font-semibold text-navy">{fmtRp(Number(apePreview.gold?.price_per_gram || 0))} / gram</div>
                   <div className="text-[11px] font-semibold text-neutral-500">Diambil {formatFetchedAt(apePreview.gold?.fetched_at)}</div>
                   {apePreview.gold?.date && <div className="text-[10px] font-semibold text-neutral-400">Tanggal harga {apePreview.gold.date}</div>}
                   {apePreview.gold?.query_variant && <div className="text-[10px] font-semibold text-neutral-400">Query {apePreview.gold.query_variant}</div>}
                 </div>
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-violet">SILVERGRAM</div>
-                  <div className="mt-1 text-sm font-bold text-navy">{fmtRp(Number(apePreview.silver?.price_per_gram || 0))} / gram</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-violet">SILVERGRAM</div>
+                  <div className="mt-1 text-sm font-semibold text-navy">{fmtRp(Number(apePreview.silver?.price_per_gram || 0))} / gram</div>
                   <div className="text-[11px] font-semibold text-neutral-500">Diambil {formatFetchedAt(apePreview.silver?.fetched_at)}</div>
                   {apePreview.silver?.date && <div className="text-[10px] font-semibold text-neutral-400">Tanggal harga {apePreview.silver.date}</div>}
                   {apePreview.silver?.query_variant && <div className="text-[10px] font-semibold text-neutral-400">Query {apePreview.silver.query_variant}</div>}
@@ -1227,7 +1472,7 @@ export default function AdminPage({ user, onLogout }) {
                     <UserCog size={20} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-[#0b1c30]">System Users</h2>
+                    <h2 className="text-xl font-semibold text-[#0b1c30]">System Users</h2>
                     <p className="mt-1 text-xs font-semibold text-[#464555]">{users.length} akun ditampilkan</p>
                   </div>
                 </div>
@@ -1248,11 +1493,11 @@ export default function AdminPage({ user, onLogout }) {
                 {users.map((u, index) => (
                   <div key={u.id} className="group flex flex-col gap-3 rounded-lg border border-transparent p-3 transition hover:border-white/25 hover:bg-white/20 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-4">
-                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-extrabold ${index % 3 === 0 ? "bg-[#e2dfff] text-[#3525cd]" : index % 3 === 1 ? "bg-[#ffdadc] text-[#8b1b34]" : "bg-[#d3e4fe] text-[#464555]"}`}>
+                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold ${index % 3 === 0 ? "bg-[#e2dfff] text-[#3525cd]" : index % 3 === 1 ? "bg-[#ffdadc] text-[#8b1b34]" : "bg-[#d3e4fe] text-[#464555]"}`}>
                         {getInitials(u.name || u.email)}
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-bold text-[#0b1c30]">{u.name || u.email}</div>
+                        <div className="truncate text-sm font-semibold text-[#0b1c30]">{u.name || u.email}</div>
                         <div className="truncate text-xs font-semibold text-[#777587]">{u.email}</div>
                       </div>
                     </div>
@@ -1277,68 +1522,135 @@ export default function AdminPage({ user, onLogout }) {
 
             <section className={`p-6 ${glassPanel}`}>
               <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
-              <div className="mb-6 flex items-center justify-between gap-3">
+              <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#e2dfff] text-[#3525cd]">
                     <Building2 size={20} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-[#0b1c30]">Household Portfolios</h2>
-                    <p className="mt-1 text-xs font-semibold text-[#464555]">{households.length} workspace aktif/tercatat</p>
+                    <h2 className="text-xl font-semibold text-[#0b1c30]">Household Portfolios</h2>
+                    <p className="mt-1 text-xs font-semibold text-[#464555]">{householdTotal} workspace tercatat</p>
                   </div>
                 </div>
+                <form onSubmit={searchHouseholds} className="flex min-w-0 gap-2">
+                  <input
+                    className="h-10 min-w-0 rounded-full border-0 bg-[#eff4ff] px-4 text-sm font-semibold text-[#0b1c30] outline-none transition placeholder:text-[#777587] focus:bg-white focus:shadow-[0_0_0_3px_rgba(53,37,205,0.12)]"
+                    value={householdQuery}
+                    onChange={(e) => setHouseholdQuery(e.target.value)}
+                    placeholder="Cari household/owner"
+                  />
+                  <button className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#3525cd] text-white transition hover:brightness-110" type="submit" title="Cari">
+                    <Search size={15} />
+                  </button>
+                </form>
               </div>
 
-              <div className="space-y-4">
-                {households.map((h) => {
-                  const memberCount = Number(h.member_count || 0);
-                  const paymentTotal = payments
-                    .filter((p) => p.household_name === h.name)
-                    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
-                  return (
-                    <div key={h.id} className={`flex items-center justify-between gap-4 p-5 ${glassSoft}`}>
-                      <div className="min-w-0">
-                        <h3 className="truncate text-sm font-bold text-[#0b1c30]">{h.name}</h3>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <span className="text-xl font-extrabold text-[#3525cd]">{paymentTotal > 0 ? fmtRp(paymentTotal) : `${memberCount} anggota`}</span>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left">
+                  <thead>
+                    <tr className="border-b border-[#c7c4d8] text-[11px] font-semibold uppercase tracking-wide text-[#777587]">
+                      <th className="pb-3">Household</th>
+                      <th className="pb-3">Owner</th>
+                      <th className="pb-3">Plan</th>
+                      <th className="pb-3">Status</th>
+                      <th className="pb-3">Anggota</th>
+                      <th className="pb-3">Total Dibayar</th>
+                      <th className="pb-3 text-right">Aktif Hingga</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {households.map((h) => (
+                      <tr
+                        key={h.id}
+                        onClick={() => setOpenHouseholdId(h.id)}
+                        className="cursor-pointer border-b border-[#eff4ff] text-sm font-semibold transition last:border-0 hover:bg-[#eff4ff]"
+                      >
+                        <td className="max-w-[180px] truncate py-3 text-[#0b1c30]">{h.name}</td>
+                        <td className="max-w-[180px] truncate py-3 text-[#464555]">{h.owner_name || h.owner_email}</td>
+                        <td className="py-3 text-[#464555]">{h.plan || "trial"}</td>
+                        <td className="py-3">
                           <StatusBadge tone={h.subscription_status === "active" ? "mint" : "gold"}>
                             {h.subscription_status || "unknown"}
                           </StatusBadge>
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          <StatusBadge tone="violet">{h.household_type || "household"}</StatusBadge>
-                          <StatusBadge tone="navy">{h.plan || "trial"}</StatusBadge>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {households.length === 0 && <div className="py-8 text-center text-sm font-semibold text-[#777587]">Tidak ada household.</div>}
+                        </td>
+                        <td className="py-3 text-[#464555]">{h.member_count}</td>
+                        <td className="py-3 text-[#3525cd]">{fmtRp(h.total_paid)}</td>
+                        <td className="py-3 text-right text-[#777587]">{formatDate(h.current_period_end)}</td>
+                      </tr>
+                    ))}
+                    {households.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-sm font-semibold text-[#777587]">Tidak ada household.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
+              <PaginationControls page={householdPage} pageSize={PAGE_SIZE} total={householdTotal} onPageChange={(p) => loadHouseholds(p, householdQuery)} />
             </section>
           </div>
 
           <section className={`p-6 ${glassPanel}`}>
             <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
-            <SectionTitle icon={WalletCards} title="Payment Activity" subtitle={`${payments.length} transaksi pembayaran terakhir`} tone="gold" />
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {payments.map((p) => (
-                <div key={p.order_id} className={`${glassSoft} p-4`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-bold text-[#0b1c30]">{p.household_name}</div>
-                      <div className="truncate text-xs font-semibold text-[#777587]">{p.owner_email}</div>
-                    </div>
-                    <StatusBadge tone={paymentTone(p.status)}>{p.status}</StatusBadge>
-                  </div>
-                  <div className="mt-4 flex items-end justify-between gap-3">
-                    <div className="text-xs font-extrabold uppercase tracking-wide text-[#464555]">{p.plan}</div>
-                    <div className="text-base font-extrabold text-[#3525cd]">{fmtRp(p.amount)}</div>
-                  </div>
-                </div>
-              ))}
-              {payments.length === 0 && <div className="py-8 text-center text-sm font-semibold text-[#777587] md:col-span-2 xl:col-span-3">Belum ada payment.</div>}
+            <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <SectionTitle icon={WalletCards} title="Payment Activity" subtitle={`${paymentTotal} transaksi pembayaran`} tone="gold" />
+              <form onSubmit={searchPayments} className="flex min-w-0 flex-wrap gap-2">
+                <select
+                  className={`${inputClass} h-10 w-auto`}
+                  value={paymentStatus}
+                  onChange={(e) => changePaymentStatus(e.target.value)}
+                >
+                  <option value="">Semua Status</option>
+                  <option value="paid">Paid</option>
+                  <option value="pending">Pending</option>
+                  <option value="failed">Failed</option>
+                </select>
+                <input
+                  className="h-10 min-w-0 rounded-full border-0 bg-[#eff4ff] px-4 text-sm font-semibold text-[#0b1c30] outline-none transition placeholder:text-[#777587] focus:bg-white focus:shadow-[0_0_0_3px_rgba(53,37,205,0.12)]"
+                  value={paymentQuery}
+                  onChange={(e) => setPaymentQuery(e.target.value)}
+                  placeholder="Cari household/owner"
+                />
+                <button className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#3525cd] text-white transition hover:brightness-110" type="submit" title="Cari">
+                  <Search size={15} />
+                </button>
+              </form>
             </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left">
+                <thead>
+                  <tr className="border-b border-[#c7c4d8] text-[11px] font-semibold uppercase tracking-wide text-[#777587]">
+                    <th className="pb-3">Household</th>
+                    <th className="pb-3">Owner</th>
+                    <th className="pb-3">Plan</th>
+                    <th className="pb-3">Nominal</th>
+                    <th className="pb-3">Status</th>
+                    <th className="pb-3 text-right">Tanggal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((p) => (
+                    <tr key={p.order_id} className="border-b border-[#eff4ff] text-sm font-semibold last:border-0">
+                      <td className="max-w-[160px] truncate py-3 text-[#0b1c30]">{p.household_name}</td>
+                      <td className="max-w-[160px] truncate py-3 text-[#464555]">{p.owner_email}</td>
+                      <td className="py-3 text-[#464555]">{p.plan}</td>
+                      <td className="py-3 text-[#3525cd]">{fmtRp(p.amount)}</td>
+                      <td className="py-3">
+                        <StatusBadge tone={paymentTone(p.status)}>{p.status}</StatusBadge>
+                      </td>
+                      <td className="py-3 text-right text-[#777587]">{formatDate(p.created_at)}</td>
+                    </tr>
+                  ))}
+                  {payments.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-sm font-semibold text-[#777587]">Belum ada payment.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <PaginationControls page={paymentPage} pageSize={PAGE_SIZE} total={paymentTotal} onPageChange={(p) => loadPayments(p, paymentQuery, paymentStatus)} />
           </section>
         </div>
       )}
@@ -1348,6 +1660,14 @@ export default function AdminPage({ user, onLogout }) {
       )}
         </div>
       </section>
+
+      {openHouseholdId && (
+        <HouseholdDetailModal
+          householdId={openHouseholdId}
+          onClose={() => setOpenHouseholdId(null)}
+          onChanged={loadAll}
+        />
+      )}
     </main>
   );
 }
