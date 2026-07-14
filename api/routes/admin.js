@@ -5,20 +5,23 @@ import rateLimit from 'express-rate-limit';
 import pool from '../db.js';
 import { authMiddleware, adminMiddleware, superAdminMiddleware, adminRoleForEmail, generateToken } from '../middleware/auth.js';
 import { auditAdminAction, getAllSettings, publicSetting, updateSetting } from '../services/appSettings.js';
-import { getCurrentMetalPrices } from '../services/apeEpi.js';
+import { getCurrentMetalPrices, getCachedMetalPricesStatus } from '../services/apeEpi.js';
+import { sendMail } from '../services/mailer.js';
 import { PLANS, applyPaymentStatus } from './payments.js';
 
 const router = Router();
+const isLocalDev = process.env.LOCAL_DEV === 'true';
 
 const adminLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  skip: () => isLocalDev,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Terlalu banyak percobaan, coba lagi beberapa menit lagi' },
 });
 
-const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'manual_payment', 'ai', 'ai_quota', 'ape_epi', 'web_push', 'telegram']);
+const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'xendit', 'payment_gateway', 'manual_payment', 'ai', 'ai_quota', 'ape_epi', 'web_push', 'telegram']);
 
 function toInt(value, fallback) {
   const n = Number(value);
@@ -27,6 +30,15 @@ function toInt(value, fallback) {
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 router.post('/login', adminLoginLimiter, async (req, res) => {
@@ -162,6 +174,16 @@ router.patch('/settings/:key', async (req, res) => {
   }
 });
 
+router.get('/ape-epi/status', async (req, res) => {
+  try {
+    const status = await getCachedMetalPricesStatus();
+    res.json({ status });
+  } catch (err) {
+    console.error('APE-EPI status error:', err);
+    res.status(500).json({ error: 'Gagal mengambil status sinkronisasi APE-EPI' });
+  }
+});
+
 router.post('/ape-epi/test', async (req, res) => {
   try {
     const prices = await getCurrentMetalPrices({
@@ -178,6 +200,64 @@ router.post('/ape-epi/test', async (req, res) => {
   } catch (err) {
     console.error('APE-EPI test error:', err);
     res.status(err.status || 500).json({ error: err.message || 'Gagal menguji koneksi APE-EPI' });
+  }
+});
+
+router.post('/mailketing/test', async (req, res) => {
+  try {
+    const to = normalizeEmail(req.body?.to || req.admin.email);
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) {
+      return res.status(400).json({ error: 'Email tujuan test tidak valid' });
+    }
+
+    const safeEmail = escapeHtml(to);
+    await sendMail({
+      to,
+      subject: 'Test Email FinePro - Mailketing Aktif',
+      html: `
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Test Email FinePro</title>
+  </head>
+  <body style="margin:0;background:#f6fbff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1c2230;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6fbff;padding:28px 14px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #dfe8f1;border-radius:24px;overflow:hidden;box-shadow:0 20px 55px rgba(49,77,119,0.14);">
+            <tr>
+              <td style="padding:26px 24px;background:linear-gradient(135deg,#0f1f3d 0%,#6f55f2 100%);">
+                <img src="https://finepro.my.id/images/fine-pro-header.png" alt="FinePro" width="240" style="display:block;max-width:240px;width:100%;height:auto;margin:0 0 18px 0;" />
+                <h1 style="margin:18px 0 0;color:#ffffff;font-size:24px;line-height:1.25;">Mailketing FinePro aktif</h1>
+                <p style="margin:8px 0 0;color:rgba(255,255,255,0.82);font-size:14px;line-height:1.6;">Email percobaan dari Admin Console berhasil dikirim.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 24px;">
+                <p style="margin:0 0 14px;font-size:15px;line-height:1.7;">Halo,</p>
+                <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#3f4657;">Ini adalah email test untuk memastikan integrasi Mailketing FinePro sudah berjalan baik.</p>
+                <div style="background:#efeaff;border:1px solid rgba(111,85,242,0.18);border-radius:16px;padding:14px 16px;margin:0 0 18px;">
+                  <p style="margin:0;font-size:13px;line-height:1.65;color:#3f2ca8;">Tujuan test:</p>
+                  <p style="margin:8px 0 0;font-size:14px;font-weight:800;word-break:break-all;color:#0f1f3d;">${safeEmail}</p>
+                </div>
+                <p style="margin:0;font-size:13px;line-height:1.7;color:#6b7280;">Jika email ini diterima, fitur reset password, undangan anggota, dan email transaksional lain siap digunakan.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
+    });
+
+    await auditAdminAction(req.admin.id, 'integrations.mailketing.test', 'app_settings', 'mailketing', { to });
+    res.json({ sent: true, to });
+  } catch (err) {
+    console.error('Mailketing test error:', err);
+    res.status(500).json({ error: err.message || 'Gagal mengirim test email Mailketing' });
   }
 });
 
@@ -246,7 +326,12 @@ router.get('/households', async (req, res) => {
 
     if (q) {
       params.push(`%${q}%`);
-      where = `WHERE h.name ILIKE $${params.length} OR u.email ILIKE $${params.length} OR COALESCE(u.name, '') ILIKE $${params.length}`;
+      where = `WHERE h.name ILIKE $${params.length} OR u.email ILIKE $${params.length} OR COALESCE(u.name, '') ILIKE $${params.length}
+        OR EXISTS (
+          SELECT 1 FROM household_members hm2
+          JOIN users u2 ON u2.id = hm2.user_id
+          WHERE hm2.household_id = h.id AND (u2.email ILIKE $${params.length} OR COALESCE(u2.name, '') ILIKE $${params.length})
+        )`;
     }
 
     params.push(limit, offset);
@@ -297,7 +382,7 @@ router.get('/households/:id', async (req, res) => {
 
     const [members, payments] = await Promise.all([
       pool.query(
-        `SELECT u.id, u.name, u.email, hm.role
+        `SELECT u.id, u.name, u.email, u.role AS system_role, hm.role AS household_role
          FROM household_members hm
          JOIN users u ON u.id = hm.user_id
          WHERE hm.household_id = $1
@@ -305,7 +390,7 @@ router.get('/households/:id', async (req, res) => {
         [req.params.id]
       ),
       pool.query(
-        `SELECT order_id, plan, amount, status, created_at, paid_at
+        `SELECT order_id, plan, amount, status, method, proof_url, reference, created_at, paid_at
          FROM payments
          WHERE household_id = $1
          ORDER BY created_at DESC
@@ -314,7 +399,12 @@ router.get('/households/:id', async (req, res) => {
       )
     ]);
 
-    res.json({ household, members: members.rows, payments: payments.rows });
+    const membersWithEffectiveRole = members.rows.map((m) => ({
+      ...m,
+      effective_role: adminRoleForEmail(m.email, m.system_role),
+    }));
+
+    res.json({ household, members: membersWithEffectiveRole, payments: payments.rows });
   } catch (err) {
     console.error('Admin household detail error:', err);
     res.status(500).json({ error: 'Gagal mengambil detail household' });
@@ -336,8 +426,8 @@ router.post('/households/:id/manual-payment', async (req, res) => {
 
     const orderId = `MANUAL-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     await pool.query(
-      `INSERT INTO payments (household_id, order_id, plan, amount, status)
-       VALUES ($1, $2, $3, $4, 'pending')`,
+      `INSERT INTO payments (household_id, order_id, plan, amount, status, method)
+       VALUES ($1, $2, $3, $4, 'pending', 'manual')`,
       [req.params.id, orderId, plan, planConfig.amount]
     );
 
@@ -363,6 +453,7 @@ router.get('/payments', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
     const status = String(req.query.status || '').trim();
+    const method = String(req.query.method || '').trim();
     const limit = Math.min(toInt(req.query.limit, 20), 100);
     const offset = toInt(req.query.offset, 0);
     const conditions = [];
@@ -372,16 +463,21 @@ router.get('/payments', async (req, res) => {
       params.push(`%${q}%`);
       conditions.push(`(h.name ILIKE $${params.length} OR u.email ILIKE $${params.length})`);
     }
-    if (['pending', 'paid', 'failed'].includes(status)) {
+    if (['pending', 'paid', 'failed', 'rejected'].includes(status)) {
       params.push(status);
       conditions.push(`p.status = $${params.length}`);
+    }
+    if (['midtrans', 'xendit', 'manual'].includes(method)) {
+      params.push(method);
+      conditions.push(`p.method = $${params.length}`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
     params.push(limit, offset);
     const result = await pool.query(
-      `SELECT p.order_id, p.plan, p.amount, p.status, p.created_at, p.paid_at,
-              h.name AS household_name, u.email AS owner_email,
+      `SELECT p.order_id, p.plan, p.amount, p.status, p.method, p.proof_url, p.reference, p.note,
+              p.created_at, p.paid_at, p.reviewed_at,
+              h.id AS household_id, h.name AS household_name, u.email AS owner_email,
               COUNT(*) OVER()::int AS total_count
        FROM payments p
        JOIN households h ON h.id = p.household_id
@@ -400,6 +496,45 @@ router.get('/payments', async (req, res) => {
   } catch (err) {
     console.error('Admin payments error:', err);
     res.status(500).json({ error: 'Gagal mengambil pembayaran' });
+  }
+});
+
+router.patch('/payments/:orderId/review', async (req, res) => {
+  try {
+    const { action, note } = req.body || {};
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ error: 'Aksi tidak valid' });
+    }
+
+    const paymentResult = await pool.query('SELECT * FROM payments WHERE order_id = $1', [req.params.orderId]);
+    const payment = paymentResult.rows[0];
+    if (!payment) {
+      return res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+    }
+    if (payment.status !== 'pending') {
+      return res.status(400).json({ error: 'Transaksi ini sudah direview' });
+    }
+
+    if (action === 'approve') {
+      await applyPaymentStatus(payment, 'paid');
+      await pool.query(
+        `UPDATE payments SET note = $1, reviewed_by = $2, reviewed_at = now() WHERE order_id = $3`,
+        [note || null, req.admin.id, req.params.orderId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE payments SET status = 'rejected', note = $1, reviewed_by = $2, reviewed_at = now() WHERE order_id = $3`,
+        [note || null, req.admin.id, req.params.orderId]
+      );
+    }
+
+    await auditAdminAction(req.admin.id, `payments.manual.${action}`, 'payments', req.params.orderId, { note });
+
+    const updated = await pool.query('SELECT * FROM payments WHERE order_id = $1', [req.params.orderId]);
+    res.json({ payment: updated.rows[0] });
+  } catch (err) {
+    console.error('Review manual payment error:', err);
+    res.status(500).json({ error: 'Gagal mereview pembayaran' });
   }
 });
 

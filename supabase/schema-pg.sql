@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS household_invites (
   household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
   invited_email TEXT NOT NULL,
   invited_by UUID REFERENCES users(id) NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','expired')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','expired','cancelled')),
   created_at TIMESTAMPTZ DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + INTERVAL '7 days'
 );

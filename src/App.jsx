@@ -28,6 +28,26 @@ import TransactionModal from "./components/TransactionModal.jsx";
 import { currentMonthKey } from "./utils/format.js";
 
 const SELECTED_PERIOD_KEY = "finepro-selected-period";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function dayStart(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function daysUntilDate(value) {
+  if (!value) return null;
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) return null;
+  return Math.ceil((dayStart(target).getTime() - dayStart().getTime()) / DAY_MS);
+}
+
+function getSubscriptionWarning(household) {
+  if (!household || household.subscription_status !== "active") return null;
+  const daysLeft = daysUntilDate(household.current_period_end);
+  if (daysLeft === null || daysLeft < 0 || daysLeft > 7) return null;
+  return { daysLeft };
+}
 
 function SplashScreen() {
   return (
@@ -135,6 +155,8 @@ export default function App() {
   }
 
   const subscriptionExpired = household.subscription_status === "expired";
+  const subscriptionWarning = getSubscriptionWarning(household);
+  const notificationCount = invites.length + (subscriptionWarning ? 1 : 0);
 
   function handleOpenModal() {
     if (subscriptionExpired) {
@@ -154,7 +176,8 @@ export default function App() {
       <AppHeader
         user={user}
         planLabel={planLabel(household)}
-        pendingInviteCount={invites.length}
+        notificationCount={notificationCount}
+        hasSubscriptionWarning={Boolean(subscriptionWarning)}
         onNavigateAccount={() => setPage("account")}
         onNavigateAdmin={() => { window.location.href = "/admin"; }}
       />

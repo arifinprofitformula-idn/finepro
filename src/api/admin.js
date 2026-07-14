@@ -97,6 +97,19 @@ export async function testApeEpiConnection(patch = {}) {
   return data.prices;
 }
 
+export async function getApeEpiStatus() {
+  const data = await adminFetch("/admin/ape-epi/status");
+  return data.status;
+}
+
+export async function testMailketingEmail(to = "") {
+  const data = await adminFetch("/admin/mailketing/test", {
+    method: "POST",
+    body: JSON.stringify({ to }),
+  });
+  return data;
+}
+
 export async function getAdminUsers(q = "") {
   const query = q ? `?q=${encodeURIComponent(q)}` : "";
   const data = await adminFetch(`/admin/users${query}`);
@@ -129,15 +142,24 @@ export async function recordManualPayment(householdId, plan) {
   return data.payment;
 }
 
-export async function getAdminPayments(q = "", status = "", limit = 10, offset = 0) {
+export async function getAdminPayments(q = "", status = "", limit = 10, offset = 0, method = "") {
   const params = new URLSearchParams({
     limit,
     offset,
     ...(q ? { q } : {}),
     ...(status ? { status } : {}),
+    ...(method ? { method } : {}),
   });
   const data = await adminFetch(`/admin/payments?${params}`);
   return { payments: data.payments || [], total: data.total || 0 };
+}
+
+export async function reviewManualPayment(orderId, action, note = "") {
+  const data = await adminFetch(`/admin/payments/${orderId}/review`, {
+    method: "PATCH",
+    body: JSON.stringify({ action, note }),
+  });
+  return data.payment;
 }
 
 export async function getAdminAuditLogs() {

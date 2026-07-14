@@ -9,12 +9,14 @@ import { useWallets } from "../hooks/useWallets.js";
 import { useArisan } from "../hooks/useArisan.js";
 import { changePassword, translateAuthError } from "../api/auth.js";
 import { disconnectTelegramLink, startTelegramLink } from "../api/telegram.js";
+import { subscribeToPush, getPushPermissionState } from "../api/push.js";
 import { monthKey, todayStr } from "../utils/format.js";
 import { hasNativeInstallPrompt, isAppInstalled, runNativeInstallPrompt, subscribeInstallState } from "../utils/pwaInstall.js";
 import {
   ArrowDownLeft,
   ArrowRightLeft,
   ArrowUpRight,
+  Bell,
   CalendarClock,
   Copy,
   Download,
@@ -82,6 +84,9 @@ export default function SettingPage({
 }) {
   const [installCardVisible, setInstallCardVisible] = useState(() => !isAppInstalled());
   const [installManualHelp, setInstallManualHelp] = useState(false);
+  const [pushPermission, setPushPermission] = useState("default");
+  const [pushSubscribing, setPushSubscribing] = useState(false);
+  const [pushMsg, setPushMsg] = useState("");
   const [monthlyIncomeDayInput, setMonthlyIncomeDayInput] = useState(household.monthly_income_day || "");
   const [incomeDaySaving, setIncomeDaySaving] = useState(false);
   const [incomeDayMsg, setIncomeDayMsg] = useState("");
@@ -126,6 +131,24 @@ export default function SettingPage({
     refreshInstallState();
     return subscribeInstallState(refreshInstallState);
   }, []);
+
+  useEffect(() => {
+    getPushPermissionState().then(setPushPermission);
+  }, []);
+
+  async function handleEnablePush() {
+    setPushSubscribing(true);
+    setPushMsg("");
+    try {
+      await subscribeToPush();
+      setPushMsg("Notifikasi budget aktif.");
+      setPushPermission("granted");
+    } catch (err) {
+      setPushMsg(err.message);
+    } finally {
+      setPushSubscribing(false);
+    }
+  }
 
   useEffect(() => {
     if (wallets.length >= 2) {
@@ -364,6 +387,20 @@ export default function SettingPage({
           </button>
         </div>
       )}
+
+      {/* Notifikasi */}
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={Bell} tone="coral" title="Notifikasi" />
+        {pushPermission !== "granted" && pushPermission !== "unsupported" && (
+          <button type="button" onClick={handleEnablePush} disabled={pushSubscribing} className={`${primaryBtnClass} w-full`}>
+            <Bell size={15} />
+            {pushSubscribing ? "Mengaktifkan..." : "Aktifkan Notifikasi Budget"}
+          </button>
+        )}
+        {pushPermission === "granted" && <p className="text-xs font-medium text-mint">✓ Notifikasi budget aktif</p>}
+        {pushPermission === "unsupported" && <p className="text-xs text-neutral-500">Perangkat/browser ini tidak mendukung notifikasi push.</p>}
+        {pushMsg && <p className="mt-1 text-xs text-neutral-500">{pushMsg}</p>}
+      </div>
 
       {/* Telegram — hubungkan akun supaya foto struk/bukti transfer yang
           dikirim ke bot otomatis jadi transaksi lewat n8n */}

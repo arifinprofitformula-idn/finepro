@@ -17,8 +17,9 @@ export function getToken() {
 }
 
 export async function apiFetch(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...options.headers,
   };
 

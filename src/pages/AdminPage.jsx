@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import {
   getAdminAuditLogs,
+  getApeEpiStatus,
   getAdminHouseholdDetail,
   getAdminHouseholds,
   getAdminOverview,
@@ -38,6 +39,8 @@ import {
   getAdminSettings,
   getAdminUsers,
   recordManualPayment,
+  reviewManualPayment,
+  testMailketingEmail,
   updateAdminSetting,
   updateAdminUserRole,
   testApeEpiConnection
@@ -292,13 +295,19 @@ function IntegrationTile({
   );
 }
 
-function TechnicalPanel({ midtrans, telegram, apeEpi }) {
+function TechnicalPanel({ midtrans, xendit, telegram, apeEpi }) {
   const deliveries = [
     {
       event: "payment.notification",
       service: "Midtrans",
       status: midtrans.enabled ? "Delivered" : "Paused",
       tone: midtrans.enabled ? "mint" : "gold"
+    },
+    {
+      event: "xendit.notification",
+      service: "Xendit",
+      status: xendit.enabled ? "Delivered" : "Paused",
+      tone: xendit.enabled ? "mint" : "gold"
     },
     {
       event: "telegram.chat.ai",
@@ -527,7 +536,7 @@ function useFormState(value) {
 
 function paymentTone(status) {
   if (status === "paid") return "mint";
-  if (status === "failed") return "coral";
+  if (status === "failed" || status === "rejected") return "coral";
   return "gold";
 }
 
@@ -542,12 +551,37 @@ function formatFetchedAt(value) {
   }).format(new Date(value));
 }
 
+function relativeTimeLabel(value) {
+  if (!value) return "";
+  const hours = (Date.now() - new Date(value).getTime()) / (1000 * 60 * 60);
+  if (hours < 1) return "kurang dari 1 jam lalu";
+  if (hours < 24) return `${Math.floor(hours)} jam lalu`;
+  return `${Math.floor(hours / 24)} hari lalu`;
+}
+
+function ApeAssetStatus({ label, data, tone }) {
+  return (
+    <div>
+      <div className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide ${tone}`}>
+        {label}
+        {data.stale && (
+          <span className="rounded-full bg-coral-light px-1.5 py-0.5 text-[10px] font-bold text-coral">⚠ Belum sinkron terbaru</span>
+        )}
+      </div>
+      <div className="mt-1 text-sm font-semibold text-navy">{fmtRp(Number(data.price_per_gram || 0))} / gram</div>
+      <div className="text-[11px] font-semibold text-neutral-500">
+        Sinkron terakhir: {formatFetchedAt(data.fetched_at)} ({relativeTimeLabel(data.fetched_at)})
+      </div>
+    </div>
+  );
+}
+
 function formatDate(value) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
 }
 
-function HouseholdDetailModal({ householdId, onClose, onChanged }) {
+function HouseholdDetailModal({ householdId, canManageRoles, onClose, onChanged }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -555,6 +589,7 @@ function HouseholdDetailModal({ householdId, onClose, onChanged }) {
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [changingRoleId, setChangingRoleId] = useState("");
 
   useEffect(() => {
     if (!householdId) return;
@@ -570,6 +605,20 @@ function HouseholdDetailModal({ householdId, onClose, onChanged }) {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [householdId]);
+
+  async function handleChangeMemberRole(memberId, role) {
+    setChangingRoleId(memberId);
+    try {
+      await updateAdminUserRole(memberId, role);
+      const refreshed = await getAdminHouseholdDetail(householdId);
+      setDetail(refreshed);
+      onChanged?.();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setChangingRoleId("");
+    }
+  }
 
   async function handleRecordPayment() {
     if (!confirming) {
@@ -638,12 +687,30 @@ function HouseholdDetailModal({ householdId, onClose, onChanged }) {
                 </div>
                 <div className="space-y-2">
                   {detail.members.map((m) => (
-                    <div key={m.id} className="flex items-center justify-between rounded-lg bg-[#eff4ff] px-3 py-2 text-sm">
+                    <div key={m.id} className="flex flex-col gap-2 rounded-lg bg-[#eff4ff] px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <div className="truncate font-semibold text-[#0b1c30]">{m.name || m.email}</div>
                         <div className="truncate text-xs text-[#777587]">{m.email}</div>
                       </div>
-                      <StatusBadge tone="violet">{m.role}</StatusBadge>
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <StatusBadge tone="violet">{m.household_role}</StatusBadge>
+                        {canManageRoles ? (
+                          <select
+                            className={`${inputClass} h-9 sm:w-36`}
+                            value={m.system_role}
+                            disabled={changingRoleId === m.id}
+                            onChange={(e) => handleChangeMemberRole(m.id, e.target.value)}
+                          >
+                            <option value="user">user</option>
+                            <option value="admin">admin</option>
+                            <option value="super_admin">super_admin</option>
+                          </select>
+                        ) : (
+                          <StatusBadge tone={m.effective_role === "super_admin" ? "navy" : m.effective_role === "admin" ? "violet" : "mint"}>
+                            {m.effective_role}
+                          </StatusBadge>
+                        )}
+                      </div>
                     </div>
                   ))}
                   {detail.members.length === 0 && <div className="text-sm text-[#777587]">Tidak ada member.</div>}
@@ -711,7 +778,6 @@ export default function AdminPage({ user, onLogout }) {
   const [households, setHouseholds] = useState([]);
   const [payments, setPayments] = useState([]);
   const [logs, setLogs] = useState([]);
-  const [userQuery, setUserQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState("");
   const [message, setMessage] = useState("");
@@ -721,51 +787,82 @@ export default function AdminPage({ user, onLogout }) {
   const [householdTotal, setHouseholdTotal] = useState(0);
   const [paymentQuery, setPaymentQuery] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState("");
   const [paymentPage, setPaymentPage] = useState(0);
   const [paymentTotal, setPaymentTotal] = useState(0);
+  const [reviewingOrderId, setReviewingOrderId] = useState("");
+  const [paymentMethodFeedback, setPaymentMethodFeedback] = useState(null);
 
   const [mailketing, setMailketing] = useFormState(settings?.mailketing);
-  const [midtrans, setMidtrans] = useFormState(settings?.midtrans);
-  const [manualPayment, setManualPayment] = useFormState(settings?.manual_payment);
+  const [midtrans, setMidtrans, replaceMidtrans] = useFormState(settings?.midtrans);
+  const [xendit, setXendit, replaceXendit] = useFormState(settings?.xendit);
+  const [paymentGateway, setPaymentGateway, replacePaymentGateway] = useFormState(settings?.payment_gateway);
+  const [manualPayment, setManualPayment, replaceManualPayment] = useFormState(settings?.manual_payment);
   const [ai, setAi] = useFormState(settings?.ai);
   const [aiQuota, setAiQuota] = useFormState(settings?.ai_quota);
   const [apeEpi, setApeEpi] = useFormState(settings?.ape_epi);
   const [webPush, setWebPush] = useFormState(settings?.web_push);
   const [telegram, setTelegram] = useFormState(settings?.telegram);
+  const [mailketingTestEmail, setMailketingTestEmail] = useState(user?.email || "");
+  const [mailketingTestStatus, setMailketingTestStatus] = useState(null);
   const [apePreview, setApePreview] = useState(null);
   const [apeTestStatus, setApeTestStatus] = useState(null);
+  const [apeSyncStatus, setApeSyncStatus] = useState(null);
 
   const canManageRoles = user?.role === "super_admin";
+  const unassignedUsers = users.filter((u) => !u.household_id);
 
   async function loadAll() {
     setLoading(true);
     setMessage("");
-    try {
-      const [overviewData, settingsData, usersData, householdsData, paymentsData, logsData] = await Promise.all([
-        getAdminOverview(),
-        getAdminSettings(),
-        getAdminUsers(userQuery),
-        getAdminHouseholds(householdQuery, PAGE_SIZE, householdPage * PAGE_SIZE),
-        getAdminPayments(paymentQuery, paymentStatus, PAGE_SIZE, paymentPage * PAGE_SIZE),
-        getAdminAuditLogs()
-      ]);
-      setOverview(overviewData);
-      setSettings(settingsData);
-      setUsers(usersData);
-      setHouseholds(householdsData.households);
-      setHouseholdTotal(householdsData.total);
-      setPayments(paymentsData.payments);
-      setPaymentTotal(paymentsData.total);
-      setLogs(logsData);
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setLoading(false);
+    const results = await Promise.allSettled([
+      getAdminOverview(),
+      getAdminSettings(),
+      getAdminUsers(),
+      getAdminHouseholds(householdQuery, PAGE_SIZE, householdPage * PAGE_SIZE),
+      getAdminPayments(paymentQuery, paymentStatus, PAGE_SIZE, paymentPage * PAGE_SIZE, paymentMethodFilter),
+      getAdminAuditLogs()
+    ]);
+
+    const [overviewResult, settingsResult, usersResult, householdsResult, paymentsResult, logsResult] = results;
+    const failures = [];
+
+    if (overviewResult.status === "fulfilled") setOverview(overviewResult.value);
+    else failures.push(overviewResult.reason?.message || "Gagal mengambil ringkasan admin");
+
+    if (settingsResult.status === "fulfilled") setSettings(settingsResult.value);
+    else failures.push(settingsResult.reason?.message || "Gagal mengambil pengaturan admin");
+
+    if (usersResult.status === "fulfilled") setUsers(usersResult.value);
+    else failures.push(usersResult.reason?.message || "Gagal mengambil user");
+
+    if (householdsResult.status === "fulfilled") {
+      setHouseholds(householdsResult.value.households);
+      setHouseholdTotal(householdsResult.value.total);
+    } else {
+      failures.push(householdsResult.reason?.message || "Gagal mengambil household");
     }
+
+    if (paymentsResult.status === "fulfilled") {
+      setPayments(paymentsResult.value.payments);
+      setPaymentTotal(paymentsResult.value.total);
+    } else {
+      failures.push(paymentsResult.reason?.message || "Gagal mengambil pembayaran");
+    }
+
+    if (logsResult.status === "fulfilled") setLogs(logsResult.value);
+    else failures.push(logsResult.reason?.message || "Gagal mengambil audit log");
+
+    if (failures.length > 0) {
+      setMessage([...new Set(failures)].join(" · "));
+    }
+
+    setLoading(false);
   }
 
   useEffect(() => {
     loadAll();
+    getApeEpiStatus().then(setApeSyncStatus).catch(() => setApeSyncStatus(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -785,9 +882,9 @@ export default function AdminPage({ user, onLogout }) {
     await loadHouseholds(0, householdQuery);
   }
 
-  async function loadPayments(page, query, status) {
+  async function loadPayments(page, query, status, method) {
     try {
-      const data = await getAdminPayments(query, status, PAGE_SIZE, page * PAGE_SIZE);
+      const data = await getAdminPayments(query, status, PAGE_SIZE, page * PAGE_SIZE, method);
       setPayments(data.payments);
       setPaymentTotal(data.total);
       setPaymentPage(page);
@@ -798,12 +895,32 @@ export default function AdminPage({ user, onLogout }) {
 
   async function searchPayments(e) {
     e.preventDefault();
-    await loadPayments(0, paymentQuery, paymentStatus);
+    await loadPayments(0, paymentQuery, paymentStatus, paymentMethodFilter);
   }
 
   async function changePaymentStatus(status) {
     setPaymentStatus(status);
-    await loadPayments(0, paymentQuery, status);
+    await loadPayments(0, paymentQuery, status, paymentMethodFilter);
+  }
+
+  async function changePaymentMethodFilter(method) {
+    setPaymentMethodFilter(method);
+    await loadPayments(0, paymentQuery, paymentStatus, method);
+  }
+
+  async function handleReviewPayment(orderId, action) {
+    if (action === "reject" && !window.confirm("Tolak klaim pembayaran manual ini?")) return;
+    setReviewingOrderId(orderId);
+    setMessage("");
+    try {
+      await reviewManualPayment(orderId, action);
+      await loadPayments(paymentPage, paymentQuery, paymentStatus, paymentMethodFilter);
+      setMessage(action === "approve" ? "Pembayaran disetujui." : "Pembayaran ditolak.");
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setReviewingOrderId("");
+    }
   }
 
   async function saveSetting(key, form) {
@@ -820,22 +937,49 @@ export default function AdminPage({ user, onLogout }) {
     }
   }
 
-  async function searchUsers(e) {
-    e.preventDefault();
-    try {
-      setUsers(await getAdminUsers(userQuery));
-    } catch (err) {
-      setMessage(err.message);
-    }
-  }
+  async function savePaymentMethodConfig() {
+    const active = paymentGateway.active || "midtrans";
+    const nextGateway = { ...paymentGateway, active };
+    const nextManual = { ...manualPayment, enabled: active === "manual" };
+    const nextMidtrans = { ...midtrans, enabled: active === "midtrans" };
+    const nextXendit = { ...xendit, enabled: active === "xendit" };
 
-  async function changeRole(id, role) {
+    setSavingKey("payment_method");
+    setMessage("");
+    setPaymentMethodFeedback({ tone: "info", text: "Menyimpan metode pembayaran..." });
     try {
-      await updateAdminUserRole(id, role);
-      setUsers(await getAdminUsers(userQuery));
-      setMessage("Role user diperbarui.");
+      const [updatedGateway, updatedManual, updatedMidtrans, updatedXendit] = await Promise.all([
+        updateAdminSetting("payment_gateway", nextGateway),
+        updateAdminSetting("manual_payment", nextManual),
+        updateAdminSetting("midtrans", nextMidtrans),
+        updateAdminSetting("xendit", nextXendit),
+      ]);
+
+      replacePaymentGateway(updatedGateway);
+      replaceManualPayment(updatedManual);
+      replaceMidtrans(updatedMidtrans);
+      replaceXendit(updatedXendit);
+
+      setSettings((prev) => ({
+        ...prev,
+        payment_gateway: updatedGateway,
+        manual_payment: updatedManual,
+        midtrans: updatedMidtrans,
+        xendit: updatedXendit,
+      }));
+      setPaymentMethodFeedback({
+        tone: "success",
+        text: `Berhasil disimpan. Metode aktif sekarang: ${active === "manual" ? "Transfer Manual" : active === "xendit" ? "Xendit" : "Midtrans"}.`,
+      });
+      setMessage("Metode pembayaran tersimpan.");
     } catch (err) {
+      setPaymentMethodFeedback({
+        tone: "error",
+        text: err.message || "Gagal menyimpan metode pembayaran.",
+      });
       setMessage(err.message);
+    } finally {
+      setSavingKey("");
     }
   }
 
@@ -856,11 +1000,34 @@ export default function AdminPage({ user, onLogout }) {
           : prices?.error || "Koneksi berhasil, tetapi harga GOLDGRAM/SILVERGRAM 1 gram belum terbaca valid.",
       });
       setMessage(hasValidPrices ? "Koneksi APE-EPI berhasil." : "Harga APE-EPI belum terbaca valid.");
+      getApeEpiStatus().then(setApeSyncStatus).catch(() => {});
     } catch (err) {
       setApePreview(null);
       setApeTestStatus({
         tone: "error",
         text: err.message || "Koneksi APE-EPI gagal. Periksa API key, base URL, dan akses jaringan server.",
+      });
+      setMessage(err.message);
+    } finally {
+      setSavingKey("");
+    }
+  }
+
+  async function testMailketing() {
+    setSavingKey("mailketing_test");
+    setMessage("");
+    setMailketingTestStatus(null);
+    try {
+      const result = await testMailketingEmail(mailketingTestEmail || user?.email || "");
+      setMailketingTestStatus({
+        tone: "success",
+        text: `Test email berhasil dikirim ke ${result.to}. Periksa inbox atau spam.`,
+      });
+      setMessage("Test email Mailketing berhasil dikirim.");
+    } catch (err) {
+      setMailketingTestStatus({
+        tone: "error",
+        text: err.message || "Gagal mengirim test email Mailketing.",
       });
       setMessage(err.message);
     } finally {
@@ -904,28 +1071,6 @@ export default function AdminPage({ user, onLogout }) {
       detailLabel: "Cache refresh",
       detailValue: `${apeEpi.cache_ttl_minutes ?? 30} menit`,
       progress: 64
-    },
-    {
-      icon: Landmark,
-      title: "Manual Transfer",
-      description: "Jalur pembayaran bank alternatif untuk pengguna yang belum memakai payment gateway.",
-      tone: "navy",
-      enabled: manualPayment.enabled,
-      onToggle: (v) => setManualPayment("enabled", v),
-      detailLabel: "Account",
-      detailValue: manualPayment.bank_name || "Belum diatur",
-      progress: manualPayment.account_number ? 82 : 28
-    },
-    {
-      icon: CreditCard,
-      title: "Midtrans",
-      description: "Payment gateway untuk subscription, notifikasi transaksi, dan mode produksi.",
-      tone: "violet",
-      enabled: midtrans.enabled,
-      onToggle: (v) => setMidtrans("enabled", v),
-      detailLabel: "Mode",
-      detailValue: midtrans.is_production ? "Production" : "Sandbox",
-      progress: midtrans.server_key_configured ? 86 : 38
     },
     {
       icon: Mail,
@@ -1107,7 +1252,7 @@ export default function AdminPage({ user, onLogout }) {
             ))}
           </div>
 
-          <TechnicalPanel apeEpi={apeEpi} midtrans={midtrans} telegram={telegram} />
+          <TechnicalPanel apeEpi={apeEpi} midtrans={midtrans} xendit={xendit} telegram={telegram} />
 
           <section id="integration-settings" className={`scroll-mt-28 p-4 ${glassPanel}`}>
             <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
@@ -1126,7 +1271,18 @@ export default function AdminPage({ user, onLogout }) {
             enabled={mailketing.enabled}
             onToggle={(v) => setMailketing("enabled", v)}
             footer={
-              <SaveButton label="Simpan Mailketing" saving={savingKey === "mailketing"} onClick={() => saveSetting("mailketing", mailketing)} />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <SaveButton label="Simpan Mailketing" saving={savingKey === "mailketing"} onClick={() => saveSetting("mailketing", mailketing)} />
+                <button
+                  type="button"
+                  onClick={testMailketing}
+                  disabled={savingKey === "mailketing_test"}
+                  className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-[#3525cd] transition active:scale-[0.98] disabled:opacity-60 sm:w-auto ${glassButton}`}
+                >
+                  <Mail size={15} />
+                  {savingKey === "mailketing_test" ? "Mengirim..." : "Kirim Test"}
+                </button>
+              </div>
             }
           >
             <div>
@@ -1144,65 +1300,159 @@ export default function AdminPage({ user, onLogout }) {
                 <input className={inputClass} value={mailketing.from_name || ""} onChange={(e) => setMailketing("from_name", e.target.value)} placeholder="Finepro" />
               </div>
             </FormRow>
+            <div>
+              <label className={labelClass}>Kirim Test Ke</label>
+              <input className={inputClass} type="email" value={mailketingTestEmail} onChange={(e) => setMailketingTestEmail(e.target.value)} placeholder={user?.email || "admin@email.com"} />
+              <div className="mt-1.5 text-[11px] font-semibold leading-relaxed text-neutral-500">
+                Simpan perubahan Mailketing terlebih dahulu sebelum mengirim test.
+              </div>
+            </div>
+            {mailketingTestStatus && (
+              <div
+                className={`rounded-2xl border px-3 py-2 text-xs font-semibold leading-relaxed ${
+                  mailketingTestStatus.tone === "success"
+                    ? "border-mint/20 bg-mint-light/80 text-mint"
+                    : "border-coral/20 bg-coral-light/80 text-coral"
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                {mailketingTestStatus.text}
+              </div>
+            )}
           </IntegrationCard>
 
-          <IntegrationCard
-            icon={CreditCard}
-            title="Midtrans"
-            description="Payment gateway untuk upgrade paket."
-            tone="navy"
-            enabled={midtrans.enabled}
-            onToggle={(v) => setMidtrans("enabled", v)}
-            footer={
-              <SaveButton label="Simpan Midtrans" saving={savingKey === "midtrans"} onClick={() => saveSetting("midtrans", midtrans)} tone="navy" />
-            }
-          >
-            <div className={`flex items-center justify-between px-3 py-2 ${glassSoft}`}>
-              <span className="text-sm font-semibold text-navy">Production Mode</span>
-              <Toggle checked={Boolean(midtrans.is_production)} onChange={(v) => setMidtrans("is_production", v)} />
-            </div>
-            <div>
-              <label className={labelClass}>Server Key</label>
-              <input className={inputClass} type="password" value={midtrans.server_key || ""} onChange={(e) => setMidtrans("server_key", e.target.value)} placeholder={midtrans.server_key_masked || "Server key baru"} />
-              <SecretHint configured={midtrans.server_key_configured} />
-            </div>
-            <div>
-              <label className={labelClass}>Client Key</label>
-              <input className={inputClass} type="password" value={midtrans.client_key || ""} onChange={(e) => setMidtrans("client_key", e.target.value)} placeholder={midtrans.client_key_masked || "Client key baru"} />
-              <SecretHint configured={midtrans.client_key_configured} />
-            </div>
-          </IntegrationCard>
+          <section className={`xl:col-span-2 p-4 ${glassCard}`}>
+            <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
+            <SectionTitle
+              icon={WalletCards}
+              title="Metode Pembayaran Aktif"
+              subtitle="Pilih metode yang dipakai user saat upgrade paket, lalu isi konfigurasinya di tempat yang sama."
+              tone="violet"
+            />
+            <div className="relative z-10 space-y-4">
+              <div className="grid gap-2 sm:grid-cols-3">
+                {[
+                  { value: "manual", label: "Transfer Manual", icon: Landmark },
+                  { value: "midtrans", label: "Midtrans", icon: CreditCard },
+                  { value: "xendit", label: "Xendit", icon: CreditCard },
+                ].map((method) => {
+                  const Icon = method.icon;
+                  const active = (paymentGateway.active || "midtrans") === method.value;
+                  return (
+                    <button
+                      key={method.value}
+                      type="button"
+                      onClick={() => setPaymentGateway("active", method.value)}
+                      className={`flex min-h-[50px] items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold transition active:scale-[0.98] ${
+                        active
+                          ? "border-white/55 bg-[#3525cd]/90 text-white shadow-[0_16px_34px_rgba(53,37,205,0.22),inset_1px_1px_0_rgba(255,255,255,0.32)]"
+                          : "border-white/30 bg-white/28 text-[#26344a] shadow-[inset_1px_1px_0_rgba(255,255,255,0.62)] hover:bg-white/42"
+                      }`}
+                    >
+                      <Icon size={16} />
+                      {method.label}
+                    </button>
+                  );
+                })}
+              </div>
 
-          <IntegrationCard
-            icon={Landmark}
-            title="Transfer Manual"
-            description="Rekening alternatif untuk pembayaran."
-            tone="gold"
-            enabled={manualPayment.enabled}
-            onToggle={(v) => setManualPayment("enabled", v)}
-            footer={
-              <SaveButton label="Simpan Transfer" saving={savingKey === "manual_payment"} onClick={() => saveSetting("manual_payment", manualPayment)} tone="gold" />
-            }
-          >
-            <FormRow>
-              <div>
-                <label className={labelClass}>Bank</label>
-                <input className={inputClass} value={manualPayment.bank_name || ""} onChange={(e) => setManualPayment("bank_name", e.target.value)} placeholder="BCA" />
-              </div>
-              <div>
-                <label className={labelClass}>Nomor Rekening</label>
-                <input className={inputClass} value={manualPayment.account_number || ""} onChange={(e) => setManualPayment("account_number", e.target.value)} placeholder="1234567890" />
-              </div>
-            </FormRow>
-            <div>
-              <label className={labelClass}>Nama Rekening</label>
-              <input className={inputClass} value={manualPayment.account_name || ""} onChange={(e) => setManualPayment("account_name", e.target.value)} placeholder="PT / Nama Pemilik" />
+              {(paymentGateway.active || "midtrans") === "manual" && (
+                <div className="space-y-3">
+                  <div className={`${glassSoft} px-3 py-2 text-sm font-semibold text-[#0b1c30]`}>
+                    Transfer Manual akan menjadi satu-satunya metode aktif setelah disimpan.
+                  </div>
+                  <FormRow>
+                    <div>
+                      <label className={labelClass}>Bank</label>
+                      <input className={inputClass} value={manualPayment.bank_name || ""} onChange={(e) => setManualPayment("bank_name", e.target.value)} placeholder="BCA" />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Nomor Rekening</label>
+                      <input className={inputClass} value={manualPayment.account_number || ""} onChange={(e) => setManualPayment("account_number", e.target.value)} placeholder="1234567890" />
+                    </div>
+                  </FormRow>
+                  <div>
+                    <label className={labelClass}>Nama Rekening</label>
+                    <input className={inputClass} value={manualPayment.account_name || ""} onChange={(e) => setManualPayment("account_name", e.target.value)} placeholder="PT / Nama Pemilik" />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Instruksi</label>
+                    <textarea className={areaClass} value={manualPayment.instructions || ""} onChange={(e) => setManualPayment("instructions", e.target.value)} placeholder="Transfer sesuai nominal, lalu konfirmasi ke admin." />
+                  </div>
+                </div>
+              )}
+
+              {(paymentGateway.active || "midtrans") === "midtrans" && (
+                <div className="space-y-3">
+                  <FormRow>
+                    <div className={`${glassSoft} px-3 py-2 text-sm font-semibold text-[#0b1c30]`}>
+                      Midtrans akan menjadi satu-satunya metode aktif setelah disimpan.
+                    </div>
+                    <div className={`flex items-center justify-between px-3 py-2 ${glassSoft}`}>
+                      <span className="text-sm font-semibold text-navy">Production Mode</span>
+                      <Toggle checked={Boolean(midtrans.is_production)} onChange={(v) => setMidtrans("is_production", v)} />
+                    </div>
+                  </FormRow>
+                  <FormRow>
+                    <div>
+                      <label className={labelClass}>Server Key</label>
+                      <input className={inputClass} type="password" value={midtrans.server_key || ""} onChange={(e) => setMidtrans("server_key", e.target.value)} placeholder={midtrans.server_key_masked || "Server key baru"} />
+                      <SecretHint configured={midtrans.server_key_configured} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Client Key</label>
+                      <input className={inputClass} type="password" value={midtrans.client_key || ""} onChange={(e) => setMidtrans("client_key", e.target.value)} placeholder={midtrans.client_key_masked || "Client key baru"} />
+                      <SecretHint configured={midtrans.client_key_configured} />
+                    </div>
+                  </FormRow>
+                </div>
+              )}
+
+              {(paymentGateway.active || "midtrans") === "xendit" && (
+                <div className="space-y-3">
+                  <FormRow>
+                    <div className={`${glassSoft} px-3 py-2 text-sm font-semibold text-[#0b1c30]`}>
+                      Xendit akan menjadi satu-satunya metode aktif setelah disimpan.
+                    </div>
+                    <div className={`flex items-center justify-between px-3 py-2 ${glassSoft}`}>
+                      <span className="text-sm font-semibold text-navy">Production Mode</span>
+                      <Toggle checked={Boolean(xendit.is_production)} onChange={(v) => setXendit("is_production", v)} />
+                    </div>
+                  </FormRow>
+                  <FormRow>
+                    <div>
+                      <label className={labelClass}>Secret Key</label>
+                      <input className={inputClass} type="password" value={xendit.secret_key || ""} onChange={(e) => setXendit("secret_key", e.target.value)} placeholder={xendit.secret_key_masked || "Secret key baru"} />
+                      <SecretHint configured={xendit.secret_key_configured} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Callback Verification Token</label>
+                      <input className={inputClass} type="password" value={xendit.callback_verification_token || ""} onChange={(e) => setXendit("callback_verification_token", e.target.value)} placeholder={xendit.callback_verification_token_masked || "Token webhook baru"} />
+                      <SecretHint configured={xendit.callback_verification_token_configured} />
+                    </div>
+                  </FormRow>
+                </div>
+              )}
+
+              {paymentMethodFeedback && (
+                <div
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold leading-relaxed ${
+                    paymentMethodFeedback.tone === "success"
+                      ? "border-[#006c49]/20 bg-[#6cf8bb]/35 text-[#006c49]"
+                      : paymentMethodFeedback.tone === "error"
+                      ? "border-[#ba1a1a]/20 bg-[#ffdad6]/70 text-[#ba1a1a]"
+                      : "border-[#3525cd]/20 bg-[#e2dfff]/55 text-[#3525cd]"
+                  }`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {paymentMethodFeedback.text}
+                </div>
+              )}
+              <SaveButton label="Simpan Metode Pembayaran" saving={savingKey === "payment_method"} onClick={savePaymentMethodConfig} />
             </div>
-            <div>
-              <label className={labelClass}>Instruksi</label>
-              <textarea className={areaClass} value={manualPayment.instructions || ""} onChange={(e) => setManualPayment("instructions", e.target.value)} placeholder="Transfer sesuai nominal, lalu konfirmasi ke admin." />
-            </div>
-          </IntegrationCard>
+          </section>
 
           <IntegrationCard
             icon={BrainCircuit}
@@ -1329,10 +1579,11 @@ export default function AdminPage({ user, onLogout }) {
                   type="button"
                   onClick={testApeEpi}
                   disabled={savingKey === "ape_epi_test"}
+                  title="Memicu 1x API call manual ke APE-EPI, memakai kuota harian yang sama dengan auto-sync"
                   className={`flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-[#3525cd] transition active:scale-[0.98] disabled:opacity-60 sm:w-auto ${glassButton}`}
                 >
                   <RefreshCw size={15} className={savingKey === "ape_epi_test" ? "animate-spin" : ""} />
-                  {savingKey === "ape_epi_test" ? "Menguji..." : "Test Koneksi"}
+                  {savingKey === "ape_epi_test" ? "Menguji..." : "Test Koneksi Manual"}
                 </button>
               </div>
             }
@@ -1373,6 +1624,58 @@ export default function AdminPage({ user, onLogout }) {
                 Rekomendasi FinePro: 3x per hari karena harga EPI biasanya update setelah jam 09:00.
               </div>
             </div>
+
+            <div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Status Auto-Sync Sistem</div>
+              {apeSyncStatus === null ? (
+                <div className="rounded-2xl border border-white/25 bg-white/40 px-3 py-2 text-xs font-semibold text-neutral-500">
+                  Memuat status sinkronisasi...
+                </div>
+              ) : !apeSyncStatus.enabled ? (
+                <div className="rounded-2xl border border-gold/20 bg-gold-light/80 px-3 py-2 text-xs font-semibold text-gold">
+                  APE-EPI belum aktif — aktifkan dan simpan API Key untuk mulai auto-sync.
+                </div>
+              ) : !apeSyncStatus.gold || !apeSyncStatus.silver ? (
+                <div className="rounded-2xl border border-gold/20 bg-gold-light/80 px-3 py-2 text-xs font-semibold text-gold">
+                  Belum ada harga tersinkron. Cron auto-sync berjalan 08:00 &amp; 13:00 WIB, atau klik Test Koneksi Manual.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-neutral-400">Harga Jual (Konsumen)</div>
+                    <div className="grid gap-2 rounded-2xl border border-white/25 bg-white/40 p-3 sm:grid-cols-2">
+                      {[
+                        { label: "GOLDGRAM", data: apeSyncStatus.gold, tone: "text-gold" },
+                        { label: "SILVERGRAM", data: apeSyncStatus.silver, tone: "text-violet" },
+                      ].map(({ label, data, tone }) => (
+                        <ApeAssetStatus key={label} label={label} data={data} tone={tone} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {(apeSyncStatus.gold_buyback || apeSyncStatus.silver_buyback) && (
+                    <div>
+                      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-neutral-400">Harga Buyback</div>
+                      <div className="grid gap-2 rounded-2xl border border-white/25 bg-white/40 p-3 sm:grid-cols-2">
+                        {apeSyncStatus.gold_buyback && (
+                          <ApeAssetStatus label="GOLDGRAM Buyback" data={apeSyncStatus.gold_buyback} tone="text-gold" />
+                        )}
+                        {apeSyncStatus.silver_buyback && (
+                          <ApeAssetStatus label="SILVERGRAM Buyback" data={apeSyncStatus.silver_buyback} tone="text-violet" />
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {(!apeSyncStatus.gold_buyback || !apeSyncStatus.silver_buyback) && (
+                    <div className="text-[11px] font-semibold leading-relaxed text-neutral-500">
+                      Harga buyback bersifat suplemen untuk estimasi target tabungan — belum semuanya berhasil tersinkron, tidak memengaruhi harga jual di atas.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {apeTestStatus && (
               <div
                 className={`rounded-2xl border px-3 py-2 text-xs font-semibold leading-relaxed ${
@@ -1463,63 +1766,7 @@ export default function AdminPage({ user, onLogout }) {
 
       {activeTab === "data" && (
         <div className="space-y-6">
-          <div className="grid gap-5 lg:grid-cols-2">
-            <section className={`p-6 ${glassPanel}`}>
-              <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
-              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#e2dfff] text-[#3525cd]">
-                    <UserCog size={20} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold text-[#0b1c30]">System Users</h2>
-                    <p className="mt-1 text-xs font-semibold text-[#464555]">{users.length} akun ditampilkan</p>
-                  </div>
-                </div>
-                <form onSubmit={searchUsers} className="flex min-w-0 gap-2">
-                  <input
-                    className="h-10 min-w-0 rounded-full border border-white/30 bg-white/35 px-4 text-sm font-semibold text-[#0b1c30] shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] outline-none backdrop-blur-xl transition placeholder:text-[#464555]/70 focus:bg-white/55 focus:shadow-[0_0_0_3px_rgba(53,37,205,0.12)]"
-                    value={userQuery}
-                    onChange={(e) => setUserQuery(e.target.value)}
-                    placeholder="Cari user"
-                  />
-                  <button className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#3525cd] text-white transition hover:brightness-110" type="submit" title="Cari">
-                    <Search size={15} />
-                  </button>
-                </form>
-              </div>
-
-              <div className="max-h-[500px] space-y-3 overflow-y-auto pr-1">
-                {users.map((u, index) => (
-                  <div key={u.id} className="group flex flex-col gap-3 rounded-lg border border-transparent p-3 transition hover:border-white/25 hover:bg-white/20 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 items-center gap-4">
-                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold ${index % 3 === 0 ? "bg-[#e2dfff] text-[#3525cd]" : index % 3 === 1 ? "bg-[#ffdadc] text-[#8b1b34]" : "bg-[#d3e4fe] text-[#464555]"}`}>
-                        {getInitials(u.name || u.email)}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-[#0b1c30]">{u.name || u.email}</div>
-                        <div className="truncate text-xs font-semibold text-[#777587]">{u.email}</div>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                      <StatusBadge tone={u.effective_role === "super_admin" ? "navy" : u.effective_role === "admin" ? "violet" : "mint"}>
-                        {u.effective_role || u.role}
-                      </StatusBadge>
-                      <StatusBadge tone="gold">{u.household_name || "Tanpa household"}</StatusBadge>
-                      {canManageRoles && (
-                        <select className={`${inputClass} h-9 sm:w-40`} value={u.role} onChange={(e) => changeRole(u.id, e.target.value)}>
-                          <option value="user">user</option>
-                          <option value="admin">admin</option>
-                          <option value="super_admin">super_admin</option>
-                        </select>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {users.length === 0 && <div className="py-8 text-center text-sm font-semibold text-[#777587]">Tidak ada user.</div>}
-              </div>
-            </section>
-
+          <div className="grid gap-5">
             <section className={`p-6 ${glassPanel}`}>
               <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
               <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1537,7 +1784,7 @@ export default function AdminPage({ user, onLogout }) {
                     className="h-10 min-w-0 rounded-full border-0 bg-[#eff4ff] px-4 text-sm font-semibold text-[#0b1c30] outline-none transition placeholder:text-[#777587] focus:bg-white focus:shadow-[0_0_0_3px_rgba(53,37,205,0.12)]"
                     value={householdQuery}
                     onChange={(e) => setHouseholdQuery(e.target.value)}
-                    placeholder="Cari household/owner"
+                    placeholder="Cari household/owner/anggota"
                   />
                   <button className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#3525cd] text-white transition hover:brightness-110" type="submit" title="Cari">
                     <Search size={15} />
@@ -1590,6 +1837,28 @@ export default function AdminPage({ user, onLogout }) {
             </section>
           </div>
 
+          {unassignedUsers.length > 0 && (
+            <section className={`p-4 ${glassPanel}`}>
+              <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
+              <SectionTitle
+                icon={UserCog}
+                title="Unassigned Users"
+                subtitle={`${unassignedUsers.length} akun belum tergabung ke household mana pun.`}
+                tone="gold"
+              />
+              <div className="flex flex-wrap gap-2">
+                {unassignedUsers.map((u) => (
+                  <div key={u.id} className="flex items-center gap-2 rounded-full bg-[#eff4ff] px-3 py-1.5 text-xs font-semibold text-[#464555]">
+                    <span className="text-[#0b1c30]">{u.name || u.email}</span>
+                    <StatusBadge tone={u.effective_role === "super_admin" ? "navy" : u.effective_role === "admin" ? "violet" : "mint"}>
+                      {u.effective_role || u.role}
+                    </StatusBadge>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className={`p-6 ${glassPanel}`}>
             <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
             <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1604,6 +1873,17 @@ export default function AdminPage({ user, onLogout }) {
                   <option value="paid">Paid</option>
                   <option value="pending">Pending</option>
                   <option value="failed">Failed</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <select
+                  className={`${inputClass} h-10 w-auto`}
+                  value={paymentMethodFilter}
+                  onChange={(e) => changePaymentMethodFilter(e.target.value)}
+                >
+                  <option value="">Semua Metode</option>
+                  <option value="midtrans">Midtrans</option>
+                  <option value="xendit">Xendit</option>
+                  <option value="manual">Manual</option>
                 </select>
                 <input
                   className="h-10 min-w-0 rounded-full border-0 bg-[#eff4ff] px-4 text-sm font-semibold text-[#0b1c30] outline-none transition placeholder:text-[#777587] focus:bg-white focus:shadow-[0_0_0_3px_rgba(53,37,205,0.12)]"
@@ -1625,8 +1905,10 @@ export default function AdminPage({ user, onLogout }) {
                     <th className="pb-3">Owner</th>
                     <th className="pb-3">Plan</th>
                     <th className="pb-3">Nominal</th>
+                    <th className="pb-3">Metode</th>
                     <th className="pb-3">Status</th>
-                    <th className="pb-3 text-right">Tanggal</th>
+                    <th className="pb-3">Tanggal</th>
+                    <th className="pb-3 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1636,21 +1918,51 @@ export default function AdminPage({ user, onLogout }) {
                       <td className="max-w-[160px] truncate py-3 text-[#464555]">{p.owner_email}</td>
                       <td className="py-3 text-[#464555]">{p.plan}</td>
                       <td className="py-3 text-[#3525cd]">{fmtRp(p.amount)}</td>
+                      <td className="py-3 text-[#464555]">
+                        {p.method}
+                        {p.proof_url && (
+                          <a href={mediaUrl(p.proof_url)} target="_blank" rel="noreferrer" className="ml-1.5 text-xs font-semibold text-[#3525cd] underline">
+                            bukti
+                          </a>
+                        )}
+                      </td>
                       <td className="py-3">
                         <StatusBadge tone={paymentTone(p.status)}>{p.status}</StatusBadge>
                       </td>
-                      <td className="py-3 text-right text-[#777587]">{formatDate(p.created_at)}</td>
+                      <td className="py-3 text-[#777587]">{formatDate(p.created_at)}</td>
+                      <td className="py-3 text-right">
+                        {p.method === "manual" && p.status === "pending" && (
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              type="button"
+                              disabled={reviewingOrderId === p.order_id}
+                              onClick={() => handleReviewPayment(p.order_id, "approve")}
+                              className="rounded-full bg-[#3525cd] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              disabled={reviewingOrderId === p.order_id}
+                              onClick={() => handleReviewPayment(p.order_id, "reject")}
+                              className="rounded-full bg-[#ba1a1a] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {payments.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-sm font-semibold text-[#777587]">Belum ada payment.</td>
+                      <td colSpan={8} className="py-8 text-center text-sm font-semibold text-[#777587]">Belum ada payment.</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
-            <PaginationControls page={paymentPage} pageSize={PAGE_SIZE} total={paymentTotal} onPageChange={(p) => loadPayments(p, paymentQuery, paymentStatus)} />
+            <PaginationControls page={paymentPage} pageSize={PAGE_SIZE} total={paymentTotal} onPageChange={(p) => loadPayments(p, paymentQuery, paymentStatus, paymentMethodFilter)} />
           </section>
         </div>
       )}
@@ -1664,6 +1976,7 @@ export default function AdminPage({ user, onLogout }) {
       {openHouseholdId && (
         <HouseholdDetailModal
           householdId={openHouseholdId}
+          canManageRoles={canManageRoles}
           onClose={() => setOpenHouseholdId(null)}
           onChanged={loadAll}
         />

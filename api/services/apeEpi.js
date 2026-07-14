@@ -241,6 +241,32 @@ async function reserveDailyRefresh(maxDailyRequests) {
   }
 }
 
+const STALE_THRESHOLD_HOURS = 12;
+
+// Baca status cache apa adanya — TANPA memicu API call baru, jadi aman dipanggil
+// kapan saja (mis. saat admin buka halaman) tanpa memakan kuota harian APE-EPI.
+export async function getCachedMetalPricesStatus() {
+  const settings = await getSetting('ape_epi');
+  const latest = await readLatestCachedPrices();
+  const now = Date.now();
+
+  const withStaleFlag = (row) => {
+    if (!row) return null;
+    const fetchedAt = new Date(row.fetched_at).getTime();
+    const hoursSinceSync = (now - fetchedAt) / (1000 * 60 * 60);
+    return { ...row, stale: hoursSinceSync >= STALE_THRESHOLD_HOURS };
+  };
+
+  return {
+    enabled: Boolean(settings.enabled),
+    stale_threshold_hours: STALE_THRESHOLD_HOURS,
+    gold: withStaleFlag(latest.gold),
+    silver: withStaleFlag(latest.silver),
+    gold_buyback: withStaleFlag(latest.gold_buyback),
+    silver_buyback: withStaleFlag(latest.silver_buyback),
+  };
+}
+
 export async function getCurrentMetalPrices({ forceRefresh = false, bypassDailyLimit = false, settingsOverride = null } = {}) {
   const settings = applySettingsOverride(await getSetting('ape_epi'), settingsOverride);
   const ttlMinutes = toPositiveInt(settings.cache_ttl_minutes, 30);

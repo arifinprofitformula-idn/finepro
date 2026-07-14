@@ -13,6 +13,15 @@ const DEFAULTS = {
     server_key: '',
     client_key: '',
   },
+  xendit: {
+    enabled: false,
+    is_production: false,
+    secret_key: '',
+    callback_verification_token: '',
+  },
+  payment_gateway: {
+    active: 'midtrans',
+  },
   manual_payment: {
     enabled: false,
     bank_name: '',
@@ -67,6 +76,7 @@ const DEFAULTS = {
 const SECRET_FIELDS = {
   mailketing: ['api_token'],
   midtrans: ['server_key', 'client_key'],
+  xendit: ['secret_key', 'callback_verification_token'],
   ai: ['sumopod_api_key', 'anthropic_api_key'],
   ape_epi: ['api_key'],
   web_push: ['vapid_private_key'],
@@ -76,6 +86,8 @@ const SECRET_FIELDS = {
 const ALLOWED_FIELDS = {
   mailketing: ['enabled', 'api_token', 'from_email', 'from_name'],
   midtrans: ['enabled', 'is_production', 'server_key', 'client_key'],
+  xendit: ['enabled', 'is_production', 'secret_key', 'callback_verification_token'],
+  payment_gateway: ['active'],
   manual_payment: ['enabled', 'bank_name', 'account_number', 'account_name', 'instructions'],
   ai: [
     'enabled',
@@ -126,6 +138,16 @@ function envFallback(key) {
       is_production: process.env.MIDTRANS_IS_PRODUCTION === 'true',
       server_key: serverKey,
       client_key: clientKey,
+    };
+  }
+  if (key === 'xendit') {
+    const secretKey = process.env.XENDIT_SECRET_KEY || '';
+    const callbackToken = process.env.XENDIT_CALLBACK_TOKEN || '';
+    return {
+      enabled: Boolean(secretKey && callbackToken),
+      is_production: process.env.XENDIT_IS_PRODUCTION === 'true',
+      secret_key: secretKey,
+      callback_verification_token: callbackToken,
     };
   }
   if (key === 'ai') {

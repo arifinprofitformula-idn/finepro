@@ -11,6 +11,21 @@ Aplikasi ini dipakai dalam mode development lokal dengan dua proses:
 
 Saat development, frontend memanggil endpoint relatif `/api`, lalu Vite meneruskan request ke backend lokal lewat proxy. Jangan gunakan `npm run build` untuk kerja harian; itu hanya untuk final/produksi.
 
+Cara paling praktis di Windows:
+
+```bash
+npm run dev:local
+```
+
+Perintah ini hanya menjalankan proses lokal dan menulis log ke `.logs/`. Ia tidak
+menjalankan deploy, tidak mengubah `dist/`, dan tidak menyentuh konfigurasi live
+server.
+
+Sebelum login, pastikan PostgreSQL lokal sesuai `.env` sudah berjalan. Jika
+memakai Laragon, nyalakan service PostgreSQL dari Laragon terlebih dahulu.
+
+Jika ingin menjalankan manual dengan dua terminal:
+
 ```bash
 npm install
 npm run dev

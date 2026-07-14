@@ -7,11 +7,19 @@
 import { Bell, ShieldCheck } from "lucide-react";
 import { mediaUrl } from "../utils/media.js";
 
-export default function AppHeader({ user, planLabel, pendingInviteCount, onNavigateAccount, onNavigateAdmin }) {
+export default function AppHeader({
+  user,
+  planLabel,
+  notificationCount = 0,
+  hasSubscriptionWarning = false,
+  onNavigateAccount,
+  onNavigateAdmin
+}) {
   const name = user?.name || user?.email?.split("@")[0] || "";
   const firstName = name.split(" ")[0];
   const initial = (user?.name || user?.email || "?").charAt(0).toUpperCase();
   const isAdmin = ["admin", "super_admin"].includes(user?.role);
+  const hasNotifications = notificationCount > 0;
 
   return (
     <div className="sticky top-0 z-10 max-w-lg mx-auto px-4 pt-3 pb-3 backdrop-blur-sm">
@@ -46,12 +54,12 @@ export default function AppHeader({ user, planLabel, pendingInviteCount, onNavig
             type="button"
             onClick={onNavigateAccount}
             className="gloss-button flex h-9 w-9 items-center justify-center rounded-full relative text-navy"
-            title="Notifikasi"
+            title={hasSubscriptionWarning ? "Langganan hampir berakhir" : "Notifikasi"}
           >
-            <Bell size={17} strokeWidth={2.2} className={pendingInviteCount > 0 ? "animate-bell-ring origin-top" : ""} />
-            {pendingInviteCount > 0 && (
+            <Bell size={17} strokeWidth={2.2} className={hasNotifications ? "animate-bell-ring origin-top" : ""} />
+            {hasNotifications && (
               <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-coral px-1 text-center text-[10px] font-medium leading-[18px] text-white">
-                {pendingInviteCount}
+                {notificationCount > 9 ? "9+" : notificationCount}
               </span>
             )}
           </button>

@@ -12,12 +12,14 @@ import { generateToken, authMiddleware, adminRoleForEmail } from '../middleware/
 import { sendMail } from '../services/mailer.js';
 
 const router = Router();
+const isLocalDev = process.env.LOCAL_DEV === 'true';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  skip: () => isLocalDev,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Terlalu banyak percobaan, coba lagi beberapa menit lagi' },

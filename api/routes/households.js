@@ -14,6 +14,14 @@ async function getUserHouseholdId(userId) {
   return result.rows[0]?.household_id || null;
 }
 
+async function getOwnerHouseholdId(userId) {
+  const result = await pool.query(
+    'SELECT household_id FROM household_members WHERE user_id = $1 AND role = $2 LIMIT 1',
+    [userId, 'owner']
+  );
+  return result.rows[0]?.household_id || null;
+}
+
 // GET /api/households — dapatkan household user (termasuk status langganan)
 router.get('/', async (req, res) => {
   try {
@@ -98,6 +106,58 @@ router.patch('/me', async (req, res) => {
   } catch (err) {
     console.error('Update household error:', err);
     res.status(500).json({ error: 'Gagal memperbarui household' });
+  }
+});
+
+// GET /api/households/members — daftar anggota household user login
+router.get('/members', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.status(404).json({ error: 'Household tidak ditemukan' });
+
+    const result = await pool.query(
+      `SELECT u.id, u.name, u.email, u.avatar_url, hm.role, hm.joined_at
+       FROM household_members hm
+       JOIN users u ON u.id = hm.user_id
+       WHERE hm.household_id = $1
+       ORDER BY CASE WHEN hm.role = 'owner' THEN 0 ELSE 1 END, hm.joined_at ASC`,
+      [householdId]
+    );
+    res.json({ members: result.rows });
+  } catch (err) {
+    console.error('List household members error:', err);
+    res.status(500).json({ error: 'Gagal mengambil anggota household' });
+  }
+});
+
+// DELETE /api/households/members/:userId — owner mengeluarkan anggota household
+router.delete('/members/:userId', async (req, res) => {
+  try {
+    const householdId = await getOwnerHouseholdId(req.user.userId);
+    if (!householdId) {
+      return res.status(403).json({ error: 'Hanya pemilik household yang bisa mengeluarkan anggota' });
+    }
+    if (req.params.userId === req.user.userId) {
+      return res.status(400).json({ error: 'Owner tidak bisa mengeluarkan dirinya sendiri' });
+    }
+
+    const member = await pool.query(
+      'SELECT role FROM household_members WHERE household_id = $1 AND user_id = $2',
+      [householdId, req.params.userId]
+    );
+    if (!member.rows[0]) return res.status(404).json({ error: 'Anggota tidak ditemukan' });
+    if (member.rows[0].role === 'owner') {
+      return res.status(400).json({ error: 'Owner household tidak bisa dikeluarkan' });
+    }
+
+    await pool.query(
+      'DELETE FROM household_members WHERE household_id = $1 AND user_id = $2',
+      [householdId, req.params.userId]
+    );
+    res.json({ removed: true });
+  } catch (err) {
+    console.error('Remove household member error:', err);
+    res.status(500).json({ error: 'Gagal mengeluarkan anggota' });
   }
 });
 

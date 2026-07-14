@@ -28,6 +28,15 @@ export async function updateMonthlyIncomeDay(day) {
   return data.household;
 }
 
+export async function getHouseholdMembers() {
+  const data = await apiFetch('/households/members');
+  return data.members || [];
+}
+
+export async function removeHouseholdMember(userId) {
+  return apiFetch(`/households/members/${userId}`, { method: 'DELETE' });
+}
+
 function defaultNameForType(type) {
   if (type === "family") return "Keluarga Saya";
   if (type === "student") return "Keuangan Kuliah";

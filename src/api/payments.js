@@ -1,5 +1,6 @@
 // src/lib/payments.js
-// Upgrade langganan via Midtrans Snap (endpoint di api/routes/payments.js)
+// Upgrade langganan lewat gateway aktif (Manual / Midtrans / Xendit) — endpoint
+// di api/routes/payments.js. Gateway aktif ditentukan admin di Admin Console.
 
 import { apiFetch } from "./apiClient.js";
 
@@ -9,6 +10,7 @@ export const PLANS = [
   { id: "annual", label: "Tahunan", price: 249000, priceLabel: "Rp 249.000 / tahun" },
 ];
 
+// Untuk Midtrans: { orderId, token, redirectUrl }. Untuk Xendit: { orderId, invoiceUrl }.
 export async function createPayment(plan) {
   return apiFetch('/payments/create', {
     method: 'POST',
@@ -16,9 +18,24 @@ export async function createPayment(plan) {
   });
 }
 
+export async function submitManualPayment({ plan, reference, note, file }) {
+  const formData = new FormData();
+  formData.append('plan', plan);
+  if (reference) formData.append('reference', reference);
+  if (note) formData.append('note', note);
+  formData.append('proof', file);
+
+  const data = await apiFetch('/payments/manual/submit', {
+    method: 'POST',
+    body: formData,
+  });
+  return data.payment;
+}
+
+// Return: { active: 'manual'|'midtrans'|'xendit', methods: { midtrans, xendit, manual } }
 export async function getPaymentMethods() {
   const data = await apiFetch('/payments/methods');
-  return data.methods || {};
+  return { active: data.active, ...(data.methods || {}) };
 }
 
 export async function getPaymentStatus(orderId) {
@@ -29,7 +46,8 @@ export async function getPaymentStatus(orderId) {
 export const PAYMENT_STATUS_LABELS = {
   paid: "Berhasil",
   pending: "Menunggu",
-  failed: "Gagal"
+  failed: "Gagal",
+  rejected: "Ditolak"
 };
 
 export async function getPaymentHistory() {
