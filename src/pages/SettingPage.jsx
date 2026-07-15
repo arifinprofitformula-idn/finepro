@@ -9,6 +9,7 @@ import { useWallets } from "../hooks/useWallets.js";
 import { useArisan } from "../hooks/useArisan.js";
 import { changePassword, translateAuthError } from "../api/auth.js";
 import { disconnectTelegramLink, startTelegramLink } from "../api/telegram.js";
+import { disconnectWhatsAppLink, startWhatsAppLink } from "../api/whatsapp.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
 import { monthKey, todayStr } from "../utils/format.js";
 import { hasNativeInstallPrompt, isAppInstalled, runNativeInstallPrompt, subscribeInstallState } from "../utils/pwaInstall.js";
@@ -124,6 +125,12 @@ export default function SettingPage({
   const [telegramLinkMsgType, setTelegramLinkMsgType] = useState("");
   const [telegramDisconnecting, setTelegramDisconnecting] = useState(false);
 
+  const [whatsappLinkLoading, setWhatsappLinkLoading] = useState(false);
+  const [whatsappLink, setWhatsappLink] = useState(null);
+  const [whatsappLinkMsg, setWhatsappLinkMsg] = useState("");
+  const [whatsappLinkMsgType, setWhatsappLinkMsgType] = useState("");
+  const [whatsappDisconnecting, setWhatsappDisconnecting] = useState(false);
+
   const isStudent = household.household_type === "student";
 
   useEffect(() => {
@@ -219,6 +226,66 @@ export default function SettingPage({
       setTelegramLinkMsgType("error");
     } finally {
       setTelegramDisconnecting(false);
+    }
+  }
+
+  function openWhatsAppLink(phone) {
+    if (!phone) return;
+    window.open(`https://wa.me/${phone}`, "_blank", "noopener");
+  }
+
+  async function handleStartWhatsAppLink() {
+    setWhatsappLinkLoading(true);
+    setWhatsappLinkMsg("");
+    setWhatsappLinkMsgType("");
+    try {
+      const data = await startWhatsAppLink();
+      setWhatsappLink(data);
+      if (data.wa_phone && data.wa_phone !== "belum dikonfigurasi") {
+        setWhatsappLinkMsg("Kode siap. Buka WhatsApp dan kirim kode ke nomor bisnis.");
+        setWhatsappLinkMsgType("success");
+      } else {
+        setWhatsappLinkMsg("Nomor WhatsApp bisnis belum dikonfigurasi. Gunakan kode manual atau hubungi admin.");
+        setWhatsappLinkMsgType("error");
+      }
+    } catch (err) {
+      setWhatsappLinkMsg(err.message);
+      setWhatsappLinkMsgType("error");
+    } finally {
+      setWhatsappLinkLoading(false);
+    }
+  }
+
+  async function handleCopyWhatsAppCode() {
+    if (!whatsappLink?.code) return;
+    try {
+      await navigator.clipboard.writeText(whatsappLink.code);
+      setWhatsappLinkMsg("Kode WhatsApp berhasil disalin.");
+      setWhatsappLinkMsgType("success");
+    } catch {
+      setWhatsappLinkMsg(`Salin manual: ${whatsappLink.code}`);
+      setWhatsappLinkMsgType("error");
+    }
+  }
+
+  async function handleDisconnectWhatsApp() {
+    if (!confirm("Putuskan koneksi WhatsApp? Bot tidak akan bisa mencatat transaksi otomatis dari WhatsApp ini lagi.")) {
+      return;
+    }
+    setWhatsappDisconnecting(true);
+    setWhatsappLinkMsg("");
+    setWhatsappLinkMsgType("");
+    try {
+      const data = await disconnectWhatsAppLink();
+      onUserUpdated(data.user);
+      setWhatsappLink(null);
+      setWhatsappLinkMsg(data.message || "Akun WhatsApp berhasil diputuskan.");
+      setWhatsappLinkMsgType("success");
+    } catch (err) {
+      setWhatsappLinkMsg(err.message);
+      setWhatsappLinkMsgType("error");
+    } finally {
+      setWhatsappDisconnecting(false);
     }
   }
 
@@ -486,6 +553,100 @@ export default function SettingPage({
               </div>
             )}
             <StatusMsg msg={telegramLinkMsg} type={telegramLinkMsgType} />
+          </>
+        )}
+      </div>
+
+      {/* WhatsApp — hubungkan akun supaya foto struk/bukti transfer yang
+          dikirim ke WhatsApp bot otomatis jadi transaksi */}
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={Smartphone} tone="mint" title="Hubungkan WhatsApp" />
+        {user.whatsapp_id ? (
+          <>
+            <p className="text-xs font-medium text-mint">
+              ✓ Terhubung
+            </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              Foto struk yang dikirim via WhatsApp akan otomatis tercatat sebagai transaksi di akun ini.
+            </p>
+            <button
+              type="button"
+              onClick={handleDisconnectWhatsApp}
+              disabled={whatsappDisconnecting}
+              className={`${outlineBtnClass} mt-3 w-full border-coral text-coral disabled:opacity-60`}
+            >
+              <Smartphone size={15} />
+              {whatsappDisconnecting ? "Memutuskan..." : "Putuskan WhatsApp"}
+            </button>
+            <StatusMsg msg={whatsappLinkMsg} type={whatsappLinkMsgType} />
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-neutral-500">
+              Hubungkan WhatsApp untuk mencatat transaksi otomatis dari foto struk yang kamu kirim ke bot WhatsApp bisnis.
+            </p>
+            {!whatsappLink ? (
+              <button
+                type="button"
+                onClick={handleStartWhatsAppLink}
+                disabled={whatsappLinkLoading}
+                className={`${primaryBtnClass} mt-3 w-full`}
+              >
+                <Smartphone size={15} />
+                {whatsappLinkLoading ? "Membuat kode..." : "Hubungkan WhatsApp"}
+              </button>
+            ) : (
+              <div className="mt-3 rounded-xl border border-mint/30 bg-mint-light/30 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-mint">Kode siap dikirim</p>
+                    <p className="mt-1 font-mono text-base font-bold tracking-widest text-navy">{whatsappLink.code}</p>
+                  </div>
+                  {whatsappLink.wa_phone && whatsappLink.wa_phone !== "belum dikonfigurasi" && (
+                    <button
+                      type="button"
+                      onClick={() => openWhatsAppLink(whatsappLink.wa_phone)}
+                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-mint text-white"
+                      title="Buka WhatsApp"
+                    >
+                      <ExternalLink size={16} />
+                    </button>
+                  )}
+                </div>
+                <p className="mt-2 leading-relaxed text-neutral-600">
+                  {whatsappLink.wa_phone && whatsappLink.wa_phone !== "belum dikonfigurasi" ? (
+                    <>
+                      Kirim kode di atas ke nomor WhatsApp{" "}
+                      <span className="font-semibold text-navy">{whatsappLink.wa_phone}</span>.
+                    </>
+                  ) : (
+                    "Kirim kode di atas ke nomor WhatsApp bisnis."
+                  )}{" "}
+                  Kode berlaku 10 menit.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {whatsappLink.wa_phone && whatsappLink.wa_phone !== "belum dikonfigurasi" && (
+                    <button
+                      type="button"
+                      onClick={() => openWhatsAppLink(whatsappLink.wa_phone)}
+                      className={`${primaryBtnClass} w-full`}
+                    >
+                      <Smartphone size={15} />
+                      Buka WhatsApp
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleCopyWhatsAppCode}
+                    className={`${outlineBtnClass} w-full`}
+                  >
+                    <Copy size={15} />
+                    Salin Kode
+                  </button>
+                </div>
+              </div>
+            )}
+            <StatusMsg msg={whatsappLinkMsg} type={whatsappLinkMsgType} />
           </>
         )}
       </div>
