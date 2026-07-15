@@ -18,6 +18,7 @@ import {
   LogOut,
   Mail,
   MessageCircle,
+  Phone,
   RefreshCw,
   Save,
   Search,
@@ -803,6 +804,7 @@ export default function AdminPage({ user, onLogout }) {
   const [apeEpi, setApeEpi] = useFormState(settings?.ape_epi);
   const [webPush, setWebPush] = useFormState(settings?.web_push);
   const [telegram, setTelegram] = useFormState(settings?.telegram);
+  const [whatsapp, setWhatsapp] = useFormState(settings?.whatsapp);
   const [mailketingTestEmail, setMailketingTestEmail] = useState(user?.email || "");
   const [mailketingTestStatus, setMailketingTestStatus] = useState(null);
   const [apePreview, setApePreview] = useState(null);
@@ -1093,6 +1095,17 @@ export default function AdminPage({ user, onLogout }) {
       detailLabel: "Bot",
       detailValue: telegram.bot_username || "Belum diatur",
       progress: telegram.bot_token_configured ? 80 : 30
+    },
+    {
+      icon: Phone,
+      title: "WhatsApp Cloud API",
+      description: "Webhook Meta, link akun, scan struk via WhatsApp, dan auto-reply AI.",
+      tone: "mint",
+      enabled: whatsapp.enabled,
+      onToggle: (v) => setWhatsapp("enabled", v),
+      detailLabel: "Phone",
+      detailValue: whatsapp.business_phone || "Belum diatur",
+      progress: whatsapp.token_configured ? 72 : 18
     },
     {
       icon: BellRing,
@@ -1758,6 +1771,37 @@ export default function AdminPage({ user, onLogout }) {
               <SecretHint configured={telegram.n8n_shared_secret_configured} />
               </div>
             </FormRow>
+          </IntegrationCard>
+
+          <IntegrationCard
+            icon={Phone}
+            title="WhatsApp Cloud API"
+            description="Webhook Meta, kirim/terima pesan & gambar, link akun user."
+            tone="mint"
+            enabled={whatsapp.enabled}
+            onToggle={(v) => setWhatsapp("enabled", v)}
+            footer={<SaveButton label="Simpan WhatsApp" saving={savingKey === "whatsapp"} onClick={() => saveSetting("whatsapp", whatsapp)} />}
+          >
+            <div>
+              <label className={labelClass}>Token (dari Meta Developer)</label>
+              <input className={inputClass} type="password" value={whatsapp.token || ""} onChange={(e) => setWhatsapp("token", e.target.value)} placeholder={whatsapp.token_masked || "EAA..."} />
+              <SecretHint configured={whatsapp.token_configured} />
+            </div>
+            <FormRow>
+              <div>
+                <label className={labelClass}>Phone Number ID</label>
+                <input className={inputClass} value={whatsapp.phone_number_id || ""} onChange={(e) => setWhatsapp("phone_number_id", e.target.value)} placeholder="123456789..." />
+              </div>
+              <div>
+                <label className={labelClass}>Verify Token</label>
+                <input className={inputClass} type="password" value={whatsapp.verify_token || ""} onChange={(e) => setWhatsapp("verify_token", e.target.value)} placeholder={whatsapp.verify_token_masked || "String acak"} />
+                <SecretHint configured={whatsapp.verify_token_configured} />
+              </div>
+            </FormRow>
+            <div>
+              <label className={labelClass}>Nomor Bisnis</label>
+              <input className={inputClass} value={whatsapp.business_phone || ""} onChange={(e) => setWhatsapp("business_phone", e.target.value)} placeholder="628xxxxxxxxxx" />
+            </div>
           </IntegrationCard>
             </div>
           </section>

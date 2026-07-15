@@ -71,6 +71,13 @@ const DEFAULTS = {
     bot_username: '',
     n8n_shared_secret: '',
   },
+  whatsapp: {
+    enabled: false,
+    token: '',
+    phone_number_id: '',
+    verify_token: '',
+    business_phone: '',
+  },
 };
 
 const SECRET_FIELDS = {
@@ -81,6 +88,7 @@ const SECRET_FIELDS = {
   ape_epi: ['api_key'],
   web_push: ['vapid_private_key'],
   telegram: ['bot_token', 'n8n_shared_secret'],
+  whatsapp: ['token', 'verify_token'],
 };
 
 const ALLOWED_FIELDS = {
@@ -113,6 +121,7 @@ const ALLOWED_FIELDS = {
   ape_epi: ['enabled', 'base_url', 'api_key', 'level', 'gold_brand', 'silver_brand', 'cache_ttl_minutes', 'max_daily_requests'],
   web_push: ['enabled', 'vapid_public_key', 'vapid_private_key', 'vapid_subject'],
   telegram: ['enabled', 'bot_token', 'bot_username', 'n8n_shared_secret'],
+  whatsapp: ['enabled', 'token', 'phone_number_id', 'verify_token', 'business_phone'],
 };
 
 const STORED_SETTING_SIGNALS = {
@@ -194,6 +203,15 @@ function envFallback(key) {
       bot_token: process.env.TELEGRAM_BOT_TOKEN || '',
       bot_username: process.env.TELEGRAM_BOT_USERNAME || '',
       n8n_shared_secret: process.env.TELEGRAM_N8N_SECRET || '',
+    };
+  }
+  if (key === 'whatsapp') {
+    return {
+      enabled: Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_VERIFY_TOKEN),
+      token: process.env.WHATSAPP_TOKEN || '',
+      phone_number_id: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+      verify_token: process.env.WHATSAPP_VERIFY_TOKEN || '',
+      business_phone: process.env.WHATSAPP_BUSINESS_PHONE || '',
     };
   }
   return {};

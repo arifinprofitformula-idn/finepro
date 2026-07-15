@@ -26,12 +26,28 @@ const router = Router();
 
 // ── Helpers ────────────────────────────────────────────────────
 
-function getWaToken() {
-  return process.env.WHATSAPP_TOKEN;
+let _cachedWaSettings = null;
+let _cachedWaSettingsAt = 0;
+const WA_SETTINGS_TTL = 30_000; // 30 detik
+
+async function getWaSettings() {
+  const now = Date.now();
+  if (_cachedWaSettings && (now - _cachedWaSettingsAt) < WA_SETTINGS_TTL) {
+    return _cachedWaSettings;
+  }
+  _cachedWaSettings = await getSetting('whatsapp');
+  _cachedWaSettingsAt = now;
+  return _cachedWaSettings;
 }
 
-function getPhoneNumberId() {
-  return process.env.WHATSAPP_PHONE_NUMBER_ID;
+async function getWaToken() {
+  const settings = await getWaSettings();
+  return settings.token;
+}
+
+async function getPhoneNumberId() {
+  const settings = await getWaSettings();
+  return settings.phone_number_id;
 }
 
 async function getUserHouseholdId(userId) {
@@ -57,8 +73,8 @@ function generateLinkCode() {
 // ── WhatsApp API helpers ────────────────────────────────────────
 
 async function downloadWaMedia(mediaId) {
-  const token = getWaToken();
-  if (!token) throw new Error('WHATSAPP_TOKEN belum dikonfigurasi');
+  const token = await getWaToken();
+  if (!token) throw new Error('Token WhatsApp belum dikonfigurasi');
 
   const url = `${WA_API_URL}/${mediaId}`;
   const resp = await fetch(url, {
@@ -76,8 +92,8 @@ async function downloadWaMedia(mediaId) {
 }
 
 async function sendWaMessage(to, text) {
-  const token = getWaToken();
-  const phoneNumberId = getPhoneNumberId();
+  const token = await getWaToken();
+  const phoneNumberId = await getPhoneNumberId();
   if (!token || !phoneNumberId) {
     console.error('WhatsApp sendMessage: token atau phone_number_id belum dikonfigurasi');
     return null;
@@ -109,8 +125,8 @@ async function sendWaMessage(to, text) {
 }
 
 async function markWaAsRead(messageId) {
-  const token = getWaToken();
-  const phoneNumberId = getPhoneNumberId();
+  const token = await getWaToken();
+  const phoneNumberId = await getPhoneNumberId();
   if (!token || !phoneNumberId) return;
 
   const url = `${WA_API_URL}/${phoneNumberId}/messages`;
@@ -319,7 +335,8 @@ router.post('/link/start', authMiddleware, async (req, res) => {
       [code, req.user.userId, expiresAt]
     );
 
-    const waPhone = process.env.WHATSAPP_BUSINESS_PHONE || 'belum dikonfigurasi';
+    const waSettings = await getWaSettings();
+    const waPhone = waSettings.business_phone || 'belum dikonfigurasi';
 
     res.json({
       code,
@@ -360,11 +377,12 @@ router.delete('/link', authMiddleware, async (req, res) => {
 // ── Webhook ─────────────────────────────────────────────────────
 
 // GET /api/whatsapp/webhook — verifikasi webhook (dipanggil Meta)
-router.get('/webhook', (req, res) => {
+router.get('/webhook', async (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
-  const expectedToken = process.env.WHATSAPP_VERIFY_TOKEN;
+  const waSettings = await getWaSettings();
+  const expectedToken = waSettings.verify_token;
 
   if (mode === 'subscribe' && token === expectedToken && expectedToken) {
     console.log('WhatsApp webhook verified');
