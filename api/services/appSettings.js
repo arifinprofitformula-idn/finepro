@@ -7,6 +7,7 @@ const DEFAULTS = {
     from_email: '',
     from_name: 'Finepro',
     list_id: '',
+    paid_list_id: '',
   },
   midtrans: {
     enabled: false,
@@ -94,7 +95,7 @@ const SECRET_FIELDS = {
 };
 
 const ALLOWED_FIELDS = {
-  mailketing: ['enabled', 'api_token', 'from_email', 'from_name', 'list_id'],
+  mailketing: ['enabled', 'api_token', 'from_email', 'from_name', 'list_id', 'paid_list_id'],
   midtrans: ['enabled', 'is_production', 'server_key', 'client_key'],
   xendit: ['enabled', 'is_production', 'secret_key', 'callback_verification_token'],
   payment_gateway: ['active'],
@@ -139,6 +140,7 @@ function envFallback(key) {
       from_email: process.env.MAILKETING_FROM_EMAIL || '',
       from_name: process.env.MAILKETING_FROM_NAME || DEFAULTS.mailketing.from_name,
       list_id: process.env.MAILKETING_LIST_ID || '',
+      paid_list_id: process.env.MAILKETING_PAID_LIST_ID || '',
     };
   }
   if (key === 'midtrans') {

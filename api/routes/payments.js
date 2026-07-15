@@ -8,6 +8,7 @@ import multer from 'multer';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getSetting } from '../services/appSettings.js';
+import { addSubscriberToList } from '../services/mailer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROOF_UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'payment-proofs');
@@ -164,6 +165,22 @@ function mapMidtransStatus(transactionStatus, fraudStatus) {
   return 'pending';
 }
 
+async function moveNewSubscriberToPaidList(householdId) {
+  const mailketing = await getSetting('mailketing');
+  if (!mailketing.paid_list_id) return;
+
+  const result = await pool.query(
+    `SELECT u.email, u.name FROM users u
+     JOIN households h ON h.owner_id = u.id
+     WHERE h.id = $1`,
+    [householdId]
+  );
+  const owner = result.rows[0];
+  if (!owner?.email) return;
+
+  await addSubscriberToList({ email: owner.email, name: owner.name, listId: mailketing.paid_list_id });
+}
+
 export async function applyPaymentStatus(payment, nextStatus) {
   if (!payment || payment.status === 'paid' || nextStatus === 'pending') {
     return payment?.status || 'pending';
@@ -174,12 +191,15 @@ export async function applyPaymentStatus(payment, nextStatus) {
     if (!planConfig) throw new Error(`Plan pembayaran tidak valid: ${payment.plan}`);
 
     const client = await pool.connect();
+    let wasTrial = false;
     try {
       await client.query('BEGIN');
       await client.query(
         `UPDATE payments SET status = 'paid', paid_at = COALESCE(paid_at, now()) WHERE order_id = $1`,
         [payment.order_id]
       );
+      const before = await client.query('SELECT plan FROM subscriptions WHERE household_id = $1', [payment.household_id]);
+      wasTrial = before.rows[0]?.plan === 'trial';
       // Kalau masih ada sisa masa aktif, perpanjang dari situ; kalau tidak, mulai dari sekarang.
       await client.query(
         `UPDATE subscriptions
@@ -197,6 +217,16 @@ export async function applyPaymentStatus(payment, nextStatus) {
     } finally {
       client.release();
     }
+
+    // Transisi trial → berlangganan pertama kali — pindahkan ke list Mailketing
+    // khusus subscriber berbayar (best-effort, tidak menggagalkan pembayaran).
+    // Renewal tidak memicu ulang karena plan sebelumnya sudah bukan 'trial'.
+    if (wasTrial) {
+      moveNewSubscriberToPaidList(payment.household_id).catch((err) =>
+        console.error('Gagal memindahkan subscriber ke list Mailketing paid:', err)
+      );
+    }
+
     return 'paid';
   }
 

@@ -58,6 +58,17 @@ const MANUAL_PAYMENT_PLANS = [
   { value: "annual", label: "Tahunan", amount: 249000 }
 ];
 
+const SETTING_LABELS = {
+  mailketing: "Mailketing",
+  payment_method: "Metode Pembayaran",
+  ai: "AI",
+  ai_quota: "Limit AI",
+  ape_epi: "APE-EPI",
+  web_push: "Web Push",
+  telegram: "Telegram",
+  whatsapp: "WhatsApp",
+};
+
 const tabs = [
   { id: "overview", label: "Overview", icon: Activity },
   { id: "integrations", label: "Integrasi", icon: Database },
@@ -226,7 +237,26 @@ function SecretHint({ configured }) {
   );
 }
 
-function IntegrationCard({ id, icon: Icon, title, description, tone = "violet", enabled, onToggle, children, footer }) {
+function InlineSaveFeedback({ feedback }) {
+  if (!feedback?.text) return null;
+  const isSuccess = feedback.tone === "success";
+  const isInfo = feedback.tone === "info";
+  const Icon = isSuccess ? CheckCircle2 : isInfo ? RefreshCw : AlertTriangle;
+  const toneClass = isSuccess
+    ? "border-mint/20 bg-mint-light/80 text-mint"
+    : isInfo
+    ? "border-[#3525cd]/15 bg-[#e2dfff]/70 text-[#3525cd]"
+    : "border-coral/20 bg-coral-light/80 text-coral";
+
+  return (
+    <div className={`mt-3 flex items-start gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold leading-relaxed ${toneClass}`} role="status" aria-live="polite">
+      <Icon size={14} className={`mt-0.5 flex-shrink-0 ${isInfo ? "animate-spin" : ""}`} />
+      <span>{feedback.text}</span>
+    </div>
+  );
+}
+
+function IntegrationCard({ id, icon: Icon, title, description, tone = "violet", enabled, onToggle, children, footer, feedback }) {
   return (
     <section id={id} className={`scroll-mt-28 p-5 ${glassCard}`}>
       <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
@@ -239,6 +269,7 @@ function IntegrationCard({ id, icon: Icon, title, description, tone = "violet", 
       />
       <div className="relative z-10 space-y-3">{children}</div>
       {footer && <div className="relative z-10 mt-3">{footer}</div>}
+      <InlineSaveFeedback feedback={feedback} />
     </section>
   );
 }
@@ -824,6 +855,7 @@ export default function AdminPage({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState("");
   const [message, setMessage] = useState("");
+  const [settingFeedbacks, setSettingFeedbacks] = useState({});
   const [openHouseholdId, setOpenHouseholdId] = useState(null);
   const [householdQuery, setHouseholdQuery] = useState("");
   const [householdPage, setHouseholdPage] = useState(0);
@@ -972,11 +1004,23 @@ export default function AdminPage({ user, onLogout }) {
   async function saveSetting(key, form) {
     setSavingKey(key);
     setMessage("");
+    setSettingFeedbacks((prev) => ({
+      ...prev,
+      [key]: { tone: "info", text: `Menyimpan pengaturan ${SETTING_LABELS[key] || key}...` },
+    }));
     try {
       const updated = await updateAdminSetting(key, form);
       setSettings((prev) => ({ ...prev, [key]: updated }));
+      setSettingFeedbacks((prev) => ({
+        ...prev,
+        [key]: { tone: "success", text: `${SETTING_LABELS[key] || "Pengaturan"} berhasil disimpan.` },
+      }));
       setMessage("Pengaturan tersimpan.");
     } catch (err) {
+      setSettingFeedbacks((prev) => ({
+        ...prev,
+        [key]: { tone: "error", text: err.message || `Gagal menyimpan ${SETTING_LABELS[key] || "pengaturan"}.` },
+      }));
       setMessage(err.message);
     } finally {
       setSavingKey("");
@@ -992,6 +1036,10 @@ export default function AdminPage({ user, onLogout }) {
 
     setSavingKey("payment_method");
     setMessage("");
+    setSettingFeedbacks((prev) => ({
+      ...prev,
+      payment_method: { tone: "info", text: "Menyimpan pengaturan Metode Pembayaran..." },
+    }));
     setPaymentMethodFeedback({ tone: "info", text: "Menyimpan metode pembayaran..." });
     try {
       const [updatedGateway, updatedManual, updatedMidtrans, updatedXendit] = await Promise.all([
@@ -1017,12 +1065,20 @@ export default function AdminPage({ user, onLogout }) {
         tone: "success",
         text: `Berhasil disimpan. Metode aktif sekarang: ${active === "manual" ? "Transfer Manual" : active === "xendit" ? "Xendit" : "Midtrans"}.`,
       });
+      setSettingFeedbacks((prev) => ({
+        ...prev,
+        payment_method: { tone: "success", text: "Metode Pembayaran berhasil disimpan." },
+      }));
       setMessage("Metode pembayaran tersimpan.");
     } catch (err) {
       setPaymentMethodFeedback({
         tone: "error",
         text: err.message || "Gagal menyimpan metode pembayaran.",
       });
+      setSettingFeedbacks((prev) => ({
+        ...prev,
+        payment_method: { tone: "error", text: err.message || "Gagal menyimpan Metode Pembayaran." },
+      }));
       setMessage(err.message);
     } finally {
       setSavingKey("");
@@ -1416,6 +1472,7 @@ export default function AdminPage({ user, onLogout }) {
             tone="violet"
             enabled={mailketing.enabled}
             onToggle={(v) => setMailketing("enabled", v)}
+            feedback={settingFeedbacks.mailketing}
             footer={
               <div className="flex flex-col gap-2 sm:flex-row">
                 <SaveButton label="Simpan Mailketing" saving={savingKey === "mailketing"} onClick={() => saveSetting("mailketing", mailketing)} />
@@ -1463,6 +1520,23 @@ export default function AdminPage({ user, onLogout }) {
               </select>
               <div className="mt-1.5 text-[11px] font-semibold leading-relaxed text-neutral-500">
                 Pilih list tujuan untuk semua user baru yang registrasi, lalu simpan Mailketing.
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>List Subscriber Berlangganan</label>
+              <select className={inputClass} value={mailketing.paid_list_id || ""} onChange={(e) => setMailketing("paid_list_id", e.target.value)}>
+                <option value="">Jangan otomatis pindahkan subscriber</option>
+                {mailketing.paid_list_id && !mailketingLists.some((item) => item.list_id === String(mailketing.paid_list_id)) && (
+                  <option value={mailketing.paid_list_id}>List tersimpan #{mailketing.paid_list_id}</option>
+                )}
+                {mailketingLists.map((item) => (
+                  <option key={item.list_id} value={item.list_id}>
+                    {item.list_name || `List #${item.list_id}`} (ID {item.list_id})
+                  </option>
+                ))}
+              </select>
+              <div className="mt-1.5 text-[11px] font-semibold leading-relaxed text-neutral-500">
+                Begitu household trial pertama kali berlangganan berbayar, emailnya otomatis ditambahkan ke list ini juga (klik "Ambil List" di atas dulu kalau daftar kosong).
               </div>
             </div>
             <FormRow>
@@ -1650,6 +1724,7 @@ export default function AdminPage({ user, onLogout }) {
             tone="mint"
             enabled={ai.enabled}
             onToggle={(v) => setAi("enabled", v)}
+            feedback={settingFeedbacks.ai}
             footer={<SaveButton label="Simpan AI" saving={savingKey === "ai"} onClick={() => saveSetting("ai", ai)} tone="mint" />}
           >
             <FormRow>
@@ -1759,6 +1834,7 @@ export default function AdminPage({ user, onLogout }) {
               </div>
 
               <SaveButton label="Simpan Limit AI" saving={savingKey === "ai_quota"} onClick={() => saveSetting("ai_quota", aiQuota)} tone="mint" />
+              <InlineSaveFeedback feedback={settingFeedbacks.ai_quota} />
             </div>
           </section>
 
@@ -1770,6 +1846,7 @@ export default function AdminPage({ user, onLogout }) {
             tone="gold"
             enabled={apeEpi.enabled}
             onToggle={(v) => setApeEpi("enabled", v)}
+            feedback={settingFeedbacks.ape_epi}
             footer={
               <div className="flex flex-col gap-2 sm:flex-row">
                 <SaveButton label="Simpan APE-EPI" saving={savingKey === "ape_epi"} onClick={() => saveSetting("ape_epi", apeEpi)} tone="gold" />
@@ -1915,6 +1992,7 @@ export default function AdminPage({ user, onLogout }) {
             tone="gold"
             enabled={webPush.enabled}
             onToggle={(v) => setWebPush("enabled", v)}
+            feedback={settingFeedbacks.web_push}
             footer={<SaveButton label="Simpan Web Push" saving={savingKey === "web_push"} onClick={() => saveSetting("web_push", webPush)} tone="gold" />}
           >
             <div>
@@ -1940,6 +2018,7 @@ export default function AdminPage({ user, onLogout }) {
             tone="violet"
             enabled={telegram.enabled}
             onToggle={(v) => setTelegram("enabled", v)}
+            feedback={settingFeedbacks.telegram}
             footer={<SaveButton label="Simpan Telegram" saving={savingKey === "telegram"} onClick={() => saveSetting("telegram", telegram)} />}
           >
             <div>
@@ -1968,6 +2047,7 @@ export default function AdminPage({ user, onLogout }) {
             tone="mint"
             enabled={whatsapp.enabled}
             onToggle={(v) => setWhatsapp("enabled", v)}
+            feedback={settingFeedbacks.whatsapp}
             footer={<SaveButton label="Simpan WhatsApp" saving={savingKey === "whatsapp"} onClick={() => saveSetting("whatsapp", whatsapp)} />}
           >
             <div>

@@ -110,22 +110,24 @@ export async function getMailketingLists(settingsOverride = {}) {
   })).filter((item) => item.list_id);
 }
 
-// Tambahkan kontak ke list Mailketing (mis. saat registrasi baru). Kalau
-// list_id belum diisi di Admin Console, ini di-skip diam-diam — admin bisa
-// mengisinya belakangan tanpa perlu perubahan kode.
-export async function addSubscriberToList({ email, name }) {
+// Tambahkan kontak ke list Mailketing (mis. saat registrasi baru, atau saat
+// trial berubah jadi berlangganan). Default ke list_id (list trial/registrasi);
+// kirim listId eksplisit untuk menarget list lain (mis. paid_list_id). Kalau
+// list tujuan belum diisi di Admin Console, ini di-skip diam-diam — admin
+// bisa mengisinya belakangan tanpa perlu perubahan kode.
+export async function addSubscriberToList({ email, name, listId }) {
   const mailketing = await getSetting('mailketing');
   const apiToken = mailketing.api_token;
-  const listId = mailketing.list_id;
+  const targetListId = listId || mailketing.list_id;
 
-  if (!mailketing.enabled || !apiToken || !listId) {
+  if (!mailketing.enabled || !apiToken || !targetListId) {
     return;
   }
 
   const [firstName, ...rest] = String(name || '').trim().split(/\s+/).filter(Boolean);
   const body = new URLSearchParams({
     api_token: apiToken,
-    list_id: listId,
+    list_id: targetListId,
     email,
     first_name: firstName || '',
     last_name: rest.join(' '),
@@ -155,5 +157,5 @@ export async function addSubscriberToList({ email, name }) {
     throw new Error(`Mailketing addsubtolist gagal: ${reason}`);
   }
 
-  console.info('[mailer] Mailketing subscriber added', { to: redactEmail(email), listId });
+  console.info('[mailer] Mailketing subscriber added', { to: redactEmail(email), listId: targetListId });
 }
