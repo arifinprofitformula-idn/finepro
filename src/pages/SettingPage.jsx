@@ -229,9 +229,12 @@ export default function SettingPage({
     }
   }
 
-  function openWhatsAppLink(phone) {
+  function openWhatsAppLink(phone, text) {
     if (!phone) return;
-    window.open(`https://wa.me/${phone}`, "_blank", "noopener");
+    const url = text
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/${phone}`;
+    window.open(url, "_blank", "noopener");
   }
 
   async function handleStartWhatsAppLink() {
@@ -242,7 +245,9 @@ export default function SettingPage({
       const data = await startWhatsAppLink();
       setWhatsappLink(data);
       if (data.wa_phone && data.wa_phone !== "belum dikonfigurasi") {
-        setWhatsappLinkMsg("Kode siap. Buka WhatsApp dan kirim kode ke nomor bisnis.");
+        // Langsung buka WhatsApp dengan kode pre-filled
+        openWhatsAppLink(data.wa_phone, data.code);
+        setWhatsappLinkMsg("WhatsApp dibuka. Jika belum berpindah otomatis, gunakan tombol Buka WhatsApp di bawah.");
         setWhatsappLinkMsgType("success");
       } else {
         setWhatsappLinkMsg("Nomor WhatsApp bisnis belum dikonfigurasi. Gunakan kode manual atau hubungi admin.");
@@ -605,7 +610,7 @@ export default function SettingPage({
                   {whatsappLink.wa_phone && whatsappLink.wa_phone !== "belum dikonfigurasi" && (
                     <button
                       type="button"
-                      onClick={() => openWhatsAppLink(whatsappLink.wa_phone)}
+                      onClick={() => openWhatsAppLink(whatsappLink.wa_phone, whatsappLink.code)}
                       className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-mint text-white"
                       title="Buka WhatsApp"
                     >
@@ -628,7 +633,7 @@ export default function SettingPage({
                   {whatsappLink.wa_phone && whatsappLink.wa_phone !== "belum dikonfigurasi" && (
                     <button
                       type="button"
-                      onClick={() => openWhatsAppLink(whatsappLink.wa_phone)}
+                      onClick={() => openWhatsAppLink(whatsappLink.wa_phone, whatsappLink.code)}
                       className={`${primaryBtnClass} w-full`}
                     >
                       <Smartphone size={15} />
