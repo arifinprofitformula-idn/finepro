@@ -11,6 +11,7 @@ import {
   ChevronRight,
   CreditCard,
   Database,
+  DollarSign,
   Gem,
   History,
   KeyRound,
@@ -24,6 +25,7 @@ import {
   Search,
   ShieldCheck,
   Settings,
+  Trash2,
   UserCog,
   UserPlus,
   Users,
@@ -31,6 +33,8 @@ import {
   X
 } from "lucide-react";
 import {
+  createBusinessExpense,
+  deleteBusinessExpense,
   getAdminAuditLogs,
   getApeEpiStatus,
   getAdminHouseholdDetail,
@@ -39,6 +43,7 @@ import {
   getAdminPayments,
   getAdminSettings,
   getAdminUsers,
+  getAdminFinanceReport,
   getMailketingLists,
   recordManualPayment,
   reviewManualPayment,
@@ -71,6 +76,7 @@ const SETTING_LABELS = {
 
 const tabs = [
   { id: "overview", label: "Overview", icon: Activity },
+  { id: "finance", label: "Keuangan", icon: DollarSign },
   { id: "integrations", label: "Integrasi", icon: Database },
   { id: "data", label: "Data", icon: Users },
   { id: "audit", label: "Audit", icon: History }
@@ -655,6 +661,206 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
 }
 
+function currentMonthInput() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function currentDateInput() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatMargin(value) {
+  const n = Number(value || 0);
+  return `${n.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`;
+}
+
+function SimpleBar({ label, revenue, expense }) {
+  const max = Math.max(Number(revenue || 0), Number(expense || 0), 1);
+  const revenueWidth = Math.max(3, Math.round((Number(revenue || 0) / max) * 100));
+  const expenseWidth = Math.max(3, Math.round((Number(expense || 0) / max) * 100));
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-[#464555]">
+        <span>{label}</span>
+        <span>{fmtRp(Number(revenue || 0) - Number(expense || 0))}</span>
+      </div>
+      <div className="space-y-1">
+        <div className="h-2 overflow-hidden rounded-full bg-white/35">
+          <div className="h-full rounded-full bg-[#006c49]" style={{ width: `${revenueWidth}%` }} />
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-white/35">
+          <div className="h-full rounded-full bg-[#ba1a1a]" style={{ width: `${expenseWidth}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BreakdownRows({ items, emptyText }) {
+  const max = Math.max(...items.map((item) => Number(item.total || 0)), 1);
+  if (!items.length) {
+    return <div className="rounded-lg bg-white/25 px-3 py-3 text-sm font-semibold text-[#777587]">{emptyText}</div>;
+  }
+  return (
+    <div className="space-y-3">
+      {items.map((item) => {
+        const label = item.plan || item.method || item.label || "-";
+        const width = Math.max(5, Math.round((Number(item.total || 0) / max) * 100));
+        return (
+          <div key={label} className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2 text-sm font-semibold">
+              <span className="capitalize text-[#0b1c30]">{label}</span>
+              <span className="text-[#3525cd]">{fmtRp(item.total || 0)}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/35">
+              <div className="h-full rounded-full bg-[#3525cd]" style={{ width: `${width}%` }} />
+            </div>
+            <div className="text-[11px] font-semibold text-[#777587]">{item.count || 0} transaksi</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FinanceDashboard({
+  report,
+  loading,
+  month,
+  onMonthChange,
+  expenseForm,
+  setExpenseForm,
+  expenseSaving,
+  onAddExpense,
+  onDeleteExpense,
+}) {
+  const summary = report?.summary || {};
+  const profit = Number(summary.profit || 0);
+  const profitTone = profit >= 0 ? "mint" : "coral";
+
+  return (
+    <div className="space-y-6">
+      <section className={`p-5 ${glassPanel}`}>
+        <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
+        <SectionTitle
+          icon={DollarSign}
+          title="Laporan Keuangan"
+          subtitle="Ringkasan uang masuk, biaya, dan profit FinePro."
+          tone="mint"
+          action={
+            <input
+              type="month"
+              className={`${inputClass} w-[170px]`}
+              value={month}
+              onChange={(e) => onMonthChange(e.target.value)}
+            />
+          }
+        />
+
+        {loading ? (
+          <div className="rounded-lg bg-white/25 px-3 py-4 text-sm font-semibold text-[#464555]">Memuat laporan...</div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="Uang Masuk" value={fmtRp(summary.revenue || 0)} icon={CreditCard} tone="mint" />
+            <StatCard label="Biaya" value={fmtRp(summary.expense || 0)} icon={WalletCards} tone="coral" />
+            <StatCard label={profit >= 0 ? "Profit" : "Rugi"} value={fmtRp(profit)} icon={Activity} tone={profitTone} />
+            <StatCard label="Margin" value={formatMargin(summary.margin)} icon={ShieldCheck} tone={profitTone} />
+          </div>
+        )}
+      </section>
+
+      {!loading && report && (
+        <>
+          <section className="grid gap-4 xl:grid-cols-3">
+            <div className={`p-5 xl:col-span-2 ${glassCard}`}>
+              <SectionTitle icon={Activity} title="6 Bulan Terakhir" subtitle="Hijau uang masuk, merah biaya." tone="mint" />
+              <div className="space-y-4">
+                {(report.trend || []).map((item) => (
+                  <SimpleBar key={item.month} label={item.label} revenue={item.revenue} expense={item.expense} />
+                ))}
+              </div>
+            </div>
+            <div className={`p-5 ${glassCard}`}>
+              <SectionTitle icon={ShieldCheck} title="Kondisi Bulan Ini" subtitle="Bahasa singkat buat owner." tone={profitTone} />
+              <div className="space-y-3 text-sm font-semibold text-[#464555]">
+                <div className={`${glassSoft} px-3 py-2`}>
+                  {profit >= 0 ? "Bisnis sedang untung bulan ini." : "Bisnis sedang rugi bulan ini."}
+                </div>
+                <div className={`${glassSoft} px-3 py-2`}>
+                  {summary.paid_count || 0} pembayaran sukses, {summary.pending_count || 0} masih pending.
+                </div>
+                <div className={`${glassSoft} px-3 py-2`}>
+                  {summary.active_paid_users || 0} pelanggan berbayar aktif sekarang.
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-2">
+            <div className={`p-5 ${glassCard}`}>
+              <SectionTitle icon={CreditCard} title="Revenue per Paket" subtitle="Paket mana yang paling menghasilkan." tone="violet" />
+              <BreakdownRows items={report.by_plan || []} emptyText="Belum ada revenue paid di bulan ini." />
+            </div>
+            <div className={`p-5 ${glassCard}`}>
+              <SectionTitle icon={Landmark} title="Revenue per Metode" subtitle="Manual, Midtrans, atau Xendit." tone="gold" />
+              <BreakdownRows items={report.by_method || []} emptyText="Belum ada metode pembayaran paid di bulan ini." />
+            </div>
+          </section>
+
+          <section className={`p-5 ${glassPanel}`}>
+            <SectionTitle icon={WalletCards} title="Biaya Operasional" subtitle="Catat biaya agar profit/loss lebih nyata." tone="coral" />
+            <form onSubmit={onAddExpense} className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_auto]">
+              <input className={inputClass} value={expenseForm.label} onChange={(e) => setExpenseForm((prev) => ({ ...prev, label: e.target.value }))} placeholder="Nama biaya, contoh: VPS" />
+              <input className={inputClass} value={expenseForm.category} onChange={(e) => setExpenseForm((prev) => ({ ...prev, category: e.target.value }))} placeholder="Kategori" />
+              <input className={inputClass} type="number" min="0" value={expenseForm.amount} onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: e.target.value }))} placeholder="Nominal" />
+              <input className={inputClass} type="date" value={expenseForm.expense_date} onChange={(e) => setExpenseForm((prev) => ({ ...prev, expense_date: e.target.value }))} />
+              <button type="submit" disabled={expenseSaving} className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg bg-[#3525cd] px-4 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-60">
+                <Save size={15} />
+                {expenseSaving ? "Menyimpan" : "Tambah"}
+              </button>
+            </form>
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[620px] text-left">
+                <thead>
+                  <tr className="border-b border-white/25 text-[11px] font-semibold uppercase tracking-wide text-[#777587]">
+                    <th className="pb-3">Biaya</th>
+                    <th className="pb-3">Kategori</th>
+                    <th className="pb-3">Tanggal</th>
+                    <th className="pb-3 text-right">Nominal</th>
+                    <th className="pb-3 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(report.expenses || []).map((expense) => (
+                    <tr key={expense.id} className="border-b border-white/15 text-sm font-semibold last:border-0">
+                      <td className="py-3 text-[#0b1c30]">{expense.label}</td>
+                      <td className="py-3 text-[#464555]">{expense.category}</td>
+                      <td className="py-3 text-[#777587]">{formatDate(expense.expense_date)}</td>
+                      <td className="py-3 text-right text-[#ba1a1a]">{fmtRp(expense.amount || 0)}</td>
+                      <td className="py-3 text-right">
+                        <button type="button" onClick={() => onDeleteExpense(expense.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#ba1a1a] transition hover:bg-[#ffdad6]/70" title="Hapus biaya">
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {(report.expenses || []).length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-sm font-semibold text-[#777587]">Belum ada biaya operasional di bulan ini.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
 function HouseholdDetailModal({ householdId, canManageRoles, onClose, onChanged }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -852,6 +1058,16 @@ export default function AdminPage({ user, onLogout }) {
   const [households, setHouseholds] = useState([]);
   const [payments, setPayments] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [financeReport, setFinanceReport] = useState(null);
+  const [financeMonth, setFinanceMonth] = useState(currentMonthInput());
+  const [financeLoading, setFinanceLoading] = useState(false);
+  const [expenseSaving, setExpenseSaving] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({
+    label: "",
+    category: "Operasional",
+    amount: "",
+    expense_date: currentDateInput(),
+  });
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState("");
   const [message, setMessage] = useState("");
@@ -943,6 +1159,65 @@ export default function AdminPage({ user, onLogout }) {
     getApeEpiStatus().then(setApeSyncStatus).catch(() => setApeSyncStatus(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "finance") {
+      loadFinanceReport(financeMonth);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, financeMonth]);
+
+  async function loadFinanceReport(month = financeMonth) {
+    setFinanceLoading(true);
+    setMessage("");
+    try {
+      const report = await getAdminFinanceReport(month);
+      setFinanceReport(report);
+    } catch (err) {
+      const text = err.message === "Endpoint tidak ditemukan"
+        ? "Endpoint Laporan Keuangan belum terbaca oleh API lokal. Restart npm run dev agar backend memuat route terbaru."
+        : err.message || "Gagal mengambil laporan keuangan";
+      setMessage(text);
+    } finally {
+      setFinanceLoading(false);
+    }
+  }
+
+  async function handleAddExpense(e) {
+    e.preventDefault();
+    setExpenseSaving(true);
+    setMessage("");
+    try {
+      await createBusinessExpense({
+        ...expenseForm,
+        amount: Number(expenseForm.amount || 0),
+      });
+      setExpenseForm({
+        label: "",
+        category: expenseForm.category || "Operasional",
+        amount: "",
+        expense_date: expenseForm.expense_date || currentDateInput(),
+      });
+      await loadFinanceReport(financeMonth);
+      setMessage("Biaya operasional ditambahkan.");
+    } catch (err) {
+      setMessage(err.message || "Gagal menambahkan biaya operasional");
+    } finally {
+      setExpenseSaving(false);
+    }
+  }
+
+  async function handleDeleteExpense(id) {
+    if (!window.confirm("Hapus biaya operasional ini?")) return;
+    setMessage("");
+    try {
+      await deleteBusinessExpense(id);
+      await loadFinanceReport(financeMonth);
+      setMessage("Biaya operasional dihapus.");
+    } catch (err) {
+      setMessage(err.message || "Gagal menghapus biaya operasional");
+    }
+  }
 
   async function loadHouseholds(page, query) {
     try {
@@ -1162,9 +1437,11 @@ export default function AdminPage({ user, onLogout }) {
   }
 
   const activeTabLabel = tabs.find((tab) => tab.id === activeTab)?.label || "Overview";
-  const pageTitle = activeTab === "overview" ? "Overview Dashboard" : activeTab === "integrations" ? "Integrations" : activeTab === "data" ? "Data Management" : activeTab === "audit" ? "System Activity Feed" : activeTabLabel;
+  const pageTitle = activeTab === "overview" ? "Overview Dashboard" : activeTab === "finance" ? "Laporan Keuangan" : activeTab === "integrations" ? "Integrations" : activeTab === "data" ? "Data Management" : activeTab === "audit" ? "System Activity Feed" : activeTabLabel;
   const pageSubtitle = activeTab === "overview"
     ? "Real-time performance metrics dan ringkasan operasional FinePro."
+    : activeTab === "finance"
+    ? "Pantau uang masuk, biaya, dan profit/loss FinePro dalam bahasa sederhana."
     : activeTab === "integrations"
     ? "Connect and manage your third-party tools and internal automation engines."
     : activeTab === "data"
@@ -1401,7 +1678,7 @@ export default function AdminPage({ user, onLogout }) {
       )}
 
       <div className="sticky top-16 z-10 -mx-4 border-y border-white/25 bg-white/20 px-4 py-2 shadow-[0_14px_38px_rgba(27,36,84,0.10)] backdrop-blur-2xl sm:mx-0 sm:rounded-xl sm:border lg:hidden">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -1439,6 +1716,20 @@ export default function AdminPage({ user, onLogout }) {
           <StatCard label="Payment Paid" value={overview?.payments?.paid ?? "-"} icon={WalletCards} tone="violet" />
           <StatCard label="Payment Pending" value={overview?.payments?.pending ?? "-"} icon={CreditCard} tone="gold" />
         </div>
+      )}
+
+      {activeTab === "finance" && (
+        <FinanceDashboard
+          report={financeReport}
+          loading={financeLoading}
+          month={financeMonth}
+          onMonthChange={setFinanceMonth}
+          expenseForm={expenseForm}
+          setExpenseForm={setExpenseForm}
+          expenseSaving={expenseSaving}
+          onAddExpense={handleAddExpense}
+          onDeleteExpense={handleDeleteExpense}
+        />
       )}
 
       {activeTab === "integrations" && settings && (

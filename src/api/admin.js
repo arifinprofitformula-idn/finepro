@@ -170,6 +170,26 @@ export async function reviewManualPayment(orderId, action, note = "") {
   return data.payment;
 }
 
+export async function getAdminFinanceReport(month = "") {
+  const query = month ? `?month=${encodeURIComponent(month)}` : "";
+  const data = await adminFetch(`/admin/finance${query}`);
+  return data.report;
+}
+
+export async function createBusinessExpense(expense) {
+  const data = await adminFetch("/admin/finance/expenses", {
+    method: "POST",
+    body: JSON.stringify(expense),
+  });
+  return data.expense;
+}
+
+export async function deleteBusinessExpense(id) {
+  return adminFetch(`/admin/finance/expenses/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function getAdminAuditLogs() {
   const data = await adminFetch("/admin/audit-logs");
   return data.logs || [];

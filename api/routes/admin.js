@@ -41,6 +41,46 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function parseMonth(value) {
+  const raw = String(value || '').trim();
+  const fallback = new Date().toISOString().slice(0, 7);
+  let month = /^\d{4}-\d{2}$/.test(raw) ? raw : fallback;
+  const [year, monthNum] = month.split('-').map(Number);
+  if (!Number.isInteger(year) || !Number.isInteger(monthNum) || monthNum < 1 || monthNum > 12) {
+    month = fallback;
+  }
+  const [safeYear, safeMonthNum] = month.split('-').map(Number);
+  const start = new Date(Date.UTC(safeYear, safeMonthNum - 1, 1));
+  const end = new Date(Date.UTC(safeYear, safeMonthNum, 1));
+  return {
+    month,
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
+}
+
+function monthLabelFromKey(month) {
+  const [year, monthNum] = String(month).split('-').map(Number);
+  return new Intl.DateTimeFormat('id-ID', { month: 'short', year: 'numeric' }).format(new Date(year, monthNum - 1, 1));
+}
+
+async function ensureBusinessExpensesTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS business_expenses (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      label TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'Operasional',
+      amount NUMERIC NOT NULL CHECK (amount >= 0),
+      expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      note TEXT,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_business_expenses_date ON business_expenses(expense_date DESC)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_business_expenses_category ON business_expenses(category)');
+}
+
 router.post('/login', adminLoginLimiter, async (req, res) => {
   try {
     const { password } = req.body || {};
@@ -509,6 +549,169 @@ router.get('/payments', async (req, res) => {
   } catch (err) {
     console.error('Admin payments error:', err);
     res.status(500).json({ error: 'Gagal mengambil pembayaran' });
+  }
+});
+
+router.get('/finance', async (req, res) => {
+  try {
+    await ensureBusinessExpensesTable();
+    const { month, start, end } = parseMonth(req.query.month);
+    const current = new Date(`${month}-01T00:00:00Z`);
+    const trendMonths = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - (5 - i), 1));
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    });
+    const trendStart = `${trendMonths[0]}-01`;
+
+    const [summary, expenses, byPlan, byMethod, revenueTrend, expenseTrend, activePaid] = await Promise.all([
+      pool.query(
+        `SELECT
+           COALESCE(SUM(amount) FILTER (WHERE status = 'paid'), 0)::numeric AS revenue,
+           COUNT(*) FILTER (WHERE status = 'paid')::int AS paid_count,
+           COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count,
+           COUNT(*) FILTER (WHERE status IN ('failed', 'rejected'))::int AS failed_count,
+           COUNT(DISTINCT household_id) FILTER (WHERE status = 'paid')::int AS paid_households
+         FROM payments
+         WHERE COALESCE(paid_at, created_at) >= $1::date
+           AND COALESCE(paid_at, created_at) < $2::date`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT id, label, category, amount, expense_date, note, created_at
+         FROM business_expenses
+         WHERE expense_date >= $1::date AND expense_date < $2::date
+         ORDER BY expense_date DESC, created_at DESC`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT plan, COALESCE(SUM(amount), 0)::numeric AS total, COUNT(*)::int AS count
+         FROM payments
+         WHERE status = 'paid'
+           AND COALESCE(paid_at, created_at) >= $1::date
+           AND COALESCE(paid_at, created_at) < $2::date
+         GROUP BY plan
+         ORDER BY total DESC`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT method, COALESCE(SUM(amount), 0)::numeric AS total, COUNT(*)::int AS count
+         FROM payments
+         WHERE status = 'paid'
+           AND COALESCE(paid_at, created_at) >= $1::date
+           AND COALESCE(paid_at, created_at) < $2::date
+         GROUP BY method
+         ORDER BY total DESC`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT to_char(date_trunc('month', COALESCE(paid_at, created_at)), 'YYYY-MM') AS month,
+                COALESCE(SUM(amount), 0)::numeric AS total
+         FROM payments
+         WHERE status = 'paid'
+           AND COALESCE(paid_at, created_at) >= $1::date
+           AND COALESCE(paid_at, created_at) < $2::date
+         GROUP BY 1`,
+        [trendStart, end]
+      ),
+      pool.query(
+        `SELECT to_char(date_trunc('month', expense_date), 'YYYY-MM') AS month,
+                COALESCE(SUM(amount), 0)::numeric AS total
+         FROM business_expenses
+         WHERE expense_date >= $1::date AND expense_date < $2::date
+         GROUP BY 1`,
+        [trendStart, end]
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS count
+         FROM subscriptions
+         WHERE status = 'active' AND plan <> 'trial'`
+      ),
+    ]);
+
+    const expenseTotal = expenses.rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const revenue = Number(summary.rows[0]?.revenue || 0);
+    const profit = revenue - expenseTotal;
+    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+    const revenueByMonth = new Map(revenueTrend.rows.map((row) => [row.month, Number(row.total || 0)]));
+    const expenseByMonth = new Map(expenseTrend.rows.map((row) => [row.month, Number(row.total || 0)]));
+
+    res.json({
+      report: {
+        month,
+        label: monthLabelFromKey(month),
+        summary: {
+          revenue,
+          expense: expenseTotal,
+          profit,
+          margin,
+          paid_count: summary.rows[0]?.paid_count || 0,
+          pending_count: summary.rows[0]?.pending_count || 0,
+          failed_count: summary.rows[0]?.failed_count || 0,
+          paid_households: summary.rows[0]?.paid_households || 0,
+          active_paid_users: activePaid.rows[0]?.count || 0,
+        },
+        by_plan: byPlan.rows.map((row) => ({ ...row, total: Number(row.total || 0) })),
+        by_method: byMethod.rows.map((row) => ({ ...row, total: Number(row.total || 0) })),
+        trend: trendMonths.map((m) => {
+          const rev = revenueByMonth.get(m) || 0;
+          const exp = expenseByMonth.get(m) || 0;
+          return { month: m, label: monthLabelFromKey(m), revenue: rev, expense: exp, profit: rev - exp };
+        }),
+        expenses: expenses.rows.map((row) => ({ ...row, amount: Number(row.amount || 0) })),
+      },
+    });
+  } catch (err) {
+    console.error('Admin finance report error:', err);
+    res.status(500).json({ error: 'Gagal mengambil laporan keuangan' });
+  }
+});
+
+router.post('/finance/expenses', async (req, res) => {
+  try {
+    await ensureBusinessExpensesTable();
+    const label = String(req.body?.label || '').trim();
+    const category = String(req.body?.category || 'Operasional').trim() || 'Operasional';
+    const amount = Number(req.body?.amount || 0);
+    const expenseDate = String(req.body?.expense_date || '').trim();
+    const note = String(req.body?.note || '').trim();
+
+    if (!label) return res.status(400).json({ error: 'Nama biaya wajib diisi' });
+    if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: 'Nominal biaya tidak valid' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expenseDate)) return res.status(400).json({ error: 'Tanggal biaya tidak valid' });
+
+    const result = await pool.query(
+      `INSERT INTO business_expenses (label, category, amount, expense_date, note, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, label, category, amount, expense_date, note, created_at`,
+      [label, category, amount, expenseDate, note || null, req.admin.id]
+    );
+
+    await auditAdminAction(req.admin.id, 'finance.expense.create', 'business_expenses', result.rows[0].id, {
+      label,
+      category,
+      amount,
+      expense_date: expenseDate,
+    });
+    res.status(201).json({ expense: { ...result.rows[0], amount: Number(result.rows[0].amount || 0) } });
+  } catch (err) {
+    console.error('Create business expense error:', err);
+    res.status(500).json({ error: 'Gagal menyimpan biaya operasional' });
+  }
+});
+
+router.delete('/finance/expenses/:id', async (req, res) => {
+  try {
+    await ensureBusinessExpensesTable();
+    const result = await pool.query(
+      'DELETE FROM business_expenses WHERE id = $1 RETURNING id, label, amount',
+      [req.params.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Biaya tidak ditemukan' });
+    await auditAdminAction(req.admin.id, 'finance.expense.delete', 'business_expenses', req.params.id, result.rows[0]);
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('Delete business expense error:', err);
+    res.status(500).json({ error: 'Gagal menghapus biaya operasional' });
   }
 });
 
