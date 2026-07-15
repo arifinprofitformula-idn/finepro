@@ -76,18 +76,34 @@ async function downloadWaMedia(mediaId) {
   const token = await getWaToken();
   if (!token) throw new Error('Token WhatsApp belum dikonfigurasi');
 
-  const url = `${WA_API_URL}/${mediaId}`;
-  const resp = await fetch(url, {
+  // 1. Ambil metadata — Meta kasih URL download, bukan binary langsung
+  const metaUrl = `${WA_API_URL}/${mediaId}`;
+  const metaResp = await fetch(metaUrl, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => '');
-    throw new Error(`Gagal download media WhatsApp: ${resp.status} ${errText.slice(0, 200)}`);
+  if (!metaResp.ok) {
+    const errText = await metaResp.text().catch(() => '');
+    throw new Error(`Gagal ambil metadata media WhatsApp: ${metaResp.status} ${errText.slice(0, 200)}`);
   }
 
-  const contentType = resp.headers.get('content-type') || 'image/jpeg';
-  const buffer = Buffer.from(await resp.arrayBuffer());
+  const meta = await metaResp.json();
+  const downloadUrl = meta.url;
+  if (!downloadUrl) {
+    throw new Error('Media WhatsApp tidak memiliki URL download');
+  }
+
+  // 2. Download binary dari URL yang diberikan Meta
+  const dlResp = await fetch(downloadUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!dlResp.ok) {
+    throw new Error(`Gagal download media WhatsApp: ${dlResp.status}`);
+  }
+
+  const contentType = dlResp.headers.get('content-type') || meta.mime_type || 'image/jpeg';
+  const buffer = Buffer.from(await dlResp.arrayBuffer());
   return { buffer, mimetype: contentType, size: buffer.length };
 }
 
