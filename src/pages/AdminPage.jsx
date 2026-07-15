@@ -225,9 +225,9 @@ function SecretHint({ configured }) {
   );
 }
 
-function IntegrationCard({ icon: Icon, title, description, tone = "violet", enabled, onToggle, children, footer }) {
+function IntegrationCard({ id, icon: Icon, title, description, tone = "violet", enabled, onToggle, children, footer }) {
   return (
-    <section className={`p-5 ${glassCard}`}>
+    <section id={id} className={`scroll-mt-28 p-5 ${glassCard}`}>
       <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
       <SectionTitle
         icon={Icon}
@@ -252,8 +252,13 @@ function IntegrationTile({
   detailLabel,
   detailValue,
   progress = 70,
+  progressLabel,
   onConfigure
 }) {
+  const normalizedProgress = Math.min(Math.max(Number(progress) || 0, 0), 100);
+  const complete = normalizedProgress === 100;
+  const progressLineClass = complete ? toneMap.mint.line : toneMap[tone].line;
+
   return (
     <article className={`group flex min-h-[286px] flex-col p-5 transition hover:-translate-y-1 hover:border-white/55 hover:bg-white/28 ${glassCard}`}>
       <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
@@ -277,10 +282,14 @@ function IntegrationTile({
       <div className="mt-5 border-t border-white/25 pt-4">
         <div className="mb-2 flex items-center justify-between text-xs font-semibold">
           <span className="text-[#777587]">{detailLabel}</span>
-          <span className="text-[#0b1c30]">{detailValue}</span>
+          <span className="text-[#0b1c30]">{progressLabel || detailValue}</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-white/35 shadow-[inset_0_1px_2px_rgba(27,36,84,0.12)]">
-          <div className={`h-full rounded-full ${toneMap[tone].line}`} style={{ width: `${Math.min(Math.max(progress, 8), 100)}%` }} />
+          <div className={`h-full rounded-full transition-all duration-500 ${progressLineClass}`} style={{ width: `${normalizedProgress}%` }} />
+        </div>
+        <div className="mt-2 flex items-center justify-between text-[11px] font-semibold text-[#777587]">
+          <span>{detailValue}</span>
+          <span className={complete ? "text-[#006c49]" : "text-[#464555]"}>{normalizedProgress}%</span>
         </div>
       </div>
 
@@ -533,6 +542,38 @@ function useFormState(value) {
   useEffect(() => setForm(value || {}), [value]);
   const set = (key, next) => setForm((prev) => ({ ...prev, [key]: next }));
   return [form, set, setForm];
+}
+
+function hasText(value) {
+  return String(value || "").trim().length > 0;
+}
+
+function hasPositiveNumber(value) {
+  return Number(value) > 0;
+}
+
+function hasNonNegativeNumber(value) {
+  return value !== "" && value !== null && value !== undefined && Number(value) >= 0;
+}
+
+function hasSecret(setting, field) {
+  return hasText(setting?.[field]) || Boolean(setting?.[`${field}_configured`]);
+}
+
+function integrationProgress(requirements) {
+  const total = requirements.length;
+  const done = requirements.filter((item) => Boolean(item)).length;
+  return {
+    done,
+    total,
+    percent: total === 0 ? 0 : Math.round((done / total) * 100)
+  };
+}
+
+function integrationProgressLabel(progress) {
+  if (progress.percent === 100) return "Lengkap";
+  if (progress.done === 0) return "Belum diatur";
+  return `${progress.done}/${progress.total} lengkap`;
 }
 
 function paymentTone(status) {
@@ -1048,9 +1089,60 @@ export default function AdminPage({ user, onLogout }) {
     : activeTab === "audit"
     ? "Real-time audit records and security event monitoring."
     : "Kelola integrasi, pengguna, pembayaran, dan jejak aktivitas sistem.";
-  const scrollToIntegrationSettings = () => {
-    document.getElementById("integration-settings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollToIntegrationSettings = (targetId) => {
+    const el = (targetId && document.getElementById(targetId)) || document.getElementById("integration-settings");
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  const activeAiProvider = ai.provider || "sumopod";
+  const aiProgress = integrationProgress([
+    ai.enabled,
+    hasText(activeAiProvider),
+    activeAiProvider === "anthropic" ? hasSecret(ai, "anthropic_api_key") : hasSecret(ai, "sumopod_api_key"),
+    activeAiProvider === "anthropic" ? true : hasText(ai.sumopod_base_url),
+    activeAiProvider === "anthropic" ? hasText(ai.anthropic_model || ai.model) : hasText(ai.sumopod_model || ai.model),
+    hasNonNegativeNumber(aiQuota.trial_insight_total),
+    hasNonNegativeNumber(aiQuota.trial_scan_total),
+    hasNonNegativeNumber(aiQuota.free_insight_monthly),
+    hasNonNegativeNumber(aiQuota.free_scan_monthly),
+    hasNonNegativeNumber(aiQuota.paid_insight_daily),
+    hasNonNegativeNumber(aiQuota.paid_scan_monthly),
+    hasNonNegativeNumber(aiQuota.telegram_chat_daily),
+  ]);
+  const apeEpiProgress = integrationProgress([
+    apeEpi.enabled,
+    hasSecret(apeEpi, "api_key"),
+    hasText(apeEpi.base_url),
+    hasText(apeEpi.level),
+    hasText(apeEpi.gold_brand),
+    hasText(apeEpi.silver_brand),
+    hasPositiveNumber(apeEpi.cache_ttl_minutes),
+    hasPositiveNumber(apeEpi.max_daily_requests),
+  ]);
+  const mailketingProgress = integrationProgress([
+    mailketing.enabled,
+    hasSecret(mailketing, "api_token"),
+    hasText(mailketing.from_email),
+    hasText(mailketing.from_name),
+  ]);
+  const telegramProgress = integrationProgress([
+    telegram.enabled,
+    hasSecret(telegram, "bot_token"),
+    hasText(telegram.bot_username),
+    hasSecret(telegram, "n8n_shared_secret"),
+  ]);
+  const whatsappProgress = integrationProgress([
+    whatsapp.enabled,
+    hasSecret(whatsapp, "token"),
+    hasText(whatsapp.phone_number_id),
+    hasSecret(whatsapp, "verify_token"),
+    hasText(whatsapp.business_phone),
+  ]);
+  const webPushProgress = integrationProgress([
+    webPush.enabled,
+    hasText(webPush.vapid_public_key),
+    hasSecret(webPush, "vapid_private_key"),
+    hasText(webPush.vapid_subject),
+  ]);
   const integrationTiles = [
     {
       icon: BrainCircuit,
@@ -1061,7 +1153,9 @@ export default function AdminPage({ user, onLogout }) {
       onToggle: (v) => setAi("enabled", v),
       detailLabel: "Telegram chat/user",
       detailValue: `${aiQuota.telegram_chat_daily ?? 100}/hari`,
-      progress: 78
+      progress: aiProgress.percent,
+      progressLabel: integrationProgressLabel(aiProgress),
+      configId: "integration-ai"
     },
     {
       icon: Gem,
@@ -1072,7 +1166,9 @@ export default function AdminPage({ user, onLogout }) {
       onToggle: (v) => setApeEpi("enabled", v),
       detailLabel: "Cache refresh",
       detailValue: `${apeEpi.cache_ttl_minutes ?? 30} menit`,
-      progress: 64
+      progress: apeEpiProgress.percent,
+      progressLabel: integrationProgressLabel(apeEpiProgress),
+      configId: "integration-ape-epi"
     },
     {
       icon: Mail,
@@ -1083,7 +1179,9 @@ export default function AdminPage({ user, onLogout }) {
       onToggle: (v) => setMailketing("enabled", v),
       detailLabel: "Sender",
       detailValue: mailketing.from_email || "Belum diatur",
-      progress: mailketing.api_token_configured ? 74 : 35
+      progress: mailketingProgress.percent,
+      progressLabel: integrationProgressLabel(mailketingProgress),
+      configId: "integration-mailketing"
     },
     {
       icon: MessageCircle,
@@ -1094,7 +1192,9 @@ export default function AdminPage({ user, onLogout }) {
       onToggle: (v) => setTelegram("enabled", v),
       detailLabel: "Bot",
       detailValue: telegram.bot_username || "Belum diatur",
-      progress: telegram.bot_token_configured ? 80 : 30
+      progress: telegramProgress.percent,
+      progressLabel: integrationProgressLabel(telegramProgress),
+      configId: "integration-telegram"
     },
     {
       icon: Phone,
@@ -1105,7 +1205,9 @@ export default function AdminPage({ user, onLogout }) {
       onToggle: (v) => setWhatsapp("enabled", v),
       detailLabel: "Phone",
       detailValue: whatsapp.business_phone || "Belum diatur",
-      progress: whatsapp.token_configured ? 72 : 18
+      progress: whatsappProgress.percent,
+      progressLabel: integrationProgressLabel(whatsappProgress),
+      configId: "integration-whatsapp"
     },
     {
       icon: BellRing,
@@ -1116,7 +1218,9 @@ export default function AdminPage({ user, onLogout }) {
       onToggle: (v) => setWebPush("enabled", v),
       detailLabel: "Subject",
       detailValue: webPush.vapid_subject || "Belum diatur",
-      progress: webPush.vapid_private_key_configured ? 70 : 24
+      progress: webPushProgress.percent,
+      progressLabel: integrationProgressLabel(webPushProgress),
+      configId: "integration-webpush"
     }
   ];
 
@@ -1260,7 +1364,7 @@ export default function AdminPage({ user, onLogout }) {
               <IntegrationTile
                 key={item.title}
                 {...item}
-                onConfigure={scrollToIntegrationSettings}
+                onConfigure={() => scrollToIntegrationSettings(item.configId)}
               />
             ))}
           </div>
@@ -1277,6 +1381,7 @@ export default function AdminPage({ user, onLogout }) {
             />
             <div className="grid gap-4 xl:grid-cols-2">
           <IntegrationCard
+            id="integration-mailketing"
             icon={Mail}
             title="Mailketing"
             description="Email reset password dan laporan bulanan."
@@ -1468,6 +1573,7 @@ export default function AdminPage({ user, onLogout }) {
           </section>
 
           <IntegrationCard
+            id="integration-ai"
             icon={BrainCircuit}
             title="API AI"
             description="Insight keuangan dan pemrosesan struk."
@@ -1579,6 +1685,7 @@ export default function AdminPage({ user, onLogout }) {
           </section>
 
           <IntegrationCard
+            id="integration-ape-epi"
             icon={Gem}
             title="APE-EPI Auto Price Engine"
             description="Harga per gram GOLDGRAM dan SILVERGRAM untuk valuasi target aset."
@@ -1723,6 +1830,7 @@ export default function AdminPage({ user, onLogout }) {
           </IntegrationCard>
 
           <IntegrationCard
+            id="integration-webpush"
             icon={BellRing}
             title="Web Push"
             description="Notifikasi budget untuk pengguna."
@@ -1747,6 +1855,7 @@ export default function AdminPage({ user, onLogout }) {
           </IntegrationCard>
 
           <IntegrationCard
+            id="integration-telegram"
             icon={MessageCircle}
             title="Telegram"
             description="Bot Telegram dan workflow n8n."
@@ -1774,6 +1883,7 @@ export default function AdminPage({ user, onLogout }) {
           </IntegrationCard>
 
           <IntegrationCard
+            id="integration-whatsapp"
             icon={Phone}
             title="WhatsApp Cloud API"
             description="Webhook Meta, kirim/terima pesan & gambar, link akun user."
