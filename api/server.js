@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth.js';
 import transactionsRoutes from './routes/transactions.js';
 import budgetsRoutes from './routes/budgets.js';
@@ -32,6 +33,17 @@ app.set('trust proxy', 1);
 
 app.use(cors());
 app.use(express.json());
+
+// Global rate limit — 100 request/menit per IP (safety net, selain auth yang sudah punya limit sendiri)
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 menit
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Terlalu banyak permintaan. Silakan coba lagi nanti.' },
+});
+app.use('/api', globalLimiter);
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 

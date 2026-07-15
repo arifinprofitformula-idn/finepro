@@ -30,7 +30,7 @@ const pool = new pg.Pool({
   database: process.env.DB_NAME || 'keuangan',
   user: process.env.DB_USER || 'keuangan_app',
   password: process.env.DB_PASSWORD,
-  max: 20,
+  max: 40,
   idleTimeoutMillis: 30000,
 });
 
