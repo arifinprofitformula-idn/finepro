@@ -418,6 +418,14 @@ router.post('/webhook', async (req, res) => {
 
     if (!waId || !msgType) return;
 
+    // Abaikan pesan dari nomor bisnis sendiri (mencegah loop)
+    const waSettings = await getWaSettings();
+    const businessPhone = waSettings.business_phone;
+    if (businessPhone && waId === businessPhone) {
+      console.log('WhatsApp: abaikan pesan dari nomor sendiri');
+      return;
+    }
+
     // 1. Handle gambar → receipt scanning
     if (msgType === 'image') {
       const mediaId = message.image?.id;
