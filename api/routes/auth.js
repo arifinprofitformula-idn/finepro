@@ -439,7 +439,7 @@ router.post('/reset-password', authLimiter, async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, email, name, avatar_url, role, created_at, telegram_id, telegram_username, (password_hash IS NOT NULL) AS has_password FROM users WHERE id = $1',
+      'SELECT id, email, name, avatar_url, role, created_at, telegram_id, telegram_username, whatsapp_id, (password_hash IS NOT NULL) AS has_password FROM users WHERE id = $1',
       [req.user.userId]
     );
     if (result.rows.length === 0) {

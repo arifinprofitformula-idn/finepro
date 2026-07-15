@@ -569,7 +569,7 @@ export default function SettingPage({
         {user.whatsapp_id ? (
           <>
             <p className="text-xs font-medium text-mint">
-              ✓ Terhubung
+              ✓ Terhubung sebagai {user.whatsapp_id.replace(/^62/, '0').replace(/(\d{4})(\d{4})(\d+)/, '$1-$2-$3')}
             </p>
             <p className="mt-1 text-xs text-neutral-500">
               Foto struk yang dikirim via WhatsApp akan otomatis tercatat sebagai transaksi di akun ini.
