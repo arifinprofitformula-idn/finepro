@@ -129,7 +129,7 @@ export async function assertQuotaAvailable(householdId, feature, label) {
 
 export async function getUserDailyQuotaStatus(userId, feature) {
   const quota = await getAiQuotaConfig();
-  const limit = feature === 'telegram_chat' ? quota.telegram_chat_daily : 0;
+  const limit = (feature === 'telegram_chat' || feature === 'whatsapp_chat') ? quota.telegram_chat_daily : 0;
   const used = await countUserUsage(userId, feature, 'day');
 
   return {
@@ -165,7 +165,7 @@ export async function reserveUserDailyAiUsage({
   label = 'Kuota AI',
 }) {
   const quota = await getAiQuotaConfig();
-  const limit = feature === 'telegram_chat' ? quota.telegram_chat_daily : 0;
+  const limit = (feature === 'telegram_chat' || feature === 'whatsapp_chat') ? quota.telegram_chat_daily : 0;
   const client = await pool.connect();
 
   try {
