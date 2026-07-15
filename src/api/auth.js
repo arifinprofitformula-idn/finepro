@@ -3,13 +3,29 @@
 
 import { API_BASE, apiFetch, setToken, getToken } from "./apiClient.js";
 
+// Registrasi tidak lagi auto-login — akun baru wajib verifikasi email dulu
+// (lihat verifyEmail di bawah), jadi respons di sini hanya berisi pesan info.
 export async function signUp(email, password, name) {
-  const data = await apiFetch('/auth/register', {
+  return apiFetch('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ email, password, name }),
   });
+}
+
+export async function verifyEmail(token) {
+  const data = await apiFetch('/auth/verify-email', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
   setToken(data.token);
   return data;
+}
+
+export async function resendVerification(email) {
+  return apiFetch('/auth/resend-verification', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
 }
 
 export async function signIn(email, password) {

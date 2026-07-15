@@ -4,8 +4,10 @@
   "description": "PWA pencatatan keuangan untuk keluarga & mahasiswa - Coach Arifin",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:local": "powershell -ExecutionPolicy Bypass -File ./scripts/start-local.ps1",
+    "dev": "powershell -ExecutionPolicy Bypass -File ./scripts/start-local.ps1 -KeepAlive",
+    "dev:web": "vite",
+    "dev:local": "powershell -ExecutionPolicy Bypass -File ./scripts/start-local.ps1 -KeepAlive",
+    "dev:check": "powershell -ExecutionPolicy Bypass -File ./scripts/start-local.ps1",
     "build": "vite build",
     "preview": "vite preview"
   },

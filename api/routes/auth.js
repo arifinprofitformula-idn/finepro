@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 import { OAuth2Client } from 'google-auth-library';
 import pool from '../db.js';
 import { generateToken, authMiddleware, adminRoleForEmail } from '../middleware/auth.js';
-import { sendMail } from '../services/mailer.js';
+import { sendMail, addSubscriberToList } from '../services/mailer.js';
 
 const router = Router();
 const isLocalDev = process.env.LOCAL_DEV === 'true';
@@ -26,6 +26,7 @@ const authLimiter = rateLimit({
 });
 
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 jam
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 jam
 const TRIAL_DAYS = 14;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -46,7 +47,7 @@ function isValidEmail(value) {
   return EMAIL_PATTERN.test(normalizeEmail(value));
 }
 
-function hashResetToken(token) {
+function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
@@ -105,6 +106,58 @@ function resetPasswordEmailTemplate({ name, resetLink }) {
                   <p style="margin:8px 0 0;font-size:12px;line-height:1.6;word-break:break-all;color:#0f1f3d;">${safeResetLink}</p>
                 </div>
                 <p style="margin:0;font-size:13px;line-height:1.7;color:#6b7280;">Jika kamu tidak meminta reset password, abaikan email ini. Password lama tetap berlaku selama tautan ini tidak digunakan.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 24px;background:#f9f9f8;border-top:1px solid #dfe8f1;">
+                <p style="margin:0;font-size:12px;line-height:1.6;color:#6b7280;">Finepro menjaga data keuanganmu tetap rapi, tenang, dan mudah dipahami.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function verifyEmailTemplate({ name, verifyLink, trialEndsAt }) {
+  const safeName = escapeHtml(name || 'Sahabat Finepro');
+  const safeVerifyLink = escapeHtml(verifyLink);
+  const safeTrialEndsAt = escapeHtml(formatIndoDate(trialEndsAt));
+
+  return `
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Verifikasi Email Finepro</title>
+  </head>
+  <body style="margin:0;background:#f6fbff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1c2230;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6fbff;padding:28px 14px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #dfe8f1;border-radius:24px;overflow:hidden;box-shadow:0 20px 55px rgba(49,77,119,0.14);">
+            <tr>
+              <td style="padding:26px 24px;background:linear-gradient(135deg,#0f1f3d 0%,#6f55f2 100%);">
+                <img src="https://finepro.my.id/images/fine-pro-header.png" alt="Finepro" width="240" style="display:block;max-width:240px;width:100%;height:auto;margin:0 0 18px 0;" />
+                <h1 style="margin:18px 0 0;color:#ffffff;font-size:24px;line-height:1.25;">Satu langkah lagi</h1>
+                <p style="margin:8px 0 0;color:rgba(255,255,255,0.82);font-size:14px;line-height:1.6;">Verifikasi email untuk mengaktifkan akun Finepro kamu.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 24px;">
+                <p style="margin:0 0 14px;font-size:15px;line-height:1.7;">Halo <strong>${safeName}</strong>,</p>
+                <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#3f4657;">Terima kasih sudah mendaftar. Klik tombol di bawah untuk verifikasi email dan mengaktifkan masa trial gratis 14 hari (berakhir <strong>${safeTrialEndsAt}</strong>). Tautan berlaku selama <strong>24 jam</strong>.</p>
+                <p style="margin:26px 0;text-align:center;">
+                  <a href="${safeVerifyLink}" style="display:inline-block;background:#6f55f2;color:#ffffff;text-decoration:none;border-radius:999px;padding:14px 22px;font-size:14px;font-weight:800;box-shadow:0 14px 28px rgba(111,85,242,0.26);">Verifikasi Email</a>
+                </p>
+                <div style="background:#efeaff;border:1px solid rgba(111,85,242,0.18);border-radius:16px;padding:14px 16px;margin:0 0 18px;">
+                  <p style="margin:0;font-size:13px;line-height:1.65;color:#3f2ca8;">Jika tombol tidak bisa dibuka, salin tautan ini ke browser:</p>
+                  <p style="margin:8px 0 0;font-size:12px;line-height:1.6;word-break:break-all;color:#0f1f3d;">${safeVerifyLink}</p>
+                </div>
+                <p style="margin:0;font-size:13px;line-height:1.7;color:#6b7280;">Jika kamu tidak merasa mendaftar di Finepro, abaikan email ini.</p>
               </td>
             </tr>
             <tr>
@@ -220,23 +273,48 @@ router.post('/register', authLimiter, async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await pool.query(
-      'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, avatar_url, role, created_at',
+      'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, created_at',
       [email, passwordHash, name || null]
     );
+    const newUser = result.rows[0];
 
-    const user = { ...result.rows[0], role: adminRoleForEmail(result.rows[0].email, result.rows[0].role), has_password: true };
-    const token = generateToken(user);
+    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    const baseUrl = appBaseUrl(req);
+
+    // Token verifikasi email — wajib diklik sebelum bisa login, supaya alamat
+    // email spam/asal-asalan tidak bisa langsung memakai akun.
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    await pool.query(
+      'INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
+      [newUser.id, hashToken(rawToken), new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS)]
+    );
+
+    if (baseUrl) {
+      const verifyLink = `${baseUrl}/?verify_token=${rawToken}`;
+      sendMail({
+        to: email,
+        subject: 'Verifikasi Email Finepro Kamu',
+        html: verifyEmailTemplate({ name, verifyLink, trialEndsAt }),
+      }).catch((err) => console.error('Gagal kirim email verifikasi:', err));
+    } else {
+      console.error('APP_BASE_URL belum diisi dan host request tidak tersedia untuk membuat tautan verifikasi email');
+    }
 
     // Email selamat datang — kirim best-effort, jangan gagalkan pendaftaran kalau Mailketing bermasalah.
-    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-    const loginLink = `${appBaseUrl(req)}/`;
+    const loginLink = `${baseUrl}/`;
     sendMail({
       to: email,
       subject: 'Akun FinePro Kamu Berhasil Dibuat',
       html: welcomeEmailTemplate({ name, email, password, trialEndsAt, loginLink }),
     }).catch((err) => console.error('Gagal kirim email selamat datang:', err));
 
-    res.status(201).json({ user, token });
+    // Masukkan ke list Mailketing — best-effort, di-skip diam-diam kalau list_id belum diatur di Admin Console.
+    addSubscriberToList({ email, name }).catch((err) => console.error('Gagal menambahkan ke list Mailketing:', err));
+
+    res.status(201).json({
+      message: 'Registrasi berhasil! Cek email kamu untuk verifikasi sebelum bisa masuk.',
+      verificationRequired: true,
+    });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Gagal mendaftar' });
@@ -257,7 +335,7 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     const result = await pool.query(
-      'SELECT id, email, password_hash, name, avatar_url, role, created_at FROM users WHERE LOWER(email) = LOWER($1)',
+      'SELECT id, email, password_hash, name, avatar_url, role, created_at, email_verified_at FROM users WHERE LOWER(email) = LOWER($1)',
       [email]
     );
 
@@ -273,9 +351,15 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!valid) {
       return res.status(401).json({ error: 'Email atau password salah' });
     }
+    if (!user.email_verified_at) {
+      return res.status(403).json({
+        error: 'Email belum diverifikasi. Cek inbox untuk tautan verifikasi, atau minta kirim ulang.',
+        code: 'EMAIL_NOT_VERIFIED',
+      });
+    }
 
     const token = generateToken(user);
-    const { password_hash, ...userWithoutPasswordRaw } = user;
+    const { password_hash, email_verified_at, ...userWithoutPasswordRaw } = user;
     const userWithoutPassword = {
       ...userWithoutPasswordRaw,
       role: adminRoleForEmail(user.email, user.role),
@@ -326,18 +410,22 @@ router.post('/google', authLimiter, async (req, res) => {
       // Belum ada akun dengan google_id ini — cek apakah email sudah terdaftar (akun lokal), kalau ada tautkan.
       const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
       if (existing.rows.length > 0) {
+        // Google sudah membuktikan kepemilikan email ini, jadi anggap terverifikasi juga.
         result = await pool.query(
-          `UPDATE users SET google_id = $1, provider = CASE WHEN password_hash IS NULL THEN 'google' ELSE provider END
+          `UPDATE users SET google_id = $1, provider = CASE WHEN password_hash IS NULL THEN 'google' ELSE provider END,
+             email_verified_at = COALESCE(email_verified_at, now())
            WHERE id = $2 RETURNING id, email, name, avatar_url, role, created_at, (password_hash IS NOT NULL) AS has_password`,
           [googleId, existing.rows[0].id]
         );
       } else {
         result = await pool.query(
-          `INSERT INTO users (email, name, google_id, provider)
-           VALUES ($1, $2, $3, 'google')
+          `INSERT INTO users (email, name, google_id, provider, email_verified_at)
+           VALUES ($1, $2, $3, 'google', now())
            RETURNING id, email, name, avatar_url, role, created_at, (password_hash IS NOT NULL) AS has_password`,
           [email, name || null, googleId]
         );
+        // Registrasi baru via Google — masukkan ke list Mailketing (best-effort).
+        addSubscriberToList({ email, name }).catch((err) => console.error('Gagal menambahkan ke list Mailketing:', err));
       }
     }
 
@@ -373,7 +461,7 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
 
     const user = result.rows[0];
     const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = hashResetToken(rawToken);
+    const tokenHash = hashToken(rawToken);
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
 
     await pool.query(
@@ -412,7 +500,7 @@ router.post('/reset-password', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Password minimal 6 karakter' });
     }
 
-    const tokenHash = hashResetToken(token);
+    const tokenHash = hashToken(token);
     const result = await pool.query(
       `SELECT id, user_id, expires_at, used_at FROM password_reset_tokens
        WHERE token_hash = $1`,
@@ -432,6 +520,90 @@ router.post('/reset-password', authLimiter, async (req, res) => {
   } catch (err) {
     console.error('Reset password error:', err);
     res.status(500).json({ error: 'Gagal mereset password' });
+  }
+});
+
+// POST /api/auth/verify-email — verifikasi email pakai token dari link, lalu auto-login
+router.post('/verify-email', authLimiter, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ error: 'Token wajib diisi' });
+    }
+
+    const tokenHash = hashToken(token);
+    const result = await pool.query(
+      `SELECT id, user_id, expires_at, used_at FROM email_verification_tokens
+       WHERE token_hash = $1`,
+      [tokenHash]
+    );
+
+    const record = result.rows[0];
+    if (!record || record.used_at || new Date(record.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'Token verifikasi tidak valid atau sudah kadaluarsa' });
+    }
+
+    const userResult = await pool.query(
+      `UPDATE users SET email_verified_at = COALESCE(email_verified_at, now())
+       WHERE id = $1 RETURNING id, email, name, avatar_url, role, created_at, (password_hash IS NOT NULL) AS has_password`,
+      [record.user_id]
+    );
+    await pool.query('UPDATE email_verification_tokens SET used_at = now() WHERE id = $1', [record.id]);
+
+    const user = { ...userResult.rows[0], role: adminRoleForEmail(userResult.rows[0].email, userResult.rows[0].role) };
+    const jwtToken = generateToken(user);
+
+    res.json({ message: 'Email berhasil diverifikasi', user, token: jwtToken });
+  } catch (err) {
+    console.error('Verify email error:', err);
+    res.status(500).json({ error: 'Gagal memverifikasi email' });
+  }
+});
+
+// POST /api/auth/resend-verification — kirim ulang link verifikasi email
+router.post('/resend-verification', authLimiter, async (req, res) => {
+  const genericResponse = {
+    message: 'Jika email tersebut terdaftar dan belum diverifikasi, tautan verifikasi baru sudah dikirim. Cek inbox dan folder spam.'
+  };
+  try {
+    const email = normalizeEmail(req.body.email);
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Format email tidak valid' });
+    }
+
+    const result = await pool.query(
+      'SELECT id, name FROM users WHERE LOWER(email) = LOWER($1) AND email_verified_at IS NULL',
+      [email]
+    );
+    if (result.rows.length === 0) {
+      // Jangan bocorkan apakah email terdaftar/sudah diverifikasi atau tidak.
+      return res.json(genericResponse);
+    }
+
+    const user = result.rows[0];
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    await pool.query(
+      'INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
+      [user.id, hashToken(rawToken), new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS)]
+    );
+
+    const baseUrl = appBaseUrl(req);
+    if (!baseUrl) {
+      throw new Error('APP_BASE_URL belum diisi dan host request tidak tersedia untuk membuat tautan verifikasi email');
+    }
+    const verifyLink = `${baseUrl}/?verify_token=${rawToken}`;
+    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+
+    await sendMail({
+      to: email,
+      subject: 'Verifikasi Email Finepro Kamu',
+      html: verifyEmailTemplate({ name: user.name, verifyLink, trialEndsAt }),
+    });
+
+    res.json(genericResponse);
+  } catch (err) {
+    console.error('Resend verification error:', err);
+    res.json(genericResponse);
   }
 });
 

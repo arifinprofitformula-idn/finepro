@@ -110,6 +110,14 @@ export async function testMailketingEmail(to = "") {
   return data;
 }
 
+export async function getMailketingLists(patch = {}) {
+  const data = await adminFetch("/admin/mailketing/lists", {
+    method: "POST",
+    body: JSON.stringify(patch),
+  });
+  return data.lists || [];
+}
+
 export async function getAdminUsers(q = "") {
   const query = q ? `?q=${encodeURIComponent(q)}` : "";
   const data = await adminFetch(`/admin/users${query}`);

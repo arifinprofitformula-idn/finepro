@@ -39,6 +39,7 @@ import {
   getAdminPayments,
   getAdminSettings,
   getAdminUsers,
+  getMailketingLists,
   recordManualPayment,
   reviewManualPayment,
   testMailketingEmail,
@@ -848,6 +849,8 @@ export default function AdminPage({ user, onLogout }) {
   const [whatsapp, setWhatsapp] = useFormState(settings?.whatsapp);
   const [mailketingTestEmail, setMailketingTestEmail] = useState(user?.email || "");
   const [mailketingTestStatus, setMailketingTestStatus] = useState(null);
+  const [mailketingLists, setMailketingLists] = useState([]);
+  const [mailketingListStatus, setMailketingListStatus] = useState(null);
   const [apePreview, setApePreview] = useState(null);
   const [apeTestStatus, setApeTestStatus] = useState(null);
   const [apeSyncStatus, setApeSyncStatus] = useState(null);
@@ -1078,6 +1081,30 @@ export default function AdminPage({ user, onLogout }) {
     }
   }
 
+  async function loadMailketingLists() {
+    setSavingKey("mailketing_lists");
+    setMessage("");
+    setMailketingListStatus(null);
+    try {
+      const lists = await getMailketingLists({ api_token: mailketing.api_token || "" });
+      setMailketingLists(lists);
+      setMailketingListStatus({
+        tone: "success",
+        text: lists.length > 0 ? `${lists.length} list Mailketing berhasil dibaca.` : "Tidak ada list Mailketing pada akun ini.",
+      });
+      setMessage("Daftar list Mailketing berhasil dibaca.");
+    } catch (err) {
+      setMailketingLists([]);
+      setMailketingListStatus({
+        tone: "error",
+        text: err.message || "Gagal mengambil daftar list Mailketing.",
+      });
+      setMessage(err.message);
+    } finally {
+      setSavingKey("");
+    }
+  }
+
   const activeTabLabel = tabs.find((tab) => tab.id === activeTab)?.label || "Overview";
   const pageTitle = activeTab === "overview" ? "Overview Dashboard" : activeTab === "integrations" ? "Integrations" : activeTab === "data" ? "Data Management" : activeTab === "audit" ? "System Activity Feed" : activeTabLabel;
   const pageSubtitle = activeTab === "overview"
@@ -1123,6 +1150,7 @@ export default function AdminPage({ user, onLogout }) {
     hasSecret(mailketing, "api_token"),
     hasText(mailketing.from_email),
     hasText(mailketing.from_name),
+    hasText(mailketing.list_id),
   ]);
   const telegramProgress = integrationProgress([
     telegram.enabled,
@@ -1408,6 +1436,35 @@ export default function AdminPage({ user, onLogout }) {
               <input className={inputClass} type="password" value={mailketing.api_token || ""} onChange={(e) => setMailketing("api_token", e.target.value)} placeholder={mailketing.api_token_masked || "Token baru"} />
               <SecretHint configured={mailketing.api_token_configured} />
             </div>
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#464555]">List Subscriber Registrasi</label>
+                <button
+                  type="button"
+                  onClick={loadMailketingLists}
+                  disabled={savingKey === "mailketing_lists"}
+                  className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold text-[#3525cd] transition active:scale-[0.98] disabled:opacity-60 ${glassButton}`}
+                  title="Ambil daftar list Mailketing"
+                >
+                  <RefreshCw size={13} className={savingKey === "mailketing_lists" ? "animate-spin" : ""} />
+                  {savingKey === "mailketing_lists" ? "Memuat" : "Ambil List"}
+                </button>
+              </div>
+              <select className={inputClass} value={mailketing.list_id || ""} onChange={(e) => setMailketing("list_id", e.target.value)}>
+                <option value="">Jangan otomatis masukkan subscriber</option>
+                {mailketing.list_id && !mailketingLists.some((item) => item.list_id === String(mailketing.list_id)) && (
+                  <option value={mailketing.list_id}>List tersimpan #{mailketing.list_id}</option>
+                )}
+                {mailketingLists.map((item) => (
+                  <option key={item.list_id} value={item.list_id}>
+                    {item.list_name || `List #${item.list_id}`} (ID {item.list_id})
+                  </option>
+                ))}
+              </select>
+              <div className="mt-1.5 text-[11px] font-semibold leading-relaxed text-neutral-500">
+                Pilih list tujuan untuk semua user baru yang registrasi, lalu simpan Mailketing.
+              </div>
+            </div>
             <FormRow>
               <div>
                 <label className={labelClass}>From Email</label>
@@ -1425,6 +1482,19 @@ export default function AdminPage({ user, onLogout }) {
                 Simpan perubahan Mailketing terlebih dahulu sebelum mengirim test.
               </div>
             </div>
+            {mailketingListStatus && (
+              <div
+                className={`rounded-2xl border px-3 py-2 text-xs font-semibold leading-relaxed ${
+                  mailketingListStatus.tone === "success"
+                    ? "border-mint/20 bg-mint-light/80 text-mint"
+                    : "border-coral/20 bg-coral-light/80 text-coral"
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                {mailketingListStatus.text}
+              </div>
+            )}
             {mailketingTestStatus && (
               <div
                 className={`rounded-2xl border px-3 py-2 text-xs font-semibold leading-relaxed ${

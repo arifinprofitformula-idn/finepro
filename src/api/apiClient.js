@@ -50,7 +50,9 @@ export async function apiFetch(path, options = {}) {
   }
 
   if (!res.ok) {
-    throw new Error(data.error || 'Terjadi kesalahan');
+    const err = new Error(data.error || 'Terjadi kesalahan');
+    if (data.code) err.code = data.code;
+    throw err;
   }
 
   return data;

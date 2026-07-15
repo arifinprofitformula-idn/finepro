@@ -186,8 +186,8 @@ function SignupBenefits() {
 }
 
 export default function AuthPage({ onBack, initialMode } = {}) {
-  const { login, signup, loginWithGoogle } = useAuth();
-  const [mode, setMode] = useState(initialMode === "signup" ? "signup" : "login"); // login | signup | forgot | reset
+  const { login, signup, loginWithGoogle, verifyEmailToken, resendVerificationEmail } = useAuth();
+  const [mode, setMode] = useState(initialMode === "signup" ? "signup" : "login"); // login | signup | forgot | reset | verify
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -197,15 +197,27 @@ export default function AuthPage({ onBack, initialMode } = {}) {
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState("");
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
+  const [signupSubmitted, setSignupSubmitted] = useState(false);
+  const [verifyStatus, setVerifyStatus] = useState("pending"); // pending | success | error
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendStatus, setResendStatus] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get("reset_token");
-    if (token) {
-      setResetToken(token);
+    const resetTokenParam = params.get("reset_token");
+    const verifyTokenParam = params.get("verify_token");
+    if (resetTokenParam) {
+      setResetToken(resetTokenParam);
       setMode("reset");
       window.history.replaceState({}, "", window.location.pathname);
+    } else if (verifyTokenParam) {
+      setMode("verify");
+      window.history.replaceState({}, "", window.location.pathname);
+      verifyEmailToken(verifyTokenParam)
+        .then(() => setVerifyStatus("success"))
+        .catch(() => setVerifyStatus("error"));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function switchMode(next) {
@@ -214,7 +226,23 @@ export default function AuthPage({ onBack, initialMode } = {}) {
     setMsgType("");
     setPassword("");
     setShowPassword(false);
+    setNeedsVerification(false);
+    setResendStatus("");
     if (next !== "forgot") setForgotSubmitted(false);
+    if (next !== "signup") setSignupSubmitted(false);
+  }
+
+  async function handleResendVerification() {
+    setLoading(true);
+    setResendStatus("");
+    try {
+      await resendVerificationEmail(email.trim());
+      setResendStatus("Tautan verifikasi baru sudah dikirim. Cek inbox dan folder spam.");
+    } catch (err) {
+      setResendStatus(err.message || "Gagal mengirim ulang tautan verifikasi.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSubmit(e) {
@@ -252,9 +280,15 @@ export default function AuthPage({ onBack, initialMode } = {}) {
     }
 
     setLoading(true);
+    setNeedsVerification(false);
+    setResendStatus("");
     try {
       if (mode === "signup") {
         await signup(trimmedEmail, password, trimmedName);
+        setEmail(trimmedEmail);
+        setMsg("");
+        setMsgType("");
+        setSignupSubmitted(true);
       } else if (mode === "forgot") {
         await forgotPassword(trimmedEmail);
         setEmail(trimmedEmail);
@@ -272,6 +306,9 @@ export default function AuthPage({ onBack, initialMode } = {}) {
     } catch (err) {
       setMsg(translateAuthError(err.message));
       setMsgType("error");
+      if (err.code === "EMAIL_NOT_VERIFIED") {
+        setNeedsVerification(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -292,7 +329,8 @@ export default function AuthPage({ onBack, initialMode } = {}) {
 
   const isPasswordMode = mode === "login" || mode === "signup";
   const isSignup = mode === "signup";
-  const isUtilityMode = mode === "forgot" || mode === "reset";
+  const isUtilityMode = mode === "forgot" || mode === "reset" || mode === "verify";
+  const showCheckEmailPanel = (mode === "forgot" && forgotSubmitted) || (mode === "signup" && signupSubmitted);
   const inputClass =
     "w-full rounded-2xl border border-neutral-border bg-white px-3 py-3 text-sm font-semibold text-navy shadow-[inset_0_1px_2px_rgba(15,31,61,0.06)] outline-none transition placeholder:text-neutral-400 focus:border-violet focus:bg-white focus:shadow-[0_0_0_4px_rgba(111,85,242,0.12),inset_0_1px_2px_rgba(15,31,61,0.04)]";
 
@@ -387,10 +425,21 @@ export default function AuthPage({ onBack, initialMode } = {}) {
                 </p>
               </div>
             )}
+
+            {mode === "verify" && (
+              <div className="mt-5 animate-auth-fade-up">
+                <h1 className="text-2xl font-bold leading-tight text-navy">Verifikasi email.</h1>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
+                  {verifyStatus === "pending" && "Sedang memverifikasi email kamu..."}
+                  {verifyStatus === "success" && "Email berhasil diverifikasi. Kamu sudah masuk."}
+                  {verifyStatus === "error" && "Tautan verifikasi tidak valid atau sudah kedaluwarsa."}
+                </p>
+              </div>
+            )}
           </div>
 
           <div key={mode} className="gloss-panel rounded-[28px] p-4 animate-auth-slide-up">
-            {!(mode === "forgot" && forgotSubmitted) && (
+            {!showCheckEmailPanel && mode !== "verify" && (
               <div className="mb-3 rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2 text-xs font-semibold text-neutral-500">
                 {mode === "forgot" ? "Kami akan memproses permintaan tanpa membocorkan status email." : "Isi data akun pada kolom di bawah."}
               </div>
@@ -408,6 +457,52 @@ export default function AuthPage({ onBack, initialMode } = {}) {
                 </p>
               </div>
             )}
+            {mode === "signup" && signupSubmitted && (
+              <div className="mb-3 rounded-2xl border border-mint/25 bg-mint-light px-3 py-3 text-xs font-semibold text-neutral-700">
+                <div className="mb-2 flex items-center gap-2 text-mint">
+                  <Inbox size={15} />
+                  Cek email kamu
+                </div>
+                <p className="leading-relaxed">
+                  Tautan verifikasi sudah dikirim ke <span className="font-bold text-navy">{email}</span>. Klik
+                  tautan tersebut untuk mengaktifkan akun. Cek inbox dan folder spam.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={loading}
+                  className="mt-3 w-full rounded-full bg-mint px-3 py-2 text-xs font-bold text-white transition active:scale-[0.98] disabled:opacity-60"
+                >
+                  {loading ? "Mengirim..." : "Kirim Ulang Tautan"}
+                </button>
+                {resendStatus && (
+                  <p className="mt-2 leading-relaxed text-neutral-700">{resendStatus}</p>
+                )}
+              </div>
+            )}
+            {mode === "verify" && (
+              <div
+                className={`mb-3 rounded-2xl border px-3 py-3 text-xs font-semibold leading-relaxed ${
+                  verifyStatus === "error"
+                    ? "border-coral/20 bg-coral-light text-coral"
+                    : "border-mint/25 bg-mint-light text-neutral-700"
+                }`}
+              >
+                {verifyStatus === "pending" && "Mohon tunggu sebentar..."}
+                {verifyStatus === "success" && "Email berhasil diverifikasi dan kamu sudah masuk ke akun."}
+                {verifyStatus === "error" && "Tautan sudah tidak berlaku. Masuk lalu minta kirim ulang tautan verifikasi."}
+                {verifyStatus === "error" && (
+                  <button
+                    type="button"
+                    onClick={() => switchMode("login")}
+                    className="mt-3 block w-full rounded-full bg-navy px-3 py-2 text-center text-xs font-bold text-white transition active:scale-[0.98]"
+                  >
+                    Kembali ke halaman Masuk
+                  </button>
+                )}
+              </div>
+            )}
+            {!showCheckEmailPanel && mode !== "verify" && (
             <form onSubmit={handleSubmit} className="flex flex-col gap-3" noValidate>
               {mode === "signup" && (
                 <InputShell icon={UserRound} label="Nama Pengguna">
@@ -485,7 +580,22 @@ export default function AuthPage({ onBack, initialMode } = {}) {
               </button>
 
               <StatusMessage msg={mode === "forgot" && msgType === "success" ? "" : msg} type={msgType} />
+
+              {mode === "login" && needsVerification && (
+                <div className="rounded-2xl border border-coral/20 bg-coral-light/60 px-3 py-2 text-xs font-semibold text-coral">
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={loading}
+                    className="underline decoration-dotted underline-offset-2 disabled:opacity-60"
+                  >
+                    Kirim ulang tautan verifikasi
+                  </button>
+                  {resendStatus && <p className="mt-1.5 font-medium text-neutral-700">{resendStatus}</p>}
+                </div>
+              )}
             </form>
+            )}
 
             {mode === "login" && (
               <button
@@ -507,7 +617,7 @@ export default function AuthPage({ onBack, initialMode } = {}) {
               </button>
             )}
 
-            {isPasswordMode && (
+            {isPasswordMode && !showCheckEmailPanel && (
               <>
                 <div className="my-4 flex items-center gap-3">
                   <div className="h-px flex-1 bg-neutral-border" />

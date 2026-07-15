@@ -4,7 +4,7 @@
 // (tidak diduplikasi di sini) — context ini hanya menyimpan data user.
 
 import { createContext, useState, useEffect, useCallback } from "react";
-import { signUp, signIn, signInWithGoogle, signOut, getSession } from "../api/auth.js";
+import { signUp, signIn, signInWithGoogle, signOut, getSession, verifyEmail, resendVerification } from "../api/auth.js";
 
 export const AuthContext = createContext(null);
 
@@ -30,10 +30,19 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
+  // Tidak auto-login — akun baru wajib klik link verifikasi email dulu.
   const signup = useCallback(async (email, password, name) => {
-    const data = await signUp(email, password, name);
+    return signUp(email, password, name);
+  }, []);
+
+  const verifyEmailToken = useCallback(async (token) => {
+    const data = await verifyEmail(token);
     setUser(data.user);
     return data.user;
+  }, []);
+
+  const resendVerificationEmail = useCallback(async (email) => {
+    return resendVerification(email);
   }, []);
 
   const loginWithGoogle = useCallback(async (idToken) => {
@@ -53,7 +62,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, initializing, login, signup, loginWithGoogle, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, initializing, login, signup, loginWithGoogle, logout, updateUser, verifyEmailToken, resendVerificationEmail }}>
       {children}
     </AuthContext.Provider>
   );

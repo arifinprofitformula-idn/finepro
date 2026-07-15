@@ -1,9 +1,14 @@
+param(
+  [switch]$KeepAlive
+)
+
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $apiDir = Join-Path $root "api"
 $logDir = Join-Path $root ".logs"
 $envPath = Join-Path $root ".env"
+$startedProcesses = @()
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
@@ -72,13 +77,17 @@ function Start-LocalProcess {
   $stdout = Join-Path $logDir "$Name.out.log"
   $stderr = Join-Path $logDir "$Name.err.log"
 
-  Start-Process `
+  $process = Start-Process `
     -FilePath "npm.cmd" `
     -ArgumentList $Arguments `
     -WorkingDirectory $WorkingDirectory `
     -WindowStyle Hidden `
     -RedirectStandardOutput $stdout `
-    -RedirectStandardError $stderr | Out-Null
+    -RedirectStandardError $stderr `
+    -PassThru
+  if ($process) {
+    $script:startedProcesses += $process
+  }
 
   Write-Host "Menyalakan $Name..."
 }
@@ -92,7 +101,7 @@ Start-LocalProcess `
 Start-LocalProcess `
   -Name "web-local" `
   -WorkingDirectory $root `
-  -Arguments @("run", "dev", "--", "--host", "127.0.0.1") `
+  -Arguments @("run", "dev:web", "--", "--host", "127.0.0.1") `
   -HealthUrl "http://127.0.0.1:5173"
 
 Start-Sleep -Seconds 4
@@ -120,4 +129,14 @@ if (-not $dbOk) {
 if (-not ($dbOk -and $apiOk -and $proxyOk -and $webOk)) {
   Write-Host "Kalau ada yang BELUM SIAP, buka log .logs/api-local.err.log atau .logs/web-local.err.log."
   exit 1
+}
+
+if ($KeepAlive) {
+  Write-Host ""
+  Write-Host "Mode testing aktif. Biarkan terminal ini terbuka selama testing."
+  Write-Host "Tekan Ctrl+C kalau sudah selesai."
+
+  while ($true) {
+    Start-Sleep -Seconds 30
+  }
 }

@@ -6,7 +6,7 @@ import pool from '../db.js';
 import { authMiddleware, adminMiddleware, superAdminMiddleware, adminRoleForEmail, generateToken } from '../middleware/auth.js';
 import { auditAdminAction, getAllSettings, publicSetting, updateSetting } from '../services/appSettings.js';
 import { getCurrentMetalPrices, getCachedMetalPricesStatus } from '../services/apeEpi.js';
-import { sendMail } from '../services/mailer.js';
+import { getMailketingLists, sendMail } from '../services/mailer.js';
 import { PLANS, applyPaymentStatus } from './payments.js';
 
 const router = Router();
@@ -258,6 +258,19 @@ router.post('/mailketing/test', async (req, res) => {
   } catch (err) {
     console.error('Mailketing test error:', err);
     res.status(500).json({ error: err.message || 'Gagal mengirim test email Mailketing' });
+  }
+});
+
+router.post('/mailketing/lists', async (req, res) => {
+  try {
+    const lists = await getMailketingLists(req.body || {});
+    await auditAdminAction(req.admin.id, 'integrations.mailketing.viewlist', 'app_settings', 'mailketing', {
+      count: lists.length,
+    });
+    res.json({ lists });
+  } catch (err) {
+    console.error('Mailketing list error:', err);
+    res.status(500).json({ error: err.message || 'Gagal mengambil daftar list Mailketing' });
   }
 });
 
