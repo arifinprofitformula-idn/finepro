@@ -172,7 +172,7 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
   if (!user) {
     return {
       status: 'unlinked',
-      message: 'Akun WhatsApp kamu belum terhubung ke Finepro.\n\nUntuk menghubungkan:\n1. Buka https://finepro.my.id\n2. Login ke akun kamu\n3. Buka menu Akun\n4. Klik "Hubungkan WhatsApp" dan ikuti langkahnya',
+      message: 'Akun WhatsApp kamu belum terhubung ke finepro.my.id. Buka halaman Akun di web untuk menghubungkan dulu.',
     };
   }
 
@@ -209,7 +209,7 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
     );
     return {
       status: 'ocr_failed',
-      message: 'Foto tidak terbaca. Coba foto ulang dengan pencahayaan lebih terang dan pastikan teks terlihat jelas.',
+      message: 'Foto tidak terbaca. Coba foto ulang dengan pencahayaan lebih baik, atau catat manual di web.',
     };
   }
 
@@ -518,7 +518,7 @@ router.post('/webhook', async (req, res) => {
 
         await sendWaMessage(
           waId,
-          `Akun WhatsApp berhasil terhubung ke ${user?.name || user?.email}! 🎉\n\nSekarang kamu bisa kirim foto struk belanja atau bukti transfer untuk otomatis dicatat.\n\nContoh:\n📸 Foto struk → tercatat sebagai pengeluaran\n📸 Foto bukti transfer → tercatat sebagai pemasukan`
+          `Akun WhatsApp berhasil terhubung ke ${user?.name || user?.email}. Kirim foto struk belanja atau bukti transfer untuk otomatis dicatat.`
         );
         return;
       }
@@ -533,7 +533,7 @@ router.post('/webhook', async (req, res) => {
       if (!user) {
         await sendWaMessage(
           waId,
-          'Halo! 👋 Akun WhatsApp kamu belum terhubung ke Finepro.\n\nUntuk menghubungkan:\n1. Buka https://finepro.my.id\n2. Login ke akun kamu\n3. Buka menu Akun\n4. Klik "Hubungkan WhatsApp" dan ikuti langkahnya\n\nSetelah terhubung, kirim foto struk atau bukti transfer untuk otomatis dicatat 📸'
+          'Akun WhatsApp kamu belum terhubung ke finepro.my.id. Buka halaman Akun di web untuk menghubungkan dulu.'
         );
         return;
       }
@@ -542,7 +542,7 @@ router.post('/webhook', async (req, res) => {
       if (!householdId) {
         await sendWaMessage(
           waId,
-          `Hai ${user.name || user.email}! Akun kamu belum tergabung di household manapun.\n\nBuka https://finepro.my.id dulu untuk membuat atau bergabung ke household.`
+          'Akun kamu belum tergabung di household manapun di finepro.my.id.'
         );
         return;
       }
@@ -554,7 +554,7 @@ router.post('/webhook', async (req, res) => {
       if (!isAiConfigured(aiConfig)) {
         await sendWaMessage(
           waId,
-          `Hai ${userName}! Saat ini asisten AI belum dikonfigurasi.\n\nYang bisa kamu lakukan:\n📸 Kirim foto struk/bukti transfer untuk otomatis dicatat\n📊 Buka https://finepro.my.id untuk kelola keuangan lengkap`
+          'Foto tidak bisa dibaca otomatis dan fitur AI belum dikonfigurasi. Catat manual dulu di web.'
         );
         return;
       }
@@ -575,7 +575,7 @@ router.post('/webhook', async (req, res) => {
       } catch (quotaErr) {
         await sendWaMessage(
           waId,
-          `${quotaErr.message || 'Kuota chat AI WhatsApp hari ini sudah habis.'}\n\nKamu masih bisa kirim foto struk/bukti transfer jika kuota scan masih tersedia, atau coba chat lagi besok 😊`
+          `${quotaErr.message || 'Kuota chat AI WhatsApp hari ini sudah habis.'} Catat manual dulu di web, atau upgrade paket.`
         );
         return;
       }
