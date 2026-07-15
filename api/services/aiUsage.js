@@ -39,7 +39,14 @@ export async function getAiQuotaConfig() {
     paid_insight_daily: toNonNegativeInt(quota.paid_insight_daily, 3),
     paid_scan_monthly: toNonNegativeInt(quota.paid_scan_monthly, 30),
     telegram_chat_daily: toNonNegativeInt(quota.telegram_chat_daily, 100),
+    whatsapp_chat_daily: toNonNegativeInt(quota.whatsapp_chat_daily, 50),
   };
+}
+
+function chatDailyLimitFor(feature, quota) {
+  if (feature === 'telegram_chat') return quota.telegram_chat_daily;
+  if (feature === 'whatsapp_chat') return quota.whatsapp_chat_daily;
+  return 0;
 }
 
 function scopeFor(feature, family) {
@@ -129,7 +136,7 @@ export async function assertQuotaAvailable(householdId, feature, label) {
 
 export async function getUserDailyQuotaStatus(userId, feature) {
   const quota = await getAiQuotaConfig();
-  const limit = (feature === 'telegram_chat' || feature === 'whatsapp_chat') ? quota.telegram_chat_daily : 0;
+  const limit = chatDailyLimitFor(feature, quota);
   const used = await countUserUsage(userId, feature, 'day');
 
   return {
@@ -165,7 +172,7 @@ export async function reserveUserDailyAiUsage({
   label = 'Kuota AI',
 }) {
   const quota = await getAiQuotaConfig();
-  const limit = (feature === 'telegram_chat' || feature === 'whatsapp_chat') ? quota.telegram_chat_daily : 0;
+  const limit = chatDailyLimitFor(feature, quota);
   const client = await pool.connect();
 
   try {

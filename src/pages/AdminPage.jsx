@@ -1676,8 +1676,16 @@ export default function AdminPage({ user, onLogout }) {
                 </div>
               </div>
 
+              <div className="rounded-xl border border-white/25 bg-[#6cf8bb]/18 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-mint">WhatsApp AI</div>
+                <div>
+                  <label className={labelClass}>Chat AI / User / Hari</label>
+                  <input className={inputClass} type="number" min="0" value={aiQuota.whatsapp_chat_daily ?? 50} onChange={(e) => setAiQuota("whatsapp_chat_daily", Number(e.target.value))} />
+                </div>
+              </div>
+
               <div className={`${glassSoft} px-3 py-2 text-xs font-semibold leading-relaxed text-[#464555]`}>
-                Scan otomatis dihitung gabungan dari web, upload file, kamera, dan Telegram. Insight dihitung dari tombol Analisa Keuangan. Chat AI Telegram dihitung per pengguna setiap hari saat pesan teks memicu AI.
+                Scan otomatis dihitung gabungan dari web, upload file, kamera, Telegram, dan WhatsApp. Insight dihitung dari tombol Analisa Keuangan. Chat AI Telegram dan WhatsApp masing-masing dihitung terpisah per pengguna setiap hari saat pesan teks memicu AI.
               </div>
 
               <SaveButton label="Simpan Limit AI" saving={savingKey === "ai_quota"} onClick={() => saveSetting("ai_quota", aiQuota)} tone="mint" />
