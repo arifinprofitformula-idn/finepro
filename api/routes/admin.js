@@ -7,7 +7,8 @@ import { authMiddleware, adminMiddleware, superAdminMiddleware, adminRoleForEmai
 import { auditAdminAction, getAllSettings, publicSetting, updateSetting } from '../services/appSettings.js';
 import { getCurrentMetalPrices, getCachedMetalPricesStatus } from '../services/apeEpi.js';
 import { getMailketingLists, sendMail } from '../services/mailer.js';
-import { PLANS, applyPaymentStatus } from './payments.js';
+import { applyPaymentStatus } from './payments.js';
+import { getPlanPricing, getTopupPricing } from '../services/pricing.js';
 
 const router = Router();
 const isLocalDev = process.env.LOCAL_DEV === 'true';
@@ -21,7 +22,7 @@ const adminLoginLimiter = rateLimit({
   message: { error: 'Terlalu banyak percobaan, coba lagi beberapa menit lagi' },
 });
 
-const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'xendit', 'payment_gateway', 'manual_payment', 'ai', 'ai_quota', 'ape_epi', 'web_push', 'telegram', 'whatsapp']);
+const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'xendit', 'payment_gateway', 'manual_payment', 'ai', 'ai_quota', 'pricing', 'ai_credit', 'ape_epi', 'web_push', 'telegram', 'whatsapp']);
 
 function toInt(value, fallback) {
   const n = Number(value);
@@ -467,7 +468,7 @@ router.get('/households/:id', async (req, res) => {
 router.post('/households/:id/manual-payment', async (req, res) => {
   try {
     const plan = req.body?.plan;
-    const planConfig = PLANS[plan];
+    const planConfig = plan === 'ai_credit_topup' ? await getTopupPricing() : await getPlanPricing(plan);
     if (!planConfig) {
       return res.status(400).json({ error: 'Plan tidak valid' });
     }

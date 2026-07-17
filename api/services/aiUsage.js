@@ -1,7 +1,8 @@
 import pool from '../db.js';
 import { getSetting } from './appSettings.js';
+import { assertCreditAvailable, debitCredit, getCreditQuotaStatus } from './aiCredits.js';
 
-const PAID_PLANS = new Set(['monthly', 'semiannual', 'annual']);
+const SHORT_PLANS = new Set(['monthly', 'quarterly', 'semiannual']);
 
 function toNonNegativeInt(value, fallback) {
   const n = Number(value);
@@ -19,14 +20,18 @@ async function getSubscription(householdId) {
   return result.rows[0] || null;
 }
 
+// group: 'lifetime' | 'annual' | 'short' | 'trial' | 'free' — dipakai buat pilih
+// kelompok kuota (short_*/annual_*) atau sistem kredit lifetime.
 export async function resolveUsageTier(householdId) {
   const subscription = await getSubscription(householdId);
   const plan = subscription?.plan || 'free';
   const active = subscription?.status === 'active';
 
-  if (active && PAID_PLANS.has(plan)) return { tier: plan, family: 'paid', subscription };
-  if (active && plan === 'trial') return { tier: 'trial', family: 'trial', subscription };
-  return { tier: 'free', family: 'free', subscription };
+  if (active && plan === 'lifetime') return { tier: 'lifetime', family: 'lifetime', group: 'lifetime', subscription };
+  if (active && plan === 'annual') return { tier: 'annual', family: 'paid', group: 'annual', subscription };
+  if (active && SHORT_PLANS.has(plan)) return { tier: plan, family: 'paid', group: 'short', subscription };
+  if (active && plan === 'trial') return { tier: 'trial', family: 'trial', group: 'trial', subscription };
+  return { tier: 'free', family: 'free', group: 'free', subscription };
 }
 
 export async function getAiQuotaConfig() {
@@ -36,34 +41,47 @@ export async function getAiQuotaConfig() {
     trial_scan_total: toNonNegativeInt(quota.trial_scan_total, 5),
     free_insight_monthly: toNonNegativeInt(quota.free_insight_monthly, 1),
     free_scan_monthly: toNonNegativeInt(quota.free_scan_monthly, 3),
-    paid_insight_daily: toNonNegativeInt(quota.paid_insight_daily, 3),
-    paid_scan_monthly: toNonNegativeInt(quota.paid_scan_monthly, 30),
-    telegram_chat_daily: toNonNegativeInt(quota.telegram_chat_daily, 100),
-    whatsapp_chat_daily: toNonNegativeInt(quota.whatsapp_chat_daily, 50),
+    short_scan_monthly: toNonNegativeInt(quota.short_scan_monthly, 20),
+    short_insight_daily: toNonNegativeInt(quota.short_insight_daily, 2),
+    short_telegram_daily: toNonNegativeInt(quota.short_telegram_daily, 30),
+    short_whatsapp_daily: toNonNegativeInt(quota.short_whatsapp_daily, 20),
+    annual_scan_monthly: toNonNegativeInt(quota.annual_scan_monthly, 40),
+    annual_insight_daily: toNonNegativeInt(quota.annual_insight_daily, 3),
+    annual_telegram_daily: toNonNegativeInt(quota.annual_telegram_daily, 50),
+    annual_whatsapp_daily: toNonNegativeInt(quota.annual_whatsapp_daily, 30),
   };
 }
 
-function chatDailyLimitFor(feature, quota) {
-  if (feature === 'telegram_chat') return quota.telegram_chat_daily;
-  if (feature === 'whatsapp_chat') return quota.whatsapp_chat_daily;
+function chatDailyLimitFor(feature, group, quota) {
+  if (group === 'annual') {
+    if (feature === 'telegram_chat') return quota.annual_telegram_daily;
+    if (feature === 'whatsapp_chat') return quota.annual_whatsapp_daily;
+  }
+  if (group === 'short') {
+    if (feature === 'telegram_chat') return quota.short_telegram_daily;
+    if (feature === 'whatsapp_chat') return quota.short_whatsapp_daily;
+  }
   return 0;
 }
 
-function scopeFor(feature, family) {
-  if (family === 'paid' && feature === 'ai_insight') return 'day';
-  if (family === 'trial') return 'total';
+function scopeFor(feature, group) {
+  if (group === 'annual' && feature === 'ai_insight') return 'day';
+  if (group === 'short' && feature === 'ai_insight') return 'day';
+  if (group === 'trial') return 'total';
   return 'month';
 }
 
-function limitFor(feature, family, quota) {
+function limitFor(feature, group, quota) {
   if (feature === 'receipt_scan') {
-    if (family === 'paid') return quota.paid_scan_monthly;
-    if (family === 'trial') return quota.trial_scan_total;
+    if (group === 'annual') return quota.annual_scan_monthly;
+    if (group === 'short') return quota.short_scan_monthly;
+    if (group === 'trial') return quota.trial_scan_total;
     return quota.free_scan_monthly;
   }
 
-  if (family === 'paid') return quota.paid_insight_daily;
-  if (family === 'trial') return quota.trial_insight_total;
+  if (group === 'annual') return quota.annual_insight_daily;
+  if (group === 'short') return quota.short_insight_daily;
+  if (group === 'trial') return quota.trial_insight_total;
   return quota.free_insight_monthly;
 }
 
@@ -102,18 +120,21 @@ async function countUserUsage(userId, feature, scope) {
 }
 
 export async function getQuotaStatus(householdId, feature) {
-  const [{ family, tier }, quota] = await Promise.all([
-    resolveUsageTier(householdId),
-    getAiQuotaConfig(),
-  ]);
-  const scope = scopeFor(feature, family);
-  const limit = limitFor(feature, family, quota);
+  const { group, tier } = await resolveUsageTier(householdId);
+
+  if (group === 'lifetime') {
+    return getCreditQuotaStatus(householdId, feature);
+  }
+
+  const quota = await getAiQuotaConfig();
+  const scope = scopeFor(feature, group);
+  const limit = limitFor(feature, group, quota);
   const used = await countUsage(householdId, feature, scope);
 
   return {
     feature,
     tier,
-    family,
+    family: group,
     scope,
     limit,
     used,
@@ -123,6 +144,12 @@ export async function getQuotaStatus(householdId, feature) {
 }
 
 export async function assertQuotaAvailable(householdId, feature, label) {
+  const { group } = await resolveUsageTier(householdId);
+
+  if (group === 'lifetime') {
+    return assertCreditAvailable(householdId, feature, label);
+  }
+
   const status = await getQuotaStatus(householdId, feature);
   if (!status.allowed) {
     const scopeLabel = status.scope === 'day' ? 'hari ini' : status.scope === 'month' ? 'bulan ini' : 'selama masa trial';
@@ -135,8 +162,11 @@ export async function assertQuotaAvailable(householdId, feature, label) {
 }
 
 export async function getUserDailyQuotaStatus(userId, feature) {
+  // reserveUserDailyAiUsage butuh householdId utk cek group lifetime; endpoint status
+  // ringan ini dipakai lewat feature/userId saja, jadi kelompok 'short' dipakai sbg default
+  // aman (limit terkecil) kalau dipanggil tanpa konteks household.
   const quota = await getAiQuotaConfig();
-  const limit = chatDailyLimitFor(feature, quota);
+  const limit = chatDailyLimitFor(feature, 'short', quota);
   const used = await countUserUsage(userId, feature, 'day');
 
   return {
@@ -171,8 +201,7 @@ export async function reserveUserDailyAiUsage({
   metadata = {},
   label = 'Kuota AI',
 }) {
-  const quota = await getAiQuotaConfig();
-  const limit = chatDailyLimitFor(feature, quota);
+  const { group } = await resolveUsageTier(householdId);
   const client = await pool.connect();
 
   try {
@@ -180,6 +209,54 @@ export async function reserveUserDailyAiUsage({
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
       `ai_usage:${feature}:${userId}:${new Date().toISOString().slice(0, 10)}`,
     ]);
+
+    if (group === 'lifetime') {
+      const { balance } = await client.query(
+        `SELECT balance FROM ai_credits WHERE household_id = $1 AND feature = $2`,
+        [householdId, feature]
+      ).then((r) => r.rows[0] || { balance: 0 });
+
+      if (balance < 1) {
+        await client.query('ROLLBACK');
+        const error = new Error(`${label} kredit AI Anda sudah habis. Silakan lakukan Top-Up Kredit AI untuk melanjutkan.`);
+        error.status = 429;
+        error.creditExhausted = true;
+        throw error;
+      }
+
+      const insertResult = await client.query(
+        `INSERT INTO ai_usage_events
+          (household_id, user_id, feature, source, used_ai, provider, model, metadata)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         RETURNING id`,
+        [
+          householdId,
+          userId,
+          feature,
+          source,
+          Boolean(usedAi),
+          provider,
+          model,
+          JSON.stringify(metadata || {}),
+        ]
+      );
+
+      const newBalance = await debitCredit(client, householdId, feature, insertResult.rows[0]?.id);
+
+      await client.query('COMMIT');
+      return {
+        id: insertResult.rows[0]?.id,
+        feature,
+        scope: 'credit',
+        limit: null,
+        used: null,
+        remaining: newBalance,
+        allowed: true,
+      };
+    }
+
+    const quota = await getAiQuotaConfig();
+    const limit = chatDailyLimitFor(feature, group, quota);
 
     const usageResult = await client.query(
       `SELECT COUNT(*)::int AS count
@@ -256,22 +333,42 @@ export async function recordAiUsage({
   estimatedCost = null,
   metadata = {},
 }) {
-  await pool.query(
-    `INSERT INTO ai_usage_events
-      (household_id, user_id, feature, source, used_ai, provider, model, input_tokens, output_tokens, estimated_cost, metadata)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-    [
-      householdId,
-      userId,
-      feature,
-      source,
-      Boolean(usedAi),
-      provider,
-      model,
-      inputTokens,
-      outputTokens,
-      estimatedCost,
-      JSON.stringify(metadata || {}),
-    ]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const insertResult = await client.query(
+      `INSERT INTO ai_usage_events
+        (household_id, user_id, feature, source, used_ai, provider, model, input_tokens, output_tokens, estimated_cost, metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       RETURNING id`,
+      [
+        householdId,
+        userId,
+        feature,
+        source,
+        Boolean(usedAi),
+        provider,
+        model,
+        inputTokens,
+        outputTokens,
+        estimatedCost,
+        JSON.stringify(metadata || {}),
+      ]
+    );
+
+    if (usedAi) {
+      const { group } = await resolveUsageTier(householdId);
+      if (group === 'lifetime') {
+        await debitCredit(client, householdId, feature, insertResult.rows[0]?.id);
+      }
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }

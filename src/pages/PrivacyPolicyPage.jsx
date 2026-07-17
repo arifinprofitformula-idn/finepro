@@ -125,6 +125,34 @@ const sections = [
         text: "Kami dapat memperbarui Kebijakan Privasi ini dari waktu ke waktu mengikuti perkembangan fitur layanan atau perubahan regulasi. Perubahan material akan diinformasikan melalui email terdaftar atau notifikasi pada aplikasi setidaknya 7 hari sebelum berlaku efektif."
       }
     ]
+  },
+  {
+    title: "11. Ketentuan Kredit AI Paket Lifetime",
+    body: [
+      {
+        text: "Bagian ini merupakan tambahan pada Kebijakan Privasi ini, khusus mengatur fitur berbasis AI (Asisten Chat WhatsApp/Telegram, Scan Struk Otomatis, dan AI Insight) pada paket Lifetime. Ketentuan ini juga ditampilkan secara ringkas di halaman pembelian paket Lifetime."
+      },
+      {
+        heading: "a. Cakupan Akses Lifetime",
+        text: "Paket Lifetime memberikan akses selamanya, tanpa batas, dan tanpa biaya tambahan untuk seluruh fitur non-AI — termasuk pencatatan transaksi manual, multi-dompet, kolaborasi & undangan anggota keluarga, budgeting, tagihan & pengingat, arisan & iuran, pos zakat/sedekah, export CSV/PDF, serta dashboard dan laporan keuangan."
+      },
+      {
+        heading: "b. Kredit AI dalam Paket Lifetime",
+        text: "Fitur AI (scan struk otomatis, AI Insight, dan asisten chat AI via WhatsApp/Telegram) menggunakan layanan AI pihak ketiga yang memiliki biaya operasional riil. Paket Lifetime menyertakan Kredit AI awal yang bersifat akumulatif (bukan reset berkala seperti paket lain) dan berkurang setiap kali fitur AI digunakan, mengikuti bobot pemakaian masing-masing fitur. Saldo Kredit AI ditampilkan secara transparan dan real-time di halaman Akun."
+      },
+      {
+        heading: "c. Top-Up Kredit AI",
+        text: "Apabila Kredit AI habis, pengguna dapat melanjutkan penggunaan fitur AI dengan membeli Top-Up Kredit AI seharga Rp124.500 — harga ini tetap berlaku terlepas dari harga promo Lifetime yang berlaku saat pembelian paket. Top-Up bersifat opsional dan tidak otomatis: tidak ada auto-charge atau penagihan otomatis dalam bentuk apa pun, pengguna harus secara aktif memilih dan menyetujui pembelian Top-Up. Apabila kredit AI habis dan pengguna belum melakukan Top-Up, seluruh fitur non-AI tetap berfungsi normal tanpa gangguan."
+      },
+      {
+        heading: "d. Perubahan Kebijakan",
+        text: "Apabila terjadi perubahan signifikan pada biaya penyedia layanan AI atau kebijakan kuota, kami akan menginformasikan perubahan tersebut kepada pengguna paket Lifetime yang sudah aktif melalui email/notifikasi aplikasi minimal 30 hari sebelum berlaku, dan tidak akan mengurangi Kredit AI yang sudah dimiliki pengguna pada saat perubahan kebijakan berlaku."
+      }
+    ],
+    list: [
+      "Paket 3 Bulan dan Tahunan mengikuti kuota reset harian/bulanan dan tidak menggunakan sistem akumulasi kredit.",
+      "Dengan melakukan pembelian paket Lifetime, pengguna dianggap telah membaca, memahami, dan menyetujui ketentuan Kredit AI dan mekanisme Top-Up sebagaimana diuraikan di atas."
+    ]
   }
 ];
 

@@ -25,6 +25,7 @@ import {
   Search,
   ShieldCheck,
   Settings,
+  Sparkles,
   Trash2,
   UserCog,
   UserPlus,
@@ -57,10 +58,14 @@ import { mediaUrl } from "../utils/media.js";
 
 const PAGE_SIZE = 10;
 
+// Harga di sini hanya label tampilan dropdown — jumlah aktual yang tercatat dihitung
+// live di server (lihat api/services/pricing.js, termasuk status promo Early Access).
 const MANUAL_PAYMENT_PLANS = [
   { value: "monthly", label: "Bulanan", amount: 29000 },
-  { value: "semiannual", label: "6 Bulan", amount: 149000 },
-  { value: "annual", label: "Tahunan", amount: 249000 }
+  { value: "quarterly", label: "3 Bulan", amount: 79000 },
+  { value: "annual", label: "Tahunan", amount: 249000 },
+  { value: "lifetime", label: "Lifetime", amount: 649000 },
+  { value: "ai_credit_topup", label: "Top-Up Kredit AI", amount: 124500 }
 ];
 
 const SETTING_LABELS = {
@@ -68,6 +73,8 @@ const SETTING_LABELS = {
   payment_method: "Metode Pembayaran",
   ai: "AI",
   ai_quota: "Limit AI",
+  pricing: "Harga & Promo",
+  ai_credit: "Kredit AI Lifetime",
   ape_epi: "APE-EPI",
   web_push: "Web Push",
   telegram: "Telegram",
@@ -1091,6 +1098,8 @@ export default function AdminPage({ user, onLogout }) {
   const [manualPayment, setManualPayment, replaceManualPayment] = useFormState(settings?.manual_payment);
   const [ai, setAi] = useFormState(settings?.ai);
   const [aiQuota, setAiQuota] = useFormState(settings?.ai_quota);
+  const [pricing, setPricing] = useFormState(settings?.pricing);
+  const [aiCredit, setAiCredit] = useFormState(settings?.ai_credit);
   const [apeEpi, setApeEpi] = useFormState(settings?.ape_epi);
   const [webPush, setWebPush] = useFormState(settings?.web_push);
   const [telegram, setTelegram] = useFormState(settings?.telegram);
@@ -1464,9 +1473,12 @@ export default function AdminPage({ user, onLogout }) {
     hasNonNegativeNumber(aiQuota.trial_scan_total),
     hasNonNegativeNumber(aiQuota.free_insight_monthly),
     hasNonNegativeNumber(aiQuota.free_scan_monthly),
-    hasNonNegativeNumber(aiQuota.paid_insight_daily),
-    hasNonNegativeNumber(aiQuota.paid_scan_monthly),
-    hasNonNegativeNumber(aiQuota.telegram_chat_daily),
+    hasNonNegativeNumber(aiQuota.short_insight_daily),
+    hasNonNegativeNumber(aiQuota.short_scan_monthly),
+    hasNonNegativeNumber(aiQuota.annual_insight_daily),
+    hasNonNegativeNumber(aiQuota.annual_scan_monthly),
+    hasNonNegativeNumber(aiQuota.short_telegram_daily),
+    hasNonNegativeNumber(aiQuota.annual_telegram_daily),
   ]);
   const apeEpiProgress = integrationProgress([
     apeEpi.enabled,
@@ -1513,7 +1525,7 @@ export default function AdminPage({ user, onLogout }) {
       enabled: ai.enabled,
       onToggle: (v) => setAi("enabled", v),
       detailLabel: "Telegram chat/user",
-      detailValue: `${aiQuota.telegram_chat_daily ?? 100}/hari`,
+      detailValue: `${aiQuota.annual_telegram_daily ?? 50}/hari`,
       progress: aiProgress.percent,
       progressLabel: integrationProgressLabel(aiProgress),
       configId: "integration-ai"
@@ -2091,41 +2103,210 @@ export default function AdminPage({ user, onLogout }) {
               </div>
 
               <div className="rounded-xl border border-white/25 bg-[#e2dfff]/35 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet">Paid: Monthly / 6 Bulan / Annual</div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet">Paid: Bulanan / 3 Bulan</div>
                 <FormRow>
                   <div>
                     <label className={labelClass}>Insight / Hari</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.paid_insight_daily ?? 3} onChange={(e) => setAiQuota("paid_insight_daily", Number(e.target.value))} />
+                    <input className={inputClass} type="number" min="0" value={aiQuota.short_insight_daily ?? 2} onChange={(e) => setAiQuota("short_insight_daily", Number(e.target.value))} />
                   </div>
                   <div>
                     <label className={labelClass}>Scan / Bulan</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.paid_scan_monthly ?? 30} onChange={(e) => setAiQuota("paid_scan_monthly", Number(e.target.value))} />
+                    <input className={inputClass} type="number" min="0" value={aiQuota.short_scan_monthly ?? 20} onChange={(e) => setAiQuota("short_scan_monthly", Number(e.target.value))} />
+                  </div>
+                </FormRow>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Chat Telegram / Hari</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.short_telegram_daily ?? 30} onChange={(e) => setAiQuota("short_telegram_daily", Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Chat WhatsApp / Hari</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.short_whatsapp_daily ?? 20} onChange={(e) => setAiQuota("short_whatsapp_daily", Number(e.target.value))} />
                   </div>
                 </FormRow>
               </div>
 
               <div className="rounded-xl border border-white/25 bg-[#ffdadc]/35 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gold">Telegram AI</div>
-                <div>
-                  <label className={labelClass}>Chat AI / User / Hari</label>
-                  <input className={inputClass} type="number" min="0" value={aiQuota.telegram_chat_daily ?? 100} onChange={(e) => setAiQuota("telegram_chat_daily", Number(e.target.value))} />
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/25 bg-[#6cf8bb]/18 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-mint">WhatsApp AI</div>
-                <div>
-                  <label className={labelClass}>Chat AI / User / Hari</label>
-                  <input className={inputClass} type="number" min="0" value={aiQuota.whatsapp_chat_daily ?? 50} onChange={(e) => setAiQuota("whatsapp_chat_daily", Number(e.target.value))} />
-                </div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gold">Paid: Tahunan</div>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Insight / Hari</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.annual_insight_daily ?? 3} onChange={(e) => setAiQuota("annual_insight_daily", Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Scan / Bulan</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.annual_scan_monthly ?? 40} onChange={(e) => setAiQuota("annual_scan_monthly", Number(e.target.value))} />
+                  </div>
+                </FormRow>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Chat Telegram / Hari</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.annual_telegram_daily ?? 50} onChange={(e) => setAiQuota("annual_telegram_daily", Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Chat WhatsApp / Hari</label>
+                    <input className={inputClass} type="number" min="0" value={aiQuota.annual_whatsapp_daily ?? 30} onChange={(e) => setAiQuota("annual_whatsapp_daily", Number(e.target.value))} />
+                  </div>
+                </FormRow>
               </div>
 
               <div className={`${glassSoft} px-3 py-2 text-xs font-semibold leading-relaxed text-[#464555]`}>
-                Scan otomatis dihitung gabungan dari web, upload file, kamera, Telegram, dan WhatsApp. Insight dihitung dari tombol Analisa Keuangan. Chat AI Telegram dan WhatsApp masing-masing dihitung terpisah per pengguna setiap hari saat pesan teks memicu AI.
+                Scan otomatis dihitung gabungan dari web, upload file, kamera, Telegram, dan WhatsApp. Insight dihitung dari tombol Analisa Keuangan. Chat AI Telegram dan WhatsApp masing-masing dihitung terpisah per pengguna setiap hari saat pesan teks memicu AI. Paket Lifetime tidak memakai limit di atas — lihat panel "Kredit AI Lifetime".
               </div>
 
               <SaveButton label="Simpan Limit AI" saving={savingKey === "ai_quota"} onClick={() => saveSetting("ai_quota", aiQuota)} tone="mint" />
               <InlineSaveFeedback feedback={settingFeedbacks.ai_quota} />
+            </div>
+          </section>
+
+          <section id="integration-pricing" className={`${glassCard} p-5`}>
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fff2c2] text-[#a97a00]">
+                <DollarSign size={17} />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-[#0b1c30]">Harga & Promo Early Access</div>
+                <div className="text-xs text-[#777587]">Harga normal + harga promo bertenggat untuk Tahunan & Lifetime</div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div className={`${glassSoft} p-3`}>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Harga Normal</div>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Bulanan</label>
+                    <input className={inputClass} type="number" min="0" value={pricing.normal?.monthly ?? 29000} onChange={(e) => setPricing("normal", { ...pricing.normal, monthly: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>3 Bulan</label>
+                    <input className={inputClass} type="number" min="0" value={pricing.normal?.quarterly ?? 79000} onChange={(e) => setPricing("normal", { ...pricing.normal, quarterly: Number(e.target.value) })} />
+                  </div>
+                </FormRow>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Tahunan</label>
+                    <input className={inputClass} type="number" min="0" value={pricing.normal?.annual ?? 249000} onChange={(e) => setPricing("normal", { ...pricing.normal, annual: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Lifetime</label>
+                    <input className={inputClass} type="number" min="0" value={pricing.normal?.lifetime ?? 649000} onChange={(e) => setPricing("normal", { ...pricing.normal, lifetime: Number(e.target.value) })} />
+                  </div>
+                </FormRow>
+              </div>
+
+              <div className="rounded-xl border border-white/25 bg-[#ffdadc]/35 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gold">Harga Promo Early Access</div>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Tahunan (promo)</label>
+                    <input className={inputClass} type="number" min="0" value={pricing.promo?.annual ?? 149000} onChange={(e) => setPricing("promo", { ...pricing.promo, annual: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Lifetime (promo)</label>
+                    <input className={inputClass} type="number" min="0" value={pricing.promo?.lifetime ?? 499000} onChange={(e) => setPricing("promo", { ...pricing.promo, lifetime: Number(e.target.value) })} />
+                  </div>
+                </FormRow>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Tenggat Promo (hari)</label>
+                    <input className={inputClass} type="number" min="0" value={pricing.promo_days ?? 30} onChange={(e) => setPricing("promo_days", Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Mulai Promo (tanggal)</label>
+                    <input
+                      className={inputClass}
+                      type="date"
+                      value={pricing.promo_start_date ? String(pricing.promo_start_date).slice(0, 10) : ""}
+                      onChange={(e) => setPricing("promo_start_date", e.target.value || null)}
+                    />
+                  </div>
+                </FormRow>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Slot Promo Tahunan</label>
+                    <input className={inputClass} type="number" min="0" value={pricing.promo_max_users?.annual ?? 500} onChange={(e) => setPricing("promo_max_users", { ...pricing.promo_max_users, annual: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Slot Promo Lifetime</label>
+                    <input className={inputClass} type="number" min="0" value={pricing.promo_max_users?.lifetime ?? 500} onChange={(e) => setPricing("promo_max_users", { ...pricing.promo_max_users, lifetime: Number(e.target.value) })} />
+                  </div>
+                </FormRow>
+              </div>
+
+              <div className={`${glassSoft} px-3 py-2 text-xs font-semibold leading-relaxed text-[#464555]`}>
+                Kosongkan "Mulai Promo" untuk menonaktifkan promo (harga normal berlaku). Promo otomatis berhenti begitu tenggat hari atau slot tercapai lebih dulu — tidak perlu deploy manual.
+              </div>
+
+              <SaveButton label="Simpan Harga & Promo" saving={savingKey === "pricing"} onClick={() => saveSetting("pricing", pricing)} tone="gold" />
+              <InlineSaveFeedback feedback={settingFeedbacks.pricing} />
+            </div>
+          </section>
+
+          <section id="integration-ai-credit" className={`${glassCard} p-5`}>
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e2dfff] text-[#3525cd]">
+                <Sparkles size={17} />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-[#0b1c30]">Kredit AI Lifetime</div>
+                <div className="text-xs text-[#777587]">Grant awal & top-up kredit per fitur untuk household paket Lifetime</div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div className={`${glassSoft} p-3`}>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Grant Awal (12 bulan)</div>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Scan Struk</label>
+                    <input className={inputClass} type="number" min="0" value={aiCredit.lifetime_grant?.receipt_scan ?? 480} onChange={(e) => setAiCredit("lifetime_grant", { ...aiCredit.lifetime_grant, receipt_scan: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>AI Insight</label>
+                    <input className={inputClass} type="number" min="0" value={aiCredit.lifetime_grant?.ai_insight ?? 1095} onChange={(e) => setAiCredit("lifetime_grant", { ...aiCredit.lifetime_grant, ai_insight: Number(e.target.value) })} />
+                  </div>
+                </FormRow>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Chat Telegram</label>
+                    <input className={inputClass} type="number" min="0" value={aiCredit.lifetime_grant?.telegram_chat ?? 18250} onChange={(e) => setAiCredit("lifetime_grant", { ...aiCredit.lifetime_grant, telegram_chat: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Chat WhatsApp</label>
+                    <input className={inputClass} type="number" min="0" value={aiCredit.lifetime_grant?.whatsapp_chat ?? 10950} onChange={(e) => setAiCredit("lifetime_grant", { ...aiCredit.lifetime_grant, whatsapp_chat: Number(e.target.value) })} />
+                  </div>
+                </FormRow>
+              </div>
+
+              <div className="rounded-xl border border-white/25 bg-[#6cf8bb]/18 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-mint">Top-Up (+6 bulan)</div>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Scan Struk</label>
+                    <input className={inputClass} type="number" min="0" value={aiCredit.topup_grant?.receipt_scan ?? 240} onChange={(e) => setAiCredit("topup_grant", { ...aiCredit.topup_grant, receipt_scan: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>AI Insight</label>
+                    <input className={inputClass} type="number" min="0" value={aiCredit.topup_grant?.ai_insight ?? 546} onChange={(e) => setAiCredit("topup_grant", { ...aiCredit.topup_grant, ai_insight: Number(e.target.value) })} />
+                  </div>
+                </FormRow>
+                <FormRow>
+                  <div>
+                    <label className={labelClass}>Chat Telegram</label>
+                    <input className={inputClass} type="number" min="0" value={aiCredit.topup_grant?.telegram_chat ?? 9100} onChange={(e) => setAiCredit("topup_grant", { ...aiCredit.topup_grant, telegram_chat: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Chat WhatsApp</label>
+                    <input className={inputClass} type="number" min="0" value={aiCredit.topup_grant?.whatsapp_chat ?? 5460} onChange={(e) => setAiCredit("topup_grant", { ...aiCredit.topup_grant, whatsapp_chat: Number(e.target.value) })} />
+                  </div>
+                </FormRow>
+                <div className="mt-2">
+                  <label className={labelClass}>Harga Top-Up (Rp)</label>
+                  <input className={inputClass} type="number" min="0" value={aiCredit.topup_price ?? 124500} onChange={(e) => setAiCredit("topup_price", Number(e.target.value))} />
+                </div>
+              </div>
+
+              <SaveButton label="Simpan Kredit AI Lifetime" saving={savingKey === "ai_credit"} onClick={() => saveSetting("ai_credit", aiCredit)} tone="violet" />
+              <InlineSaveFeedback feedback={settingFeedbacks.ai_credit} />
             </div>
           </section>
 

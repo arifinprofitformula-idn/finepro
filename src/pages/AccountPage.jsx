@@ -2,9 +2,19 @@
 import { useState, useEffect } from "react";
 import { HOUSEHOLD_TYPE_LABELS, getHouseholdMembers, removeHouseholdMember } from "../api/households.js";
 import { createInvite, acceptInvite, getSentInvites, resendInvite, cancelInvite } from "../api/invites.js";
-import { createPayment, getPaymentHistory, getPaymentMethods, submitManualPayment, PAYMENT_STATUS_LABELS, PLANS } from "../api/payments.js";
+import {
+  createPayment,
+  getPaymentHistory,
+  getPaymentMethods,
+  submitManualPayment,
+  PAYMENT_STATUS_LABELS,
+  getPricing,
+  createAiCreditTopup,
+  submitManualAiCreditTopup,
+  getAiCreditBalances,
+} from "../api/payments.js";
 import { uploadAvatar, updateProfile } from "../api/auth.js";
-import { planLabel } from "../api/subscriptions.js";
+import { planLabel, PLAN_LABELS } from "../api/subscriptions.js";
 import { fmtRp } from "../utils/format.js";
 import { mediaUrl } from "../utils/media.js";
 import {
@@ -14,6 +24,7 @@ import {
   RefreshCw,
   Receipt,
   ShieldCheck,
+  Sparkles,
   User,
   UserMinus,
   UserPlus
@@ -32,6 +43,23 @@ const TONE_CLASS = {
   mint: "bg-mint-light text-mint",
   coral: "bg-coral-light text-coral"
 };
+
+const PLAN_ORDER = ["monthly", "quarterly", "annual", "lifetime"];
+
+const CREDIT_FEATURE_LABELS = {
+  receipt_scan: "Scan Struk",
+  ai_insight: "AI Insight",
+  telegram_chat: "Chat Telegram",
+  whatsapp_chat: "Chat WhatsApp",
+};
+
+function formatPlanPrice(planId, planConfig) {
+  if (!planConfig) return "";
+  const price = fmtRp(planConfig.amount);
+  if (planId === "lifetime") return `${price} (sekali bayar)`;
+  if (planConfig.months === 1) return `${price} / bulan`;
+  return `${price} / ${planConfig.months} bulan`;
+}
 
 let snapScriptPromise = null;
 
@@ -87,13 +115,50 @@ function PendingManualReviewCard({ payment, onCancel }) {
       <div className="flex items-start gap-2 rounded-2xl bg-gold-light p-3 text-xs font-semibold text-gold">
         <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" />
         <span>
-          Klaim pembayaran {PLANS.find((pl) => pl.id === payment.plan)?.label || payment.plan} sedang menunggu verifikasi admin
+          Klaim pembayaran {PLAN_LABELS[payment.plan] || payment.plan} sedang menunggu verifikasi admin
           {payment.created_at ? ` (dikirim ${new Date(payment.created_at).toLocaleDateString("id-ID")})` : ""}. Anda akan bisa berlangganan otomatis setelah disetujui.
         </span>
       </div>
       <button type="button" onClick={onCancel} className={secondaryBtnClass}>
         Kirim Klaim Baru
       </button>
+    </div>
+  );
+}
+
+function LifetimeTermsBox({ accepted, onAcceptedChange }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="mt-2 rounded-2xl bg-gold-light/60 p-3 text-xs text-navy">
+      <p className="font-semibold">Ketentuan Kredit AI — Paket Lifetime</p>
+      <p className="mt-1 leading-relaxed text-neutral-600">
+        Paket Lifetime memberi akses selamanya untuk seluruh fitur non-AI. Fitur AI (scan struk, AI Insight, chat
+        WhatsApp/Telegram) memakai <strong>Kredit AI</strong> awal yang diberikan sekali di muka dan tidak reset
+        otomatis. Jika kredit habis, Anda bisa membeli Top-Up Kredit AI seharga Rp124.500 secara opsional — tidak ada
+        auto-charge dalam bentuk apapun. Fitur non-AI tetap berfungsi normal meski kredit AI habis.
+      </p>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="mt-1.5 text-[11px] font-bold text-violet underline"
+      >
+        {expanded ? "Sembunyikan detail" : "Lihat ketentuan lengkap"}
+      </button>
+      {expanded && (
+        <div className="mt-2 rounded-xl bg-white/70 p-2.5 text-[11px] leading-relaxed text-neutral-600">
+          Detail lengkap ketentuan Kredit AI — termasuk kuota acuan per fitur, mekanisme top-up, dan kebijakan
+          perubahan — tersedia di halaman Kebijakan Privasi bagian "Ketentuan Kredit AI Paket Lifetime".
+        </div>
+      )}
+      <label className="mt-2 flex items-start gap-2 text-[11px] font-medium text-navy">
+        <input
+          type="checkbox"
+          checked={accepted}
+          onChange={(e) => onAcceptedChange(e.target.checked)}
+          className="mt-0.5"
+        />
+        Saya sudah membaca dan menyetujui Ketentuan Kredit AI Paket Lifetime di atas.
+      </label>
     </div>
   );
 }
@@ -196,13 +261,22 @@ export default function AccountPage({
   const [payingPlan, setPayingPlan] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState(null);
-  const [manualPlan, setManualPlan] = useState(PLANS[0].id);
+  const [pricing, setPricing] = useState(null);
+  const [manualPlan, setManualPlan] = useState("monthly");
   const [manualReference, setManualReference] = useState("");
   const [manualFile, setManualFile] = useState(null);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualMsg, setManualMsg] = useState("");
   const [manualMsgType, setManualMsgType] = useState("");
   const [showUpgradeForm, setShowUpgradeForm] = useState(false);
+  const [lifetimeTermsAccepted, setLifetimeTermsAccepted] = useState(false);
+  const [creditBalances, setCreditBalances] = useState(null);
+  const [topupPaying, setTopupPaying] = useState(false);
+  const [topupReference, setTopupReference] = useState("");
+  const [topupFile, setTopupFile] = useState(null);
+  const [topupSubmitting, setTopupSubmitting] = useState(false);
+  const [topupMsg, setTopupMsg] = useState("");
+  const [topupMsgType, setTopupMsgType] = useState("");
 
   const isOwner = household.role === "owner";
   const subscriptionMeta = subscriptionStatusMeta(household);
@@ -214,11 +288,20 @@ export default function AccountPage({
     ? "pending_manual"
     : "form";
 
+  const isLifetime = household.plan === "lifetime";
+
   useEffect(() => {
     getPaymentHistory().then(setPaymentHistory).catch(() => setPaymentHistory([]));
     getPaymentMethods().then(setPaymentMethods).catch(() => setPaymentMethods({ active: null, midtrans: { enabled: false }, xendit: { enabled: false }, manual: { enabled: false } }));
+    getPricing().then(setPricing).catch(() => setPricing(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isLifetime) return;
+    getAiCreditBalances().then(setCreditBalances).catch(() => setCreditBalances(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLifetime]);
 
   useEffect(() => {
     setProfileName(user.name || "");
@@ -365,6 +448,10 @@ export default function AccountPage({
   }
 
   async function handleUpgrade(planId) {
+    if (planId === "lifetime" && !lifetimeTermsAccepted) {
+      alert("Anda harus menyetujui Ketentuan Kredit AI Lifetime terlebih dahulu.");
+      return;
+    }
     setPayingPlan(planId);
     try {
       if (paymentMethods?.active === "xendit") {
@@ -415,6 +502,11 @@ export default function AccountPage({
 
   async function handleManualSubmit(e) {
     e.preventDefault();
+    if (manualPlan === "lifetime" && !lifetimeTermsAccepted) {
+      setManualMsg("Anda harus menyetujui Ketentuan Kredit AI Lifetime terlebih dahulu.");
+      setManualMsgType("error");
+      return;
+    }
     if (!manualFile) {
       setManualMsg("Unggah bukti transfer terlebih dahulu.");
       setManualMsgType("error");
@@ -435,6 +527,79 @@ export default function AccountPage({
       setManualMsgType("error");
     } finally {
       setManualSubmitting(false);
+    }
+  }
+
+  async function handleTopup() {
+    setTopupPaying(true);
+    try {
+      if (paymentMethods?.active === "xendit") {
+        if (!paymentMethods?.xendit?.enabled) {
+          throw new Error("Metode pembayaran Xendit belum aktif. Hubungi admin Fine Pro.");
+        }
+        const { invoiceUrl } = await createAiCreditTopup();
+        window.location.href = invoiceUrl;
+        return;
+      }
+
+      if (!paymentMethods?.midtrans?.enabled) {
+        throw new Error("Metode pembayaran Midtrans belum aktif. Hubungi admin Fine Pro.");
+      }
+
+      const { orderId, token, redirectUrl } = await createAiCreditTopup();
+      const snap = await loadSnapScript(paymentMethods.midtrans);
+
+      snap.pay(token, {
+        onSuccess: () => {
+          window.location.href = `/payment/finish?order_id=${encodeURIComponent(orderId)}`;
+        },
+        onPending: () => {
+          window.location.href = `/payment/finish?order_id=${encodeURIComponent(orderId)}`;
+        },
+        onError: () => {
+          alert("Pembayaran top-up gagal diproses oleh Midtrans. Silakan coba lagi.");
+          setTopupPaying(false);
+        },
+        onClose: async () => {
+          setTopupPaying(false);
+          try {
+            setCreditBalances(await getAiCreditBalances());
+          } catch {
+            // Tidak kritis; saldo akan dimuat ulang saat halaman dibuka kembali.
+          }
+        }
+      });
+
+      if (!window.snap?.pay && redirectUrl) {
+        window.location.href = redirectUrl;
+      }
+    } catch (err) {
+      alert("Gagal memulai pembayaran top-up: " + err.message);
+      setTopupPaying(false);
+    }
+  }
+
+  async function handleTopupManualSubmit(e) {
+    e.preventDefault();
+    if (!topupFile) {
+      setTopupMsg("Unggah bukti transfer terlebih dahulu.");
+      setTopupMsgType("error");
+      return;
+    }
+    setTopupSubmitting(true);
+    setTopupMsg("");
+    try {
+      await submitManualAiCreditTopup({ reference: topupReference, file: topupFile });
+      setTopupMsg("Klaim top-up terkirim. Admin akan memverifikasi bukti transfer Anda.");
+      setTopupMsgType("success");
+      setTopupReference("");
+      setTopupFile(null);
+      setPaymentHistory(await getPaymentHistory());
+    } catch (err) {
+      setTopupMsg(err.message);
+      setTopupMsgType("error");
+    } finally {
+      setTopupSubmitting(false);
     }
   }
 
@@ -563,10 +728,13 @@ export default function AccountPage({
                           value={manualPlan}
                           onChange={(e) => setManualPlan(e.target.value)}
                         >
-                          {PLANS.map((p) => (
-                            <option key={p.id} value={p.id}>{p.label} — {p.priceLabel}</option>
+                          {PLAN_ORDER.filter((id) => pricing?.plans?.[id]).map((id) => (
+                            <option key={id} value={id}>{PLAN_LABELS[id]} — {formatPlanPrice(id, pricing.plans[id])}</option>
                           ))}
                         </select>
+                        {manualPlan === "lifetime" && (
+                          <LifetimeTermsBox accepted={lifetimeTermsAccepted} onAcceptedChange={setLifetimeTermsAccepted} />
+                        )}
                         <label htmlFor="manual-reference" className="text-xs font-medium text-neutral-500">No. Referensi / Berita Transfer (opsional)</label>
                         <input
                           id="manual-reference"
@@ -621,22 +789,34 @@ export default function AccountPage({
                       </span>
                     </div>
                     <div className="flex flex-col gap-2">
-                      {PLANS.map((p) => {
+                      {PLAN_ORDER.filter((id) => pricing?.plans?.[id]).map((id) => {
+                        const p = pricing.plans[id];
                         const gatewayEnabled = paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.midtrans?.enabled;
+                        const blockedByTerms = id === "lifetime" && !lifetimeTermsAccepted;
                         return (
-                          <div key={p.id} className="flex items-center justify-between rounded-2xl bg-white/70 p-3">
-                            <div>
-                              <div className="text-sm font-semibold text-navy">{p.label}</div>
-                              <div className="text-xs text-neutral-500">{p.priceLabel}</div>
+                          <div key={id} className="rounded-2xl bg-white/70 p-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm font-semibold text-navy">
+                                  {PLAN_LABELS[id]}
+                                  {p.isPromo && (
+                                    <span className="ml-1.5 rounded-full bg-coral-light px-2 py-0.5 text-[10px] font-bold text-coral">Early Access</span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-neutral-500">{formatPlanPrice(id, p)}</div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleUpgrade(id)}
+                                disabled={payingPlan === id || !gatewayEnabled || blockedByTerms}
+                                className="flex h-10 items-center justify-center rounded-full bg-gold px-4 text-xs font-bold text-white disabled:opacity-60"
+                              >
+                                {payingPlan === id ? "Membuka..." : "Pilih"}
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleUpgrade(p.id)}
-                              disabled={payingPlan === p.id || !gatewayEnabled}
-                              className="flex h-10 items-center justify-center rounded-full bg-gold px-4 text-xs font-bold text-white disabled:opacity-60"
-                            >
-                              {payingPlan === p.id ? "Membuka..." : "Pilih"}
-                            </button>
+                            {id === "lifetime" && (
+                              <LifetimeTermsBox accepted={lifetimeTermsAccepted} onAcceptedChange={setLifetimeTermsAccepted} />
+                            )}
                           </div>
                         );
                       })}
@@ -655,6 +835,73 @@ export default function AccountPage({
         )}
       </div>
 
+      {/* Kredit AI — khusus household paket Lifetime */}
+      {isLifetime && (
+        <div className="gloss-panel mb-4 rounded-2xl p-4">
+          <SectionHeader icon={Sparkles} tone="gold" title="Kredit AI" />
+          <div className="flex flex-col gap-2">
+            {Object.entries(CREDIT_FEATURE_LABELS).map(([feature, label]) => {
+              const c = creditBalances?.[feature];
+              const balance = c?.balance ?? 0;
+              const granted = c?.granted_total ?? 0;
+              const low = granted > 0 && balance / granted <= 0.1;
+              return (
+                <div key={feature} className="flex items-center justify-between rounded-2xl bg-white/70 p-3">
+                  <div className="text-sm font-semibold text-navy">{label}</div>
+                  <div className={`text-sm font-bold ${low ? "text-coral" : "text-navy"}`}>
+                    {balance.toLocaleString("id-ID")}/{granted.toLocaleString("id-ID")}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {paymentMethods?.active === "manual" ? (
+            paymentMethods?.manual?.enabled ? (
+              <form onSubmit={handleTopupManualSubmit} className="mt-3 flex flex-col gap-2 border-t border-neutral-border/60 pt-3">
+                <div className="text-xs font-bold uppercase tracking-wide text-neutral-500">
+                  Top-Up Kredit AI — {pricing?.topup ? fmtRp(pricing.topup.amount) : "Rp124.500"}
+                </div>
+                <label htmlFor="topup-reference" className="text-xs font-medium text-neutral-500">No. Referensi / Berita Transfer (opsional)</label>
+                <input
+                  id="topup-reference"
+                  type="text"
+                  className={inputClass}
+                  value={topupReference}
+                  onChange={(e) => setTopupReference(e.target.value)}
+                />
+                <label htmlFor="topup-proof" className="text-xs font-medium text-neutral-500">Bukti Transfer</label>
+                <input
+                  id="topup-proof"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(e) => setTopupFile(e.target.files[0] || null)}
+                  className="text-xs"
+                />
+                <button type="submit" disabled={topupSubmitting} className={`${primaryBtnClass} mt-1`}>
+                  {topupSubmitting ? "Mengirim..." : "Kirim Klaim Top-Up"}
+                </button>
+                <StatusMsg msg={topupMsg} type={topupMsgType} />
+              </form>
+            ) : (
+              <div className="mt-3 flex items-start gap-2 rounded-2xl bg-gold-light p-3 text-xs font-semibold text-gold">
+                <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" />
+                <span>Transfer manual belum aktif. Hubungi admin Fine Pro.</span>
+              </div>
+            )
+          ) : (
+            <button
+              type="button"
+              onClick={handleTopup}
+              disabled={topupPaying}
+              className={`${primaryBtnClass} mt-3`}
+            >
+              {topupPaying ? "Membuka..." : `Beli Top-Up Kredit AI — ${pricing?.topup ? fmtRp(pricing.topup.amount) : "Rp124.500"}`}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Riwayat Pembayaran */}
       {paymentHistory.length > 0 && (
         <div className="gloss-panel mb-4 rounded-2xl p-4">
@@ -663,7 +910,7 @@ export default function AccountPage({
             <div key={p.order_id} className="flex items-center justify-between gap-2 border-b border-neutral-border/60 py-2 last:border-0">
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-navy">
-                  {PLANS.find((pl) => pl.id === p.plan)?.label || p.plan}
+                  {PLAN_LABELS[p.plan] || p.plan}
                 </div>
                 <div className="text-xs text-neutral-500">{new Date(p.created_at).toLocaleDateString("id-ID")}</div>
               </div>

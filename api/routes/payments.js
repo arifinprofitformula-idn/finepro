@@ -9,17 +9,17 @@ import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getSetting } from '../services/appSettings.js';
 import { addSubscriberToList } from '../services/mailer.js';
+import { PLAN_MONTHS, getAllPlanPricing, getPlanPricing, getTopupPricing } from '../services/pricing.js';
+import { applyTopupCredit, getCreditBalances, grantInitialAiCredit } from '../services/aiCredits.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROOF_UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'payment-proofs');
 
 const router = Router();
 
-export const PLANS = {
-  monthly: { amount: 29000, months: 1, label: 'Bulanan' },
-  semiannual: { amount: 149000, months: 6, label: '6 Bulan' },
-  annual: { amount: 249000, months: 12, label: 'Tahunan' },
-};
+// Paket yang masih dijual (monthly/quarterly/annual/lifetime). 'semiannual' tetap
+// valid di DB untuk histori/subscriber lama tapi tidak lagi ditawarkan di sini.
+const SELLABLE_PLANS = new Set(['monthly', 'quarterly', 'annual', 'lifetime']);
 
 const proofUpload = multer({
   storage: multer.memoryStorage(),
@@ -187,8 +187,24 @@ export async function applyPaymentStatus(payment, nextStatus) {
   }
 
   if (nextStatus === 'paid') {
-    const planConfig = PLANS[payment.plan];
-    if (!planConfig) throw new Error(`Plan pembayaran tidak valid: ${payment.plan}`);
+    if (payment.plan === 'ai_credit_topup') {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE payments SET status = 'paid', paid_at = COALESCE(paid_at, now()) WHERE order_id = $1`,
+          [payment.order_id]
+        );
+        await applyTopupCredit(payment.household_id, payment.order_id, client);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+      return 'paid';
+    }
 
     const client = await pool.connect();
     let wasTrial = false;
@@ -200,16 +216,32 @@ export async function applyPaymentStatus(payment, nextStatus) {
       );
       const before = await client.query('SELECT plan FROM subscriptions WHERE household_id = $1', [payment.household_id]);
       wasTrial = before.rows[0]?.plan === 'trial';
-      // Kalau masih ada sisa masa aktif, perpanjang dari situ; kalau tidak, mulai dari sekarang.
-      await client.query(
-        `UPDATE subscriptions
-         SET plan = $1,
-             status = 'active',
-             current_period_end = GREATEST(COALESCE(current_period_end, CURRENT_DATE), CURRENT_DATE) + ($2 || ' months')::interval,
-             updated_at = now()
-         WHERE household_id = $3`,
-        [payment.plan, planConfig.months, payment.household_id]
-      );
+
+      if (payment.plan === 'lifetime') {
+        // Lifetime tidak punya expiry — current_period_end dikosongkan (bukan diperpanjang).
+        await client.query(
+          `UPDATE subscriptions
+           SET plan = 'lifetime', status = 'active', current_period_end = NULL, updated_at = now()
+           WHERE household_id = $1`,
+          [payment.household_id]
+        );
+        // Grant awal kredit AI — atomik dengan aktivasi paket (client yang sama), idempotent.
+        await grantInitialAiCredit(payment.household_id, client);
+      } else {
+        const months = PLAN_MONTHS[payment.plan];
+        if (!months) throw new Error(`Plan pembayaran tidak valid: ${payment.plan}`);
+        // Kalau masih ada sisa masa aktif, perpanjang dari situ; kalau tidak, mulai dari sekarang.
+        await client.query(
+          `UPDATE subscriptions
+           SET plan = $1,
+               status = 'active',
+               current_period_end = GREATEST(COALESCE(current_period_end, CURRENT_DATE), CURRENT_DATE) + ($2 || ' months')::interval,
+               updated_at = now()
+           WHERE household_id = $3`,
+          [payment.plan, months, payment.household_id]
+        );
+      }
+
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -278,11 +310,27 @@ async function syncPaymentFromXendit(payment) {
   }
 }
 
+// GET /api/payments/pricing — harga & status promo Early Access semua paket, publik
+// (dipakai halaman landing/akun sebelum & sesudah login untuk render harga dinamis).
+router.get('/pricing', async (_req, res) => {
+  try {
+    const pricing = await getAllPlanPricing();
+    const topup = await getTopupPricing();
+    res.json({ plans: pricing, topup });
+  } catch (err) {
+    console.error('Get pricing error:', err);
+    res.status(500).json({ error: 'Gagal mengambil harga paket' });
+  }
+});
+
 // POST /api/payments/create — buat transaksi sesuai gateway aktif (Midtrans atau Xendit)
 router.post('/create', authMiddleware, async (req, res) => {
   try {
     const { plan } = req.body;
-    const planConfig = PLANS[plan];
+    if (!SELLABLE_PLANS.has(plan)) {
+      return res.status(400).json({ error: 'Plan tidak valid' });
+    }
+    const planConfig = await getPlanPricing(plan);
     if (!planConfig) {
       return res.status(400).json({ error: 'Plan tidak valid' });
     }
@@ -304,9 +352,9 @@ router.post('/create', authMiddleware, async (req, res) => {
 
     if (activeGateway === 'xendit') {
       await pool.query(
-        `INSERT INTO payments (household_id, order_id, plan, amount, status, method)
-         VALUES ($1, $2, $3, $4, 'pending', 'xendit')`,
-        [householdId, orderId, plan, planConfig.amount]
+        `INSERT INTO payments (household_id, order_id, plan, amount, status, method, is_promo)
+         VALUES ($1, $2, $3, $4, 'pending', 'xendit', $5)`,
+        [householdId, orderId, plan, planConfig.amount, planConfig.isPromo]
       );
       const invoice = await createXenditInvoice(orderId, planConfig, user);
       return res.status(201).json({ orderId, invoiceUrl: invoice.invoice_url });
@@ -315,9 +363,9 @@ router.post('/create', authMiddleware, async (req, res) => {
     // Default: midtrans
     const snap = await getMidtransSnap();
     await pool.query(
-      `INSERT INTO payments (household_id, order_id, plan, amount, status, method)
-       VALUES ($1, $2, $3, $4, 'pending', 'midtrans')`,
-      [householdId, orderId, plan, planConfig.amount]
+      `INSERT INTO payments (household_id, order_id, plan, amount, status, method, is_promo)
+       VALUES ($1, $2, $3, $4, 'pending', 'midtrans', $5)`,
+      [householdId, orderId, plan, planConfig.amount, planConfig.isPromo]
     );
 
     const transaction = await snap.createTransaction({
@@ -351,6 +399,113 @@ router.post('/create', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/payments/ai-credit-topup/create — top-up kredit AI Lifetime, opt-in,
+// harga tetap (tidak terpengaruh promo Lifetime). Hanya untuk household plan='lifetime'.
+router.post('/ai-credit-topup/create', authMiddleware, async (req, res) => {
+  try {
+    const activeGateway = await getActiveGateway();
+    if (activeGateway === 'manual') {
+      return res.status(400).json({ error: 'Metode aktif saat ini adalah transfer manual. Gunakan /api/payments/ai-credit-topup/manual/submit.' });
+    }
+
+    const householdId = await getOwnerHouseholdId(req.user.userId);
+    if (!householdId) {
+      return res.status(403).json({ error: 'Hanya pemilik household yang bisa membeli top-up' });
+    }
+
+    const subResult = await pool.query('SELECT plan FROM subscriptions WHERE household_id = $1', [householdId]);
+    if (subResult.rows[0]?.plan !== 'lifetime') {
+      return res.status(403).json({ error: 'Top-Up Kredit AI hanya untuk paket Lifetime' });
+    }
+
+    const topup = await getTopupPricing();
+    const userResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.user.userId]);
+    const user = userResult.rows[0];
+    const orderId = `TOPUP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+
+    if (activeGateway === 'xendit') {
+      await pool.query(
+        `INSERT INTO payments (household_id, order_id, plan, amount, status, method)
+         VALUES ($1, $2, 'ai_credit_topup', $3, 'pending', 'xendit')`,
+        [householdId, orderId, topup.amount]
+      );
+      const invoice = await createXenditInvoice(orderId, { amount: topup.amount, label: topup.label }, user);
+      return res.status(201).json({ orderId, invoiceUrl: invoice.invoice_url });
+    }
+
+    const snap = await getMidtransSnap();
+    await pool.query(
+      `INSERT INTO payments (household_id, order_id, plan, amount, status, method)
+       VALUES ($1, $2, 'ai_credit_topup', $3, 'pending', 'midtrans')`,
+      [householdId, orderId, topup.amount]
+    );
+
+    const transaction = await snap.createTransaction({
+      transaction_details: { order_id: orderId, gross_amount: topup.amount },
+      customer_details: { first_name: user.name || user.email, email: user.email },
+      item_details: [{ id: 'ai_credit_topup', price: topup.amount, quantity: 1, name: topup.label }],
+      callbacks: process.env.APP_BASE_URL ? {
+        finish: `${process.env.APP_BASE_URL}/payment/finish?order_id=${orderId}`,
+      } : undefined,
+    });
+
+    res.status(201).json({ orderId, token: transaction.token, redirectUrl: transaction.redirect_url });
+  } catch (err) {
+    console.error('Create AI credit topup error:', err);
+    res.status(500).json({ error: 'Gagal membuat transaksi top-up kredit AI' });
+  }
+});
+
+// POST /api/payments/ai-credit-topup/manual/submit — klaim top-up via transfer manual
+router.post('/ai-credit-topup/manual/submit', authMiddleware, (req, res) => {
+  proofUpload.single('proof')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Gagal membaca bukti transfer' });
+    }
+    try {
+      const { reference, note } = req.body;
+      if (!req.file) {
+        return res.status(400).json({ error: 'Bukti transfer wajib diunggah' });
+      }
+
+      const manualConfig = await getSetting('manual_payment');
+      if (!manualConfig.enabled) {
+        return res.status(400).json({ error: 'Metode transfer manual belum aktif' });
+      }
+
+      const householdId = await getOwnerHouseholdId(req.user.userId);
+      if (!householdId) {
+        return res.status(403).json({ error: 'Hanya pemilik household yang bisa membeli top-up' });
+      }
+
+      const subResult = await pool.query('SELECT plan FROM subscriptions WHERE household_id = $1', [householdId]);
+      if (subResult.rows[0]?.plan !== 'lifetime') {
+        return res.status(403).json({ error: 'Top-Up Kredit AI hanya untuk paket Lifetime' });
+      }
+
+      const topup = await getTopupPricing();
+
+      await fs.mkdir(PROOF_UPLOAD_DIR, { recursive: true });
+      const ext = req.file.mimetype === 'image/png' ? 'png' : req.file.mimetype === 'image/webp' ? 'webp' : 'jpg';
+      const filename = `${crypto.randomUUID()}.${ext}`;
+      await fs.writeFile(path.join(PROOF_UPLOAD_DIR, filename), req.file.buffer);
+      const proofUrl = `/uploads/payment-proofs/${filename}`;
+
+      const orderId = `TOPUP-MANUAL-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+      await pool.query(
+        `INSERT INTO payments (household_id, order_id, plan, amount, status, method, proof_url, reference, note)
+         VALUES ($1, $2, 'ai_credit_topup', $3, 'pending', 'manual', $4, $5, $6)`,
+        [householdId, orderId, topup.amount, proofUrl, reference || null, note || null]
+      );
+
+      res.status(201).json({ payment: { order_id: orderId, plan: 'ai_credit_topup', amount: topup.amount, status: 'pending', method: 'manual' } });
+    } catch (err) {
+      console.error('Submit manual AI credit topup error:', err);
+      res.status(500).json({ error: 'Gagal mengirim klaim top-up kredit AI' });
+    }
+  });
+});
+
 // POST /api/payments/manual/submit — user klaim sudah transfer manual + upload bukti
 router.post('/manual/submit', authMiddleware, (req, res) => {
   proofUpload.single('proof')(req, res, async (err) => {
@@ -359,7 +514,10 @@ router.post('/manual/submit', authMiddleware, (req, res) => {
     }
     try {
       const { plan, reference, note } = req.body;
-      const planConfig = PLANS[plan];
+      if (!SELLABLE_PLANS.has(plan)) {
+        return res.status(400).json({ error: 'Plan tidak valid' });
+      }
+      const planConfig = await getPlanPricing(plan);
       if (!planConfig) {
         return res.status(400).json({ error: 'Plan tidak valid' });
       }
@@ -385,9 +543,9 @@ router.post('/manual/submit', authMiddleware, (req, res) => {
 
       const orderId = `MANUAL-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
       await pool.query(
-        `INSERT INTO payments (household_id, order_id, plan, amount, status, method, proof_url, reference, note)
-         VALUES ($1, $2, $3, $4, 'pending', 'manual', $5, $6, $7)`,
-        [householdId, orderId, plan, planConfig.amount, proofUrl, reference || null, note || null]
+        `INSERT INTO payments (household_id, order_id, plan, amount, status, method, proof_url, reference, note, is_promo)
+         VALUES ($1, $2, $3, $4, 'pending', 'manual', $5, $6, $7, $8)`,
+        [householdId, orderId, plan, planConfig.amount, proofUrl, reference || null, note || null, planConfig.isPromo]
       );
 
       res.status(201).json({ payment: { order_id: orderId, plan, amount: planConfig.amount, status: 'pending', method: 'manual' } });
@@ -443,6 +601,20 @@ router.get('/history', authMiddleware, async (req, res) => {
 });
 
 // GET /api/payments/methods — metode pembayaran aktif untuk tampilan user
+// GET /api/payments/ai-credit/balance — saldo kredit AI per fitur (khusus household lifetime)
+router.get('/ai-credit/balance', authMiddleware, async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.json({ features: {} });
+
+    const features = await getCreditBalances(householdId);
+    res.json({ features });
+  } catch (err) {
+    console.error('Get AI credit balance error:', err);
+    res.status(500).json({ error: 'Gagal mengambil saldo kredit AI' });
+  }
+});
+
 router.get('/methods', authMiddleware, async (req, res) => {
   try {
     const [active, midtrans, xendit, manual] = await Promise.all([

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
     CHECK (provider IN ('local','google')),
   telegram_id BIGINT UNIQUE,
   telegram_username TEXT,
+  email_verified_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -145,9 +146,10 @@ CREATE TABLE IF NOT EXISTS payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
   order_id TEXT UNIQUE NOT NULL,
-  plan TEXT NOT NULL CHECK (plan IN ('monthly','semiannual','annual')),
+  plan TEXT NOT NULL CHECK (plan IN ('monthly','semiannual','quarterly','annual','lifetime','ai_credit_topup')),
   amount NUMERIC NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed')),
+  is_promo BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   paid_at TIMESTAMPTZ
 );
@@ -234,6 +236,28 @@ CREATE TABLE IF NOT EXISTS ai_usage_events (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Kredit AI akumulatif khusus paket Lifetime — 4 saldo terpisah per fitur,
+-- tidak reset periodik (lihat api/services/aiCredits.js).
+CREATE TABLE IF NOT EXISTS ai_credits (
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
+  feature TEXT NOT NULL CHECK (feature IN ('receipt_scan','ai_insight','telegram_chat','whatsapp_chat')),
+  balance INTEGER NOT NULL DEFAULT 0,
+  granted_total INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (household_id, feature)
+);
+
+CREATE TABLE IF NOT EXISTS ai_credit_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
+  feature TEXT NOT NULL CHECK (feature IN ('receipt_scan','ai_insight','telegram_chat','whatsapp_chat')),
+  type TEXT NOT NULL CHECK (type IN ('grant_initial','topup','debit')),
+  amount INTEGER NOT NULL,
+  ai_usage_event_id UUID REFERENCES ai_usage_events(id) ON DELETE SET NULL,
+  payment_order_id TEXT REFERENCES payments(order_id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- 15. Target tabungan dan aset
 CREATE TABLE IF NOT EXISTS savings_goals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -288,6 +312,15 @@ CREATE TABLE IF NOT EXISTS integration_request_logs (
 
 -- 17. Google/local password reset
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) NOT NULL,
+  token_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) NOT NULL,
   token_hash TEXT NOT NULL,
@@ -454,10 +487,13 @@ CREATE INDEX IF NOT EXISTS idx_metal_price_cache_fetched_at ON metal_price_cache
 CREATE INDEX IF NOT EXISTS idx_integration_request_logs_date ON integration_request_logs (integration_key, request_date DESC);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token_hash ON password_reset_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_token_hash ON email_verification_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_telegram_receipts_household ON telegram_receipts (household_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_telegram_link_codes_user ON telegram_link_codes (user_id);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created_at ON admin_audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_admin_user ON admin_audit_logs(admin_user_id);
+CREATE INDEX IF NOT EXISTS idx_ai_credit_tx_household ON ai_credit_transactions (household_id, created_at DESC);
 
 -- ============================================================
 -- Seed konfigurasi aplikasi
@@ -468,7 +504,9 @@ VALUES
   ('midtrans', '{"enabled": false, "is_production": false, "server_key": "", "client_key": ""}', true),
   ('manual_payment', '{"enabled": false, "bank_name": "", "account_number": "", "account_name": "", "instructions": ""}', false),
   ('ai', '{"enabled": false, "provider": "sumopod", "sumopod_api_key": "", "sumopod_base_url": "https://ai.sumopod.com/v1", "sumopod_model": "gpt-4o-mini", "anthropic_api_key": "", "anthropic_model": "claude-sonnet-4-5", "insights_daily_limit": 3, "receipt_scan_monthly_limit": 30}', true),
-  ('ai_quota', '{"trial_insight_total": 3, "trial_scan_total": 5, "free_insight_monthly": 1, "free_scan_monthly": 3, "paid_insight_daily": 3, "paid_scan_monthly": 30, "telegram_chat_daily": 100, "whatsapp_chat_daily": 50}', false),
+  ('ai_quota', '{"trial_insight_total": 3, "trial_scan_total": 5, "free_insight_monthly": 1, "free_scan_monthly": 3, "short_scan_monthly": 20, "short_insight_daily": 2, "short_telegram_daily": 30, "short_whatsapp_daily": 20, "annual_scan_monthly": 40, "annual_insight_daily": 3, "annual_telegram_daily": 50, "annual_whatsapp_daily": 30}', false),
+  ('pricing', '{"promo_start_date": null, "promo_days": 30, "promo_max_users": {"annual": 500, "lifetime": 500}, "normal": {"monthly": 29000, "quarterly": 79000, "annual": 249000, "lifetime": 649000}, "promo": {"annual": 149000, "lifetime": 499000}}', false),
+  ('ai_credit', '{"lifetime_grant": {"receipt_scan": 480, "ai_insight": 1095, "telegram_chat": 18250, "whatsapp_chat": 10950}, "topup_grant": {"receipt_scan": 240, "ai_insight": 546, "telegram_chat": 9100, "whatsapp_chat": 5460}, "topup_price": 124500}', false),
   ('ape_epi', '{"enabled": false, "base_url": "https://ape.bisnisemasperak.com/api/v1", "api_key": "", "level": "konsumen", "gold_brand": "GOLDGRAM", "silver_brand": "SILVERGRAM", "cache_ttl_minutes": 30, "max_daily_requests": 3}', true),
   ('web_push', '{"enabled": true, "vapid_public_key": "", "vapid_private_key": "", "vapid_subject": "mailto:admin@finepro.my.id"}', true),
   ('telegram', '{"enabled": false, "bot_token": "", "bot_username": "", "n8n_shared_secret": ""}', true)

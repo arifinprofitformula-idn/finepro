@@ -7,7 +7,10 @@ export const PLAN_LABELS = {
   trial: "Trial",
   monthly: "Bulanan",
   semiannual: "6 Bulan",
-  annual: "Tahunan"
+  quarterly: "3 Bulan",
+  annual: "Tahunan",
+  lifetime: "Lifetime",
+  ai_credit_topup: "Top-Up Kredit AI"
 };
 
 // household: objek dari getMyHousehold(), berisi plan/subscription_status/current_period_end

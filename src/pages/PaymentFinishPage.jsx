@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, Clock3, Crown, Home, Loader2, ReceiptText, XCircle } from "lucide-react";
-import { getPaymentStatus, PLANS } from "../api/payments.js";
+import { getPaymentStatus } from "../api/payments.js";
+import { PLAN_LABELS } from "../api/subscriptions.js";
 import { fmtRp } from "../utils/format.js";
 
 const MAX_ATTEMPTS = 20;
@@ -112,7 +113,7 @@ export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard }
     };
   }, [orderId, onPaid]);
 
-  const plan = PLANS.find((item) => item.id === payment?.plan);
+  const planLabel = payment?.plan ? PLAN_LABELS[payment.plan] || payment.plan : null;
   const isPaid = payment?.status === "paid";
   const isFailed = payment?.status === "failed";
 
@@ -146,7 +147,7 @@ export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard }
 
           <div className="mt-6 grid gap-3 text-left">
             <DetailRow icon={ReceiptText} label="Order ID" value={orderId || "-"} />
-            <DetailRow icon={Crown} label="Paket" value={plan?.label || payment?.plan || "-"} />
+            <DetailRow icon={Crown} label="Paket" value={planLabel || "-"} />
             <DetailRow icon={Clock3} label="Status" value={payment?.status || (polling ? "checking" : "-")} />
             <DetailRow icon={ReceiptText} label="Nominal" value={payment ? fmtRp(payment.amount) : "-"} />
           </div>
