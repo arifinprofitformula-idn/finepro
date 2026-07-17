@@ -1,6 +1,7 @@
 -- ============================================================
 -- Migrasi: Dukungan Multi-Persona (Keluarga / Mahasiswa / Individu)
--- Jalankan SETELAH supabase-schema.sql (Supabase SQL Editor > New Query)
+-- Target: PostgreSQL standalone (lihat supabase/schema-pg.sql) — bukan
+-- RLS/auth.uid() Supabase, otorisasi ditangani di Express API.
 -- ============================================================
 
 -- 1. Tambah tipe household ke tabel yang sudah ada
@@ -20,21 +21,10 @@ create table if not exists categories (
   unique (household_id, type, name)
 );
 
-alter table categories enable row level security;
-
-create policy "categories select for members" on categories
-  for select using (
-    household_id in (select household_id from household_members where user_id = auth.uid())
-  );
-create policy "categories insert for members" on categories
-  for insert with check (
-    household_id in (select household_id from household_members where user_id = auth.uid())
-  );
-create policy "categories delete for members" on categories
-  for delete using (
-    household_id in (select household_id from household_members where user_id = auth.uid())
-    and is_default = false  -- kategori default tidak boleh dihapus, hanya kategori custom
-  );
+drop policy if exists "categories select for members" on categories;
+drop policy if exists "categories insert for members" on categories;
+drop policy if exists "categories delete for members" on categories;
+alter table categories disable row level security;
 
 -- 3. Fungsi seed kategori otomatis sesuai household_type
 create or replace function seed_default_categories(p_household_id uuid, p_type text)

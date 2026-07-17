@@ -10,9 +10,38 @@
 -- Jalankan manual: psql -U keuangan_app -d keuangan -f supabase/migrations/014_rename_zakat_category.sql
 -- ============================================================
 
-UPDATE categories SET name = 'Zakat & Sedekah' WHERE name = 'Ibadah & Sedekah';
 UPDATE transactions SET category = 'Zakat & Sedekah' WHERE category = 'Ibadah & Sedekah';
+
+UPDATE budgets target
+SET amount = GREATEST(target.amount, source.amount),
+    updated_at = now()
+FROM budgets source
+WHERE target.household_id = source.household_id
+  AND target.category = 'Zakat & Sedekah'
+  AND source.category = 'Ibadah & Sedekah';
+
+DELETE FROM budgets source
+WHERE source.category = 'Ibadah & Sedekah'
+  AND EXISTS (
+    SELECT 1
+    FROM budgets target
+    WHERE target.household_id = source.household_id
+      AND target.category = 'Zakat & Sedekah'
+  );
+
 UPDATE budgets SET category = 'Zakat & Sedekah' WHERE category = 'Ibadah & Sedekah';
+
+DELETE FROM categories source
+WHERE source.name = 'Ibadah & Sedekah'
+  AND EXISTS (
+    SELECT 1
+    FROM categories target
+    WHERE target.household_id = source.household_id
+      AND target.type = source.type
+      AND target.name = 'Zakat & Sedekah'
+  );
+
+UPDATE categories SET name = 'Zakat & Sedekah' WHERE name = 'Ibadah & Sedekah';
 
 CREATE OR REPLACE FUNCTION seed_default_categories(p_household_id UUID, p_type TEXT)
 RETURNS void AS $$
