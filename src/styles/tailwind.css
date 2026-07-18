@@ -30,14 +30,13 @@
     overflow: hidden;
   }
 
-  .gloss-panel::before,
-  .gloss-button::before {
+  .gloss-panel::before {
     content: "";
     position: absolute;
-    inset: 1px 1px auto 1px;
-    height: 42%;
+    inset: 0 0 auto 0;
+    height: 3px;
     border-radius: inherit;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0));
+    background: linear-gradient(90deg, theme("colors.violet.DEFAULT"), theme("colors.mint.DEFAULT"));
     pointer-events: none;
   }
 
@@ -46,7 +45,6 @@
     background-color: rgba(255, 255, 255, 0.72);
     box-shadow: 0 12px 30px rgba(49, 77, 119, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.74);
     position: relative;
-    overflow: hidden;
   }
 
   .soft-progress {
