@@ -11,15 +11,16 @@ import { getSetting } from '../services/appSettings.js';
 import { addSubscriberToList } from '../services/mailer.js';
 import { PLAN_MONTHS, getAllPlanPricing, getPlanPricing, getTopupPricing } from '../services/pricing.js';
 import { applyTopupCredit, getCreditBalances, grantInitialAiCredit } from '../services/aiCredits.js';
+import { getAiQuotaConfig } from '../services/aiUsage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROOF_UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'payment-proofs');
 
 const router = Router();
 
-// Paket yang masih dijual (monthly/quarterly/annual/lifetime). 'semiannual' tetap
+// Paket yang masih dijual (quarterly/annual/lifetime). 'monthly' dan 'semiannual' tetap
 // valid di DB untuk histori/subscriber lama tapi tidak lagi ditawarkan di sini.
-const SELLABLE_PLANS = new Set(['monthly', 'quarterly', 'annual', 'lifetime']);
+const SELLABLE_PLANS = new Set(['quarterly', 'annual', 'lifetime']);
 
 const proofUpload = multer({
   storage: multer.memoryStorage(),
@@ -312,11 +313,21 @@ async function syncPaymentFromXendit(payment) {
 
 // GET /api/payments/pricing — harga & status promo Early Access semua paket, publik
 // (dipakai halaman landing/akun sebelum & sesudah login untuk render harga dinamis).
+// Kuota AI (aiQuota/aiCredit) ikut disertakan supaya halaman Pilih Paket Langganan bisa
+// menampilkan batas kredit AI yang benar-benar berlaku (live dari Admin Console), bukan
+// angka statis yang bisa basi kalau admin mengubah kuota.
 router.get('/pricing', async (_req, res) => {
   try {
     const pricing = await getAllPlanPricing();
     const topup = await getTopupPricing();
-    res.json({ plans: pricing, topup });
+    const aiQuota = await getAiQuotaConfig();
+    const aiCredit = await getSetting('ai_credit');
+    res.json({
+      plans: pricing,
+      topup,
+      aiQuota,
+      aiCredit: { lifetime_grant: aiCredit.lifetime_grant, topup_grant: aiCredit.topup_grant },
+    });
   } catch (err) {
     console.error('Get pricing error:', err);
     res.status(500).json({ error: 'Gagal mengambil harga paket' });

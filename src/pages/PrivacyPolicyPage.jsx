@@ -1,7 +1,7 @@
 import { ArrowRight, FileText, Mail, ShieldCheck } from "lucide-react";
 
 const EFFECTIVE_DATE = "13 Juli 2026";
-const UPDATED_DATE = "13 Juli 2026";
+const UPDATED_DATE = "18 Juli 2026";
 const CONTACT_EMAIL = "contact.bustanul@gmail.com";
 
 const sections = [
@@ -29,7 +29,15 @@ const sections = [
       },
       {
         heading: "e. Data Pembayaran",
-        text: "Apabila Anda berlangganan paket berbayar di kemudian hari, data pembayaran akan diproses oleh penyedia payment gateway pihak ketiga berlisensi. Fine Pro tidak menyimpan nomor kartu kredit atau debit Anda di server kami."
+        text: "Untuk langganan paket berbayar (3 Bulan, Tahunan, atau Lifetime), data pembayaran diproses oleh penyedia payment gateway pihak ketiga berlisensi (Midtrans atau Xendit, tergantung metode yang sedang aktif). Fine Pro tidak menyimpan nomor kartu kredit atau debit Anda di server kami. Apabila Anda memilih metode transfer bank manual, foto bukti transfer dan nomor referensi yang Anda unggah akan tersimpan di server Fine Pro sendiri untuk keperluan verifikasi oleh admin."
+      },
+      {
+        heading: "f. Data Foto & Berkas Unggahan",
+        text: "Foto profil yang Anda unggah, serta foto struk belanja yang Anda unggah untuk fitur Scan Struk Otomatis. Foto struk diproses oleh layanan AI pihak ketiga untuk mengekstrak data transaksi, dan tidak disimpan permanen oleh penyedia AI tersebut setelah proses selesai."
+      },
+      {
+        heading: "g. Data Fitur Asisten Chat AI",
+        text: "Apabila Anda mengaktifkan Asisten Chat AI melalui WhatsApp atau Telegram, kami memproses nomor WhatsApp atau username Telegram Anda untuk keperluan autentikasi percakapan, beserta isi pesan yang Anda kirimkan ke asisten untuk menghasilkan balasan yang relevan."
       }
     ]
   },
@@ -40,7 +48,8 @@ const sections = [
       "Mengautentikasi dan mengamankan akun Anda.",
       "Mengirim komunikasi terkait layanan, seperti notifikasi budget, pembaruan fitur, atau informasi penting mengenai akun.",
       "Menganalisis penggunaan aplikasi secara agregat untuk perbaikan produk.",
-      "Memproses Data Transaksi untuk fitur Insight Pengeluaran AI apabila fitur tersebut aktif dan dipicu secara manual oleh Anda.",
+      "Memproses Data Transaksi untuk fitur AI Insight, Scan Struk Otomatis, dan Asisten Chat AI (WhatsApp/Telegram) apabila fitur tersebut aktif dan dipicu secara manual oleh Anda.",
+      "Memverifikasi klaim pembayaran transfer manual menggunakan bukti transfer yang Anda unggah.",
       "Memenuhi kewajiban hukum yang berlaku."
     ],
     body: [
@@ -61,7 +70,8 @@ const sections = [
     title: "4. Berbagi Data dengan Pihak Ketiga",
     list: [
       "Penyedia infrastruktur atau hosting yang menyimpan data secara aman atas nama kami dan terikat kewajiban kerahasiaan.",
-      "Penyedia payment gateway, seperti Midtrans, semata-mata untuk memproses pembayaran langganan apabila fitur berbayar telah aktif.",
+      "Penyedia payment gateway (Midtrans atau Xendit), semata-mata untuk memproses pembayaran langganan paket berbayar.",
+      "Penyedia layanan AI pihak ketiga, untuk memproses fitur Scan Struk Otomatis, AI Insight, dan Asisten Chat AI (WhatsApp/Telegram).",
       "Pihak yang berwenang apabila diwajibkan oleh perintah pengadilan atau otoritas berwenang di Indonesia sesuai peraturan yang berlaku."
     ],
     body: [
@@ -168,19 +178,19 @@ function BrandLogo() {
 
 function PolicySection({ section }) {
   return (
-    <section className="rounded-3xl border border-white/75 bg-white/65 p-5 shadow-soft">
-      <h2 className="text-lg font-bold text-navy">{section.title}</h2>
+    <section className="rounded-3xl border border-white/75 bg-white/80 p-5 shadow-soft md:p-6">
+      <h2 className="text-lg font-bold text-navy md:text-xl">{section.title}</h2>
       {section.body?.map((item, index) => (
-        <div key={`${section.title}-${index}`} className="mt-4">
-          {item.heading && <h3 className="text-sm font-bold text-navy">{item.heading}</h3>}
-          <p className="mt-1 text-sm font-medium leading-relaxed text-neutral-600">{item.text}</p>
+        <div key={`${section.title}-${index}`} className="mt-4 max-w-prose">
+          {item.heading && <h3 className="text-base font-bold text-navy">{item.heading}</h3>}
+          <p className="mt-1.5 text-base font-normal leading-7 text-neutral-700">{item.text}</p>
         </div>
       ))}
       {section.list && (
-        <ul className="mt-4 grid gap-2 text-sm font-medium leading-relaxed text-neutral-600">
+        <ul className="mt-4 grid max-w-prose gap-2.5 text-base font-normal leading-7 text-neutral-700">
           {section.list.map((item) => (
-            <li key={item} className="flex gap-2">
-              <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-violet" />
+            <li key={item} className="flex gap-2.5">
+              <span className="mt-2.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-violet" />
               <span>{item}</span>
             </li>
           ))}
@@ -226,7 +236,7 @@ export default function PrivacyPolicyPage({ onBack }) {
                 Perlindungan Data Pribadi
               </div>
               <h1 className="mt-4 text-3xl font-bold leading-tight text-navy md:text-4xl">Kebijakan Privasi Fine Pro</h1>
-              <p className="mt-4 text-sm font-medium leading-relaxed text-neutral-600 md:text-base">
+              <p className="mt-4 max-w-prose text-base font-normal leading-7 text-neutral-700">
                 Fine Pro menghargai kepercayaan Anda dalam mencatat data keuangan pribadi melalui layanan ini. Kebijakan
                 Privasi ini menjelaskan data apa saja yang kami kumpulkan, bagaimana data tersebut digunakan, dilindungi,
                 dan hak apa saja yang Anda miliki sesuai Undang-Undang No. 27 Tahun 2022 tentang Pelindungan Data Pribadi
@@ -251,7 +261,7 @@ export default function PrivacyPolicyPage({ onBack }) {
             </div>
           </div>
 
-          <div className="mt-6 rounded-3xl bg-mint-light/80 p-4 text-sm font-semibold leading-relaxed text-navy">
+          <div className="mt-6 rounded-3xl bg-mint-light/80 p-4 text-base font-semibold leading-7 text-navy">
             Dengan menggunakan Fine Pro, Anda menyetujui pengumpulan dan penggunaan data sebagaimana dijelaskan dalam
             kebijakan ini.
           </div>
@@ -263,8 +273,8 @@ export default function PrivacyPolicyPage({ onBack }) {
           ))}
 
           <section className="rounded-3xl border border-white/75 bg-white/65 p-5 shadow-soft">
-            <h2 className="text-lg font-bold text-navy">11. Hubungi Kami</h2>
-            <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-600">
+            <h2 className="text-lg font-bold text-navy md:text-xl">12. Hubungi Kami</h2>
+            <p className="mt-3 max-w-prose text-base font-normal leading-7 text-neutral-700">
               Untuk pertanyaan, permintaan akses atau hapus data, dan keluhan terkait privasi, silakan hubungi:
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">

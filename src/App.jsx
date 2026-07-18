@@ -21,6 +21,8 @@ import AccountPage from "./pages/AccountPage.jsx";
 import SettingPage from "./pages/SettingPage.jsx";
 import PaymentFinishPage from "./pages/PaymentFinishPage.jsx";
 import PaymentNotificationPage from "./pages/PaymentNotificationPage.jsx";
+import PricingPage from "./pages/PricingPage.jsx";
+import CheckoutPage from "./pages/CheckoutPage.jsx";
 import AppHeader from "./components/AppHeader.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import InstallPrompt from "./components/InstallPrompt.jsx";
@@ -77,6 +79,7 @@ export default function App() {
   const { categoriesExpense, categoriesIncome } = categories;
   const { invites, refresh: refreshInvites } = useInvites(!!household);
   const [page, setPage] = useState("dashboard");
+  const [selectedUpgradePlan, setSelectedUpgradePlan] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState("login");
@@ -154,6 +157,29 @@ export default function App() {
     );
   }
 
+  if (page === "upgrade") {
+    return (
+      <PricingPage
+        onSelectPlan={(planId) => { setSelectedUpgradePlan(planId); setPage("checkout"); }}
+        onBack={() => setPage("account")}
+      />
+    );
+  }
+
+  if (page === "checkout") {
+    return (
+      <CheckoutPage
+        plan={selectedUpgradePlan}
+        onBack={() => setPage("upgrade")}
+        onDone={async () => {
+          setSelectedUpgradePlan(null);
+          await refreshHousehold();
+          setPage("account");
+        }}
+      />
+    );
+  }
+
   const subscriptionExpired = household.subscription_status === "expired";
   const subscriptionWarning = getSubscriptionWarning(household);
   const notificationCount = invites.length + (subscriptionWarning ? 1 : 0);
@@ -215,6 +241,7 @@ export default function App() {
           onUserUpdated={updateUser}
           onDataChanged={dashboard.refresh}
           onInvitesChanged={refreshInvites}
+          onNavigateUpgrade={() => setPage("upgrade")}
         />
       )}
 

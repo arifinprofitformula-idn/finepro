@@ -50,19 +50,21 @@ export default function AppHeader({
               <ShieldCheck size={17} strokeWidth={2.3} />
             </button>
           )}
-          <button
-            type="button"
-            onClick={onNavigateAccount}
-            className="gloss-button flex h-9 w-9 items-center justify-center rounded-full relative text-navy"
-            title={hasSubscriptionWarning ? "Langganan hampir berakhir" : "Notifikasi"}
-          >
-            <Bell size={17} strokeWidth={2.2} className={hasNotifications ? "animate-bell-ring origin-top" : ""} />
+          <div className="relative">
+            <button
+              type="button"
+              onClick={onNavigateAccount}
+              className="gloss-button flex h-9 w-9 items-center justify-center rounded-full text-navy"
+              title={hasSubscriptionWarning ? "Langganan hampir berakhir" : "Notifikasi"}
+            >
+              <Bell size={17} strokeWidth={2.2} className={hasNotifications ? "animate-bell-ring origin-top" : ""} />
+            </button>
             {hasNotifications && (
-              <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-coral px-1 text-center text-[10px] font-medium leading-[18px] text-white">
+              <span className="pointer-events-none absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-coral px-1 text-[10px] font-bold leading-none text-white">
                 {notificationCount > 9 ? "9+" : notificationCount}
               </span>
             )}
-          </button>
+          </div>
         </div>
       </div>
     </div>

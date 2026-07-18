@@ -6,7 +6,7 @@
 
 import { apiFetch } from "./apiClient.js";
 
-// { plans: { monthly, quarterly, annual, lifetime }, topup } — tiap plan:
+// { plans: { quarterly, annual, lifetime }, topup, aiQuota, aiCredit } — tiap plan:
 // { amount, months, label, isPromo }
 export async function getPricing() {
   return apiFetch('/payments/pricing');

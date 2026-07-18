@@ -3,10 +3,8 @@ import { useState, useEffect } from "react";
 import { HOUSEHOLD_TYPE_LABELS, getHouseholdMembers, removeHouseholdMember } from "../api/households.js";
 import { createInvite, acceptInvite, getSentInvites, resendInvite, cancelInvite } from "../api/invites.js";
 import {
-  createPayment,
   getPaymentHistory,
   getPaymentMethods,
-  submitManualPayment,
   PAYMENT_STATUS_LABELS,
   getPricing,
   createAiCreditTopup,
@@ -17,6 +15,7 @@ import { uploadAvatar, updateProfile } from "../api/auth.js";
 import { planLabel, PLAN_LABELS } from "../api/subscriptions.js";
 import { fmtRp } from "../utils/format.js";
 import { mediaUrl } from "../utils/media.js";
+import UpgradeCheckout from "../components/UpgradeCheckout.jsx";
 import {
   CalendarDays,
   Crown,
@@ -44,22 +43,12 @@ const TONE_CLASS = {
   coral: "bg-coral-light text-coral"
 };
 
-const PLAN_ORDER = ["monthly", "quarterly", "annual", "lifetime"];
-
 const CREDIT_FEATURE_LABELS = {
   receipt_scan: "Scan Struk",
   ai_insight: "AI Insight",
   telegram_chat: "Chat Telegram",
   whatsapp_chat: "Chat WhatsApp",
 };
-
-function formatPlanPrice(planId, planConfig) {
-  if (!planConfig) return "";
-  const price = fmtRp(planConfig.amount);
-  if (planId === "lifetime") return `${price} (sekali bayar)`;
-  if (planConfig.months === 1) return `${price} / bulan`;
-  return `${price} / ${planConfig.months} bulan`;
-}
 
 let snapScriptPromise = null;
 
@@ -122,43 +111,6 @@ function PendingManualReviewCard({ payment, onCancel }) {
       <button type="button" onClick={onCancel} className={secondaryBtnClass}>
         Kirim Klaim Baru
       </button>
-    </div>
-  );
-}
-
-function LifetimeTermsBox({ accepted, onAcceptedChange }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className="mt-2 rounded-2xl bg-gold-light/60 p-3 text-xs text-navy">
-      <p className="font-semibold">Ketentuan Kredit AI — Paket Lifetime</p>
-      <p className="mt-1 leading-relaxed text-neutral-600">
-        Paket Lifetime memberi akses selamanya untuk seluruh fitur non-AI. Fitur AI (scan struk, AI Insight, chat
-        WhatsApp/Telegram) memakai <strong>Kredit AI</strong> awal yang diberikan sekali di muka dan tidak reset
-        otomatis. Jika kredit habis, Anda bisa membeli Top-Up Kredit AI seharga Rp124.500 secara opsional — tidak ada
-        auto-charge dalam bentuk apapun. Fitur non-AI tetap berfungsi normal meski kredit AI habis.
-      </p>
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="mt-1.5 text-[11px] font-bold text-violet underline"
-      >
-        {expanded ? "Sembunyikan detail" : "Lihat ketentuan lengkap"}
-      </button>
-      {expanded && (
-        <div className="mt-2 rounded-xl bg-white/70 p-2.5 text-[11px] leading-relaxed text-neutral-600">
-          Detail lengkap ketentuan Kredit AI — termasuk kuota acuan per fitur, mekanisme top-up, dan kebijakan
-          perubahan — tersedia di halaman Kebijakan Privasi bagian "Ketentuan Kredit AI Paket Lifetime".
-        </div>
-      )}
-      <label className="mt-2 flex items-start gap-2 text-[11px] font-medium text-navy">
-        <input
-          type="checkbox"
-          checked={accepted}
-          onChange={(e) => onAcceptedChange(e.target.checked)}
-          className="mt-0.5"
-        />
-        Saya sudah membaca dan menyetujui Ketentuan Kredit AI Paket Lifetime di atas.
-      </label>
     </div>
   );
 }
@@ -242,7 +194,8 @@ export default function AccountPage({
   invites,
   onUserUpdated,
   onDataChanged,
-  onInvitesChanged
+  onInvitesChanged,
+  onNavigateUpgrade
 }) {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [profileName, setProfileName] = useState(user.name || "");
@@ -258,18 +211,10 @@ export default function AccountPage({
   const [inviteActionId, setInviteActionId] = useState("");
   const [memberActionId, setMemberActionId] = useState("");
   const [acceptingId, setAcceptingId] = useState(null);
-  const [payingPlan, setPayingPlan] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState(null);
   const [pricing, setPricing] = useState(null);
-  const [manualPlan, setManualPlan] = useState("monthly");
-  const [manualReference, setManualReference] = useState("");
-  const [manualFile, setManualFile] = useState(null);
-  const [manualSubmitting, setManualSubmitting] = useState(false);
-  const [manualMsg, setManualMsg] = useState("");
-  const [manualMsgType, setManualMsgType] = useState("");
   const [showUpgradeForm, setShowUpgradeForm] = useState(false);
-  const [lifetimeTermsAccepted, setLifetimeTermsAccepted] = useState(false);
   const [creditBalances, setCreditBalances] = useState(null);
   const [topupPaying, setTopupPaying] = useState(false);
   const [topupReference, setTopupReference] = useState("");
@@ -280,6 +225,7 @@ export default function AccountPage({
 
   const isOwner = household.role === "owner";
   const subscriptionMeta = subscriptionStatusMeta(household);
+  const isTrial = household.plan === "trial";
   const isActivePaid = household.subscription_status === "active" && household.plan && household.plan !== "trial";
   const pendingManualPayment = paymentHistory.find((p) => p.method === "manual" && p.status === "pending");
   const upgradeMode = isActivePaid && !showUpgradeForm
@@ -444,89 +390,6 @@ export default function AccountPage({
       alert("Gagal menerima undangan: " + err.message);
     } finally {
       setAcceptingId(null);
-    }
-  }
-
-  async function handleUpgrade(planId) {
-    if (planId === "lifetime" && !lifetimeTermsAccepted) {
-      alert("Anda harus menyetujui Ketentuan Kredit AI Lifetime terlebih dahulu.");
-      return;
-    }
-    setPayingPlan(planId);
-    try {
-      if (paymentMethods?.active === "xendit") {
-        if (!paymentMethods?.xendit?.enabled) {
-          throw new Error("Metode pembayaran Xendit belum aktif. Hubungi admin Fine Pro.");
-        }
-        const { invoiceUrl } = await createPayment(planId);
-        window.location.href = invoiceUrl;
-        return;
-      }
-
-      if (!paymentMethods?.midtrans?.enabled) {
-        throw new Error("Metode pembayaran Midtrans belum aktif. Hubungi admin Fine Pro.");
-      }
-
-      const { orderId, token, redirectUrl } = await createPayment(planId);
-      const snap = await loadSnapScript(paymentMethods.midtrans);
-
-      snap.pay(token, {
-        onSuccess: () => {
-          window.location.href = `/payment/finish?order_id=${encodeURIComponent(orderId)}`;
-        },
-        onPending: () => {
-          window.location.href = `/payment/finish?order_id=${encodeURIComponent(orderId)}`;
-        },
-        onError: () => {
-          alert("Pembayaran gagal diproses oleh Midtrans. Silakan coba lagi.");
-          setPayingPlan(null);
-        },
-        onClose: async () => {
-          setPayingPlan(null);
-          try {
-            setPaymentHistory(await getPaymentHistory());
-          } catch {
-            // Tidak kritis; riwayat akan dimuat ulang saat halaman dibuka kembali.
-          }
-        }
-      });
-
-      if (!window.snap?.pay && redirectUrl) {
-        window.location.href = redirectUrl;
-      }
-    } catch (err) {
-      alert("Gagal memulai pembayaran: " + err.message);
-      setPayingPlan(null);
-    }
-  }
-
-  async function handleManualSubmit(e) {
-    e.preventDefault();
-    if (manualPlan === "lifetime" && !lifetimeTermsAccepted) {
-      setManualMsg("Anda harus menyetujui Ketentuan Kredit AI Lifetime terlebih dahulu.");
-      setManualMsgType("error");
-      return;
-    }
-    if (!manualFile) {
-      setManualMsg("Unggah bukti transfer terlebih dahulu.");
-      setManualMsgType("error");
-      return;
-    }
-    setManualSubmitting(true);
-    setManualMsg("");
-    try {
-      await submitManualPayment({ plan: manualPlan, reference: manualReference, file: manualFile });
-      setManualMsg("Klaim pembayaran terkirim. Admin akan memverifikasi bukti transfer Anda.");
-      setManualMsgType("success");
-      setManualReference("");
-      setManualFile(null);
-      setShowUpgradeForm(false);
-      setPaymentHistory(await getPaymentHistory());
-    } catch (err) {
-      setManualMsg(err.message);
-      setManualMsgType("error");
-    } finally {
-      setManualSubmitting(false);
     }
   }
 
@@ -702,134 +565,19 @@ export default function AccountPage({
               <PendingManualReviewCard payment={pendingManualPayment} onCancel={() => setShowUpgradeForm(true)} />
             )}
 
-            {upgradeMode === "form" && (
-              <>
-                <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-neutral-500">
-                  <Crown size={13} />
-                  {paymentMethods?.active === "manual" ? "Upgrade Paket — Transfer Manual" : "Upgrade Paket"}
-                </div>
+            {upgradeMode === "form" && isTrial && (
+              <button type="button" onClick={onNavigateUpgrade} className={primaryBtnClass}>
+                <Crown size={14} />
+                UPGRADE SEKARANG
+              </button>
+            )}
 
-                {paymentMethods?.active === "manual" ? (
-                  paymentMethods?.manual?.enabled ? (
-                    <>
-                      <div className="mb-3 rounded-2xl bg-white/70 p-3 text-xs text-navy">
-                        <div className="font-semibold">{paymentMethods.manual.bank_name}</div>
-                        <div>No. Rekening: <span className="font-semibold">{paymentMethods.manual.account_number}</span></div>
-                        <div>a.n. {paymentMethods.manual.account_name}</div>
-                        {paymentMethods.manual.instructions && (
-                          <p className="mt-2 text-neutral-500">{paymentMethods.manual.instructions}</p>
-                        )}
-                      </div>
-                      <form onSubmit={handleManualSubmit} className="flex flex-col gap-2">
-                        <label htmlFor="manual-plan" className="text-xs font-medium text-neutral-500">Pilih Paket</label>
-                        <select
-                          id="manual-plan"
-                          className={inputClass}
-                          value={manualPlan}
-                          onChange={(e) => setManualPlan(e.target.value)}
-                        >
-                          {PLAN_ORDER.filter((id) => pricing?.plans?.[id]).map((id) => (
-                            <option key={id} value={id}>{PLAN_LABELS[id]} — {formatPlanPrice(id, pricing.plans[id])}</option>
-                          ))}
-                        </select>
-                        {manualPlan === "lifetime" && (
-                          <LifetimeTermsBox accepted={lifetimeTermsAccepted} onAcceptedChange={setLifetimeTermsAccepted} />
-                        )}
-                        <label htmlFor="manual-reference" className="text-xs font-medium text-neutral-500">No. Referensi / Berita Transfer (opsional)</label>
-                        <input
-                          id="manual-reference"
-                          type="text"
-                          className={inputClass}
-                          value={manualReference}
-                          onChange={(e) => setManualReference(e.target.value)}
-                          placeholder="Contoh: 4 digit terakhir rekening pengirim"
-                        />
-                        <label htmlFor="manual-proof" className="text-xs font-medium text-neutral-500">Bukti Transfer</label>
-                        <input
-                          id="manual-proof"
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          onChange={(e) => setManualFile(e.target.files[0] || null)}
-                          className="text-xs"
-                        />
-                        <button type="submit" disabled={manualSubmitting} className={`${primaryBtnClass} mt-1`}>
-                          {manualSubmitting ? "Mengirim..." : "Kirim Klaim Pembayaran"}
-                        </button>
-                        <StatusMsg msg={manualMsg} type={manualMsgType} />
-                      </form>
-                    </>
-                  ) : (
-                    <div className="flex items-start gap-2 rounded-2xl bg-gold-light p-3 text-xs font-semibold text-gold">
-                      <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" />
-                      <span>Transfer manual belum aktif. Hubungi admin Fine Pro.</span>
-                    </div>
-                  )
-                ) : (
-                  <>
-                    <p className="mb-2 text-xs text-neutral-500">
-                      {paymentMethods?.active === "xendit"
-                        ? "Pembayaran diproses via Xendit, otomatis aktif setelah bayar."
-                        : "Pembayaran diproses via Midtrans, otomatis aktif setelah bayar."}
-                    </p>
-                    <div className={`mb-3 flex items-start gap-2 rounded-2xl p-3 text-xs font-semibold ${
-                      (paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.midtrans?.enabled)
-                        ? "bg-mint-light text-mint" : "bg-gold-light text-gold"
-                    }`}>
-                      <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" />
-                      <span>
-                        {paymentMethods === null
-                          ? "Memeriksa konfigurasi pembayaran..."
-                          : paymentMethods?.active === "xendit"
-                          ? (paymentMethods?.xendit?.enabled
-                            ? "Xendit aktif. Pilih paket untuk membuka metode pembayaran."
-                            : "Xendit belum aktif. Admin perlu mengisi Secret Key di Admin Console.")
-                          : (paymentMethods?.midtrans?.enabled
-                            ? "Midtrans Snap aktif. Pilih paket untuk membuka metode pembayaran."
-                            : "Midtrans belum aktif. Admin perlu mengisi Server Key dan Client Key di Admin Console.")}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {PLAN_ORDER.filter((id) => pricing?.plans?.[id]).map((id) => {
-                        const p = pricing.plans[id];
-                        const gatewayEnabled = paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.midtrans?.enabled;
-                        const blockedByTerms = id === "lifetime" && !lifetimeTermsAccepted;
-                        return (
-                          <div key={id} className="rounded-2xl bg-white/70 p-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="text-sm font-semibold text-navy">
-                                  {PLAN_LABELS[id]}
-                                  {p.isPromo && (
-                                    <span className="ml-1.5 rounded-full bg-coral-light px-2 py-0.5 text-[10px] font-bold text-coral">Early Access</span>
-                                  )}
-                                </div>
-                                <div className="text-xs text-neutral-500">{formatPlanPrice(id, p)}</div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleUpgrade(id)}
-                                disabled={payingPlan === id || !gatewayEnabled || blockedByTerms}
-                                className="flex h-10 items-center justify-center rounded-full bg-gold px-4 text-xs font-bold text-white disabled:opacity-60"
-                              >
-                                {payingPlan === id ? "Membuka..." : "Pilih"}
-                              </button>
-                            </div>
-                            {id === "lifetime" && (
-                              <LifetimeTermsBox accepted={lifetimeTermsAccepted} onAcceptedChange={setLifetimeTermsAccepted} />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-
-                {isActivePaid && (
-                  <button type="button" onClick={() => setShowUpgradeForm(false)} className={`${secondaryBtnClass} mt-2 border-neutral-border text-neutral-500`}>
-                    Batal
-                  </button>
-                )}
-              </>
+            {upgradeMode === "form" && !isTrial && (
+              <UpgradeCheckout
+                onClose={() => setShowUpgradeForm(false)}
+                showCancelButton={isActivePaid}
+                onPaymentHistoryChanged={async () => setPaymentHistory(await getPaymentHistory())}
+              />
             )}
           </div>
         )}

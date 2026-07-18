@@ -31,10 +31,9 @@ export function useHousehold(user) {
   }, [refresh]);
 
   const createHousehold = useCallback(async (type) => {
-    const h = await apiCreateHousehold(user.id, type);
-    setHousehold(h);
-    return h;
-  }, [user]);
+    await apiCreateHousehold(user.id, type);
+    return refresh();
+  }, [user, refresh]);
 
   return { household, loading, refresh, createHousehold, setHousehold };
 }

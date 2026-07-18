@@ -15,7 +15,6 @@ export const PLAN_LABELS = {
 };
 
 export const PLAN_MONTHS = {
-  monthly: 1,
   quarterly: 3,
   semiannual: 6,
   annual: 12,
@@ -79,7 +78,7 @@ export async function getPlanPricing(plan) {
 }
 
 export async function getAllPlanPricing() {
-  const plans = ['monthly', 'quarterly', 'annual', 'lifetime'];
+  const plans = ['quarterly', 'annual', 'lifetime'];
   const entries = await Promise.all(plans.map(async (plan) => [plan, await getPlanPricing(plan)]));
   return Object.fromEntries(entries);
 }

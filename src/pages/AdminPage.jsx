@@ -61,7 +61,6 @@ const PAGE_SIZE = 10;
 // Harga di sini hanya label tampilan dropdown — jumlah aktual yang tercatat dihitung
 // live di server (lihat api/services/pricing.js, termasuk status promo Early Access).
 const MANUAL_PAYMENT_PLANS = [
-  { value: "monthly", label: "Bulanan", amount: 29000 },
   { value: "quarterly", label: "3 Bulan", amount: 79000 },
   { value: "annual", label: "Tahunan", amount: 249000 },
   { value: "lifetime", label: "Lifetime", amount: 649000 },
@@ -2103,7 +2102,7 @@ export default function AdminPage({ user, onLogout }) {
               </div>
 
               <div className="rounded-xl border border-white/25 bg-[#e2dfff]/35 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet">Paid: Bulanan / 3 Bulan</div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet">Paid: 3 Bulan</div>
                 <FormRow>
                   <div>
                     <label className={labelClass}>Insight / Hari</label>
@@ -2174,19 +2173,15 @@ export default function AdminPage({ user, onLogout }) {
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Harga Normal</div>
                 <FormRow>
                   <div>
-                    <label className={labelClass}>Bulanan</label>
-                    <input className={inputClass} type="number" min="0" value={pricing.normal?.monthly ?? 29000} onChange={(e) => setPricing("normal", { ...pricing.normal, monthly: Number(e.target.value) })} />
-                  </div>
-                  <div>
                     <label className={labelClass}>3 Bulan</label>
                     <input className={inputClass} type="number" min="0" value={pricing.normal?.quarterly ?? 79000} onChange={(e) => setPricing("normal", { ...pricing.normal, quarterly: Number(e.target.value) })} />
                   </div>
-                </FormRow>
-                <FormRow>
                   <div>
                     <label className={labelClass}>Tahunan</label>
                     <input className={inputClass} type="number" min="0" value={pricing.normal?.annual ?? 249000} onChange={(e) => setPricing("normal", { ...pricing.normal, annual: Number(e.target.value) })} />
                   </div>
+                </FormRow>
+                <FormRow>
                   <div>
                     <label className={labelClass}>Lifetime</label>
                     <input className={inputClass} type="number" min="0" value={pricing.normal?.lifetime ?? 649000} onChange={(e) => setPricing("normal", { ...pricing.normal, lifetime: Number(e.target.value) })} />
