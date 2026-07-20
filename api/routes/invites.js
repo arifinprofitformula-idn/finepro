@@ -7,6 +7,8 @@ const router = Router();
 router.use(authMiddleware);
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const INVITE_BLOCKED_REASON_ALREADY_MEMBER =
+  'Pengguna sudah terdaftar di household lain, sehingga undangan tidak dapat diterima.';
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -106,6 +108,30 @@ async function getOwnerHouseholdId(userId) {
   return result.rows[0]?.household_id || null;
 }
 
+async function getUserMembershipByEmail(email, queryable = pool) {
+  const result = await queryable.query(
+    `SELECT hm.household_id, h.name AS household_name
+     FROM household_members hm
+     JOIN users u ON u.id = hm.user_id
+     JOIN households h ON h.id = hm.household_id
+     WHERE lower(u.email) = lower($1)
+     LIMIT 1`,
+    [email]
+  );
+  return result.rows[0] || null;
+}
+
+async function blockPendingInvitesForEmail(email, reason, queryable = pool) {
+  await queryable.query(
+    `UPDATE household_invites
+     SET status = 'blocked',
+         status_reason = $2
+     WHERE lower(invited_email) = lower($1)
+       AND status = 'pending'`,
+    [email, reason]
+  );
+}
+
 async function getOwnerContext(userId, householdId) {
   const context = await pool.query(
     `SELECT h.name AS household_name, u.name AS inviter_name, u.email AS inviter_email
@@ -175,6 +201,15 @@ router.post('/', async (req, res) => {
       return res.status(409).json({ error: 'Email ini sudah menjadi anggota household' });
     }
 
+    const existingMembership = await getUserMembershipByEmail(email);
+    if (existingMembership) {
+      await blockPendingInvitesForEmail(email, INVITE_BLOCKED_REASON_ALREADY_MEMBER);
+      return res.status(409).json({
+        error: INVITE_BLOCKED_REASON_ALREADY_MEMBER,
+        code: 'INVITE_RECIPIENT_ALREADY_IN_HOUSEHOLD',
+      });
+    }
+
     const existingInvite = await pool.query(
       `SELECT *
        FROM household_invites
@@ -231,6 +266,21 @@ router.get('/sent', async (req, res) => {
       [householdId]
     );
 
+    await pool.query(
+      `UPDATE household_invites i
+       SET status = 'blocked',
+           status_reason = $2
+       WHERE i.household_id = $1
+         AND i.status = 'pending'
+         AND EXISTS (
+           SELECT 1
+           FROM users u
+           JOIN household_members hm ON hm.user_id = u.id
+           WHERE lower(u.email) = lower(i.invited_email)
+         )`,
+      [householdId, INVITE_BLOCKED_REASON_ALREADY_MEMBER]
+    );
+
     const result = await pool.query(
       `SELECT i.*, h.name AS household_name, u.name AS invited_user_name
        FROM household_invites i
@@ -256,6 +306,15 @@ router.post('/:id/resend', async (req, res) => {
     if (!invite) return res.status(404).json({ error: 'Undangan tidak ditemukan' });
     if (invite.status !== 'pending' || new Date(invite.expires_at) < new Date()) {
       return res.status(400).json({ error: 'Hanya undangan pending yang masih berlaku yang bisa dikirim ulang' });
+    }
+
+    const existingMembership = await getUserMembershipByEmail(invite.invited_email);
+    if (existingMembership) {
+      await blockPendingInvitesForEmail(invite.invited_email, INVITE_BLOCKED_REASON_ALREADY_MEMBER);
+      return res.status(409).json({
+        error: INVITE_BLOCKED_REASON_ALREADY_MEMBER,
+        code: 'INVITE_RECIPIENT_ALREADY_IN_HOUSEHOLD',
+      });
     }
 
     const context = await getOwnerContext(req.user.userId, householdId);
@@ -291,6 +350,12 @@ router.post('/:id/cancel', async (req, res) => {
 // GET /api/invites/mine — undangan pending untuk email user yang sedang login
 router.get('/mine', async (req, res) => {
   try {
+    const existingMembership = await getUserMembershipByEmail(req.user.email);
+    if (existingMembership) {
+      await blockPendingInvitesForEmail(req.user.email, INVITE_BLOCKED_REASON_ALREADY_MEMBER);
+      return res.json({ invites: [] });
+    }
+
     const result = await pool.query(
       `SELECT i.*, h.name as household_name
        FROM household_invites i
@@ -338,8 +403,18 @@ router.post('/:id/accept', async (req, res) => {
       [req.user.userId]
     );
     if (existing.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Anda sudah tergabung di household lain' });
+      await client.query(
+        `UPDATE household_invites
+         SET status = 'blocked',
+             status_reason = $2
+         WHERE id = $1`,
+        [invite.id, INVITE_BLOCKED_REASON_ALREADY_MEMBER]
+      );
+      await client.query('COMMIT');
+      return res.status(409).json({
+        error: INVITE_BLOCKED_REASON_ALREADY_MEMBER,
+        code: 'INVITE_RECIPIENT_ALREADY_IN_HOUSEHOLD',
+      });
     }
 
     await client.query(

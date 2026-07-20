@@ -52,6 +52,7 @@ export async function apiFetch(path, options = {}) {
   if (!res.ok) {
     const err = new Error(data.error || 'Terjadi kesalahan');
     if (data.code) err.code = data.code;
+    err.status = res.status;
     throw err;
   }
 

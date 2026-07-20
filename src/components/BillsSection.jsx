@@ -65,9 +65,9 @@ export default function BillsSection({ householdId }) {
             {upcoming.length} tagihan jatuh tempo dalam 5 hari
           </div>
           {upcoming.slice(0, 3).map((b) => (
-            <div key={b.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 py-0.5 text-xs font-medium">
-              <span className="min-w-0 truncate">{b.name}</span>
-              <span className="whitespace-nowrap">{fmtRp(b.amount)}</span>
+            <div key={b.id} className="grid gap-0.5 py-1 text-xs font-medium sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-2">
+              <span className="min-w-0 break-words">{b.name}</span>
+              <span className="min-w-0 break-words sm:text-right sm:whitespace-nowrap">{fmtRp(b.amount)}</span>
             </div>
           ))}
         </div>
@@ -79,8 +79,8 @@ export default function BillsSection({ householdId }) {
         </div>
       ) : (
         <div className="grid gap-2">
-          {bills.map((bill) => (
-            <BillItem key={bill.id} bill={bill} onMarkPaid={markPaid} onEdit={openEdit} onDelete={handleDelete} />
+          {bills.map((bill, index) => (
+            <BillItem key={bill.id} bill={bill} index={index} onMarkPaid={markPaid} onEdit={openEdit} onDelete={handleDelete} />
           ))}
         </div>
       )}

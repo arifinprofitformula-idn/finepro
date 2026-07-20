@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS household_invites (
   household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
   invited_email TEXT NOT NULL,
   invited_by UUID REFERENCES users(id) NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','expired','cancelled')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','expired','cancelled','blocked')),
+  status_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + INTERVAL '7 days'
 );
@@ -139,6 +140,19 @@ CREATE TABLE IF NOT EXISTS bills (
   paid_at TIMESTAMPTZ,
   created_by UUID REFERENCES users(id) NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS bill_payment_statements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bill_id UUID REFERENCES bills(id) ON DELETE CASCADE NOT NULL,
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
+  due_date DATE NOT NULL,
+  period_month DATE NOT NULL,
+  amount NUMERIC NOT NULL CHECK (amount >= 0),
+  paid_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (bill_id, due_date)
 );
 
 -- 11. Pembayaran langganan
@@ -469,6 +483,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_household_system_key
   WHERE system_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_bills_household ON bills (household_id);
 CREATE INDEX IF NOT EXISTS idx_bills_due_date ON bills (household_id, due_date);
+CREATE INDEX IF NOT EXISTS idx_bill_payment_statements_bill ON bill_payment_statements (bill_id, due_date DESC);
+CREATE INDEX IF NOT EXISTS idx_bill_payment_statements_household ON bill_payment_statements (household_id, paid_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments (order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_household ON payments (household_id);
 CREATE INDEX IF NOT EXISTS idx_arisan_groups_household ON arisan_groups (household_id);

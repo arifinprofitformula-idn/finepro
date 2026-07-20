@@ -175,6 +175,7 @@ function subscriptionStatusMeta(household) {
 
 function inviteStatusTone(status) {
   if (status === "accepted") return "mint";
+  if (status === "blocked") return "coral";
   if (status === "cancelled" || status === "expired") return "coral";
   return "gold";
 }
@@ -185,6 +186,7 @@ function inviteStatusLabel(status) {
     accepted: "Diterima",
     expired: "Expired",
     cancelled: "Dibatalkan",
+    blocked: "Sudah punya household",
   }[status] || status;
 }
 
@@ -341,6 +343,9 @@ export default function AccountPage({
     } catch (err) {
       setInviteMsg(err.message);
       setInviteMsgType("error");
+      if (err.code === "INVITE_RECIPIENT_ALREADY_IN_HOUSEHOLD" || err.status === 409) {
+        await refreshCollaboration();
+      }
     } finally {
       setInviteActionId("");
     }
@@ -747,6 +752,9 @@ export default function AccountPage({
                       <div className="text-xs text-neutral-500">
                         Berlaku sampai {new Date(invite.expires_at).toLocaleDateString("id-ID")}
                       </div>
+                      {invite.status_reason && (
+                        <div className="mt-1 text-xs font-semibold text-coral">{invite.status_reason}</div>
+                      )}
                     </div>
                     <span className={`flex-shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${TONE_CLASS[inviteStatusTone(invite.status)]}`}>
                       {inviteStatusLabel(invite.status)}

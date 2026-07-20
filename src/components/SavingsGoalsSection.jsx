@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useSavingsGoals } from "../hooks/useSavingsGoals.js";
 import { useMetalPrices } from "../hooks/useMetalPrices.js";
 import { fmtRp, formatNumberIdInput, parseNumberId, todayStr } from "../utils/format.js";
-import { CalendarDays, Coins, Gem, PiggyBank, Plus, Save, Target, X } from "lucide-react";
+import { CalendarDays, Coins, Gem, Info, PiggyBank, Plus, Save, Target, X } from "lucide-react";
 
 const GOAL_OPTIONS = [
   { value: "money", label: "Rupiah", icon: PiggyBank, tone: "bg-mint-light text-mint" },
@@ -257,8 +257,14 @@ export default function SavingsGoalsSection({ householdId }) {
         </div>
       )}
       {metalPricesEnabled && (
-        <div className="mb-3 text-center text-[11px] font-semibold text-neutral-500">
-          {formatPriceUpdateDate(prices.gold.fetched_at, prices.silver.fetched_at)}
+        <div className="mb-3 grid gap-2">
+          <div className="text-center text-[11px] font-semibold text-neutral-500">
+            {formatPriceUpdateDate(prices.gold.fetched_at, prices.silver.fetched_at)}
+          </div>
+          <div className="flex items-start gap-2 rounded-2xl bg-white/60 px-3 py-2 text-[11px] font-semibold leading-relaxed text-neutral-500">
+            <Info size={14} className="mt-0.5 flex-shrink-0 text-violet" />
+            <span>Harga emas/perak mengikuti data terbaru untuk estimasi. FinePro tidak menyediakan pembelian atau penjualan emas/perak.</span>
+          </div>
         </div>
       )}
 
