@@ -1,18 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import {
   Activity,
   AlertTriangle,
   Archive,
+  BarChart3,
   BellRing,
   BrainCircuit,
   Building2,
   CheckCircle2,
   ChevronRight,
+  Cookie,
   CreditCard,
   Database,
   DollarSign,
+  FlaskConical,
   Gem,
+  GitBranch,
   History,
   KeyRound,
   Landmark,
@@ -22,10 +26,12 @@ import {
   Phone,
   RefreshCw,
   Save,
+  ScrollText,
   Search,
   ShieldCheck,
   Settings,
   Sparkles,
+  Target,
   Trash2,
   UserCog,
   UserPlus,
@@ -33,6 +39,18 @@ import {
   WalletCards,
   X
 } from "lucide-react";
+import {
+  getTrackingSettings,
+  updateTrackingSettings,
+  clearTrackingSecret,
+  clearMetaTestEventCode,
+  testMetaCapi,
+  validateGa4Payload,
+  sendGa4RealtimeTest,
+  updateEventMapping,
+  resetEventMapping,
+  getTrackingLogs,
+} from "../api/adminTracking.js";
 import {
   createBusinessExpense,
   deleteBusinessExpense,
@@ -84,6 +102,7 @@ const tabs = [
   { id: "overview", label: "Overview", icon: Activity },
   { id: "finance", label: "Keuangan", icon: DollarSign },
   { id: "integrations", label: "Integrasi", icon: Database },
+  { id: "tracking", label: "Tracking", icon: BarChart3 },
   { id: "data", label: "Data", icon: Users },
   { id: "audit", label: "Audit", icon: History }
 ];
@@ -1056,6 +1075,788 @@ function HouseholdDetailModal({ householdId, canManageRoles, onClose, onChanged 
   );
 }
 
+const TRACKING_SUBTABS = [
+  { id: "overview", label: "Overview" },
+  { id: "meta", label: "Meta Ads" },
+  { id: "ga4", label: "Google Analytics" },
+  { id: "consent", label: "Consent" },
+  { id: "mapping", label: "Event Mapping" },
+  { id: "logs", label: "Delivery Logs" },
+];
+
+const META_CHANNEL_OPTIONS = [
+  { value: "none", label: "Tidak aktif" },
+  { value: "browser", label: "Browser saja" },
+  { value: "server", label: "Server saja" },
+  { value: "browser_and_server", label: "Browser + Server (dedup event_id)" },
+];
+const GA4_CHANNEL_OPTIONS = [
+  { value: "none", label: "Tidak aktif" },
+  { value: "browser", label: "Browser saja" },
+  { value: "server", label: "Server saja" },
+];
+
+function TrackingSubNav({ active, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {TRACKING_SUBTABS.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onChange(tab.id)}
+          className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${
+            active === tab.id ? "bg-[#3525cd] text-white shadow-[0_10px_22px_rgba(53,37,205,0.26)]" : `text-[#464555] ${glassButton}`
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TrackingStatusCard({ icon: Icon, title, tone = "violet", rows, onConfigure, configureLabel = "Configure" }) {
+  return (
+    <div className={`p-5 ${glassCard}`}>
+      <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
+      <div className="relative z-10 flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${toneMap[tone].icon}`}>
+            <Icon size={17} />
+          </div>
+          <h3 className="text-sm font-bold text-[#0b1c30]">{title}</h3>
+        </div>
+      </div>
+      <div className="relative z-10 mt-3 space-y-1.5">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-2 text-xs font-semibold">
+            <span className="text-neutral-500">{row.label}</span>
+            <span className={row.tone === "mint" ? "text-mint" : row.tone === "coral" ? "text-coral" : "text-[#0b1c30]"}>{row.value}</span>
+          </div>
+        ))}
+      </div>
+      {onConfigure && (
+        <button
+          type="button"
+          onClick={onConfigure}
+          className={`relative z-10 mt-3 flex min-h-[38px] w-full items-center justify-center rounded-lg px-4 text-xs font-semibold text-[#3525cd] transition active:scale-[0.98] ${glassButton}`}
+        >
+          {configureLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function TrackingTab({ active }) {
+  const [loading, setLoading] = useState(true);
+  const [subTab, setSubTab] = useState("overview");
+  const [settings, setSettings] = useState(null);
+  const [eventMapping, setEventMapping] = useState(null);
+  const [mappingDraft, setMappingDraft] = useState(null);
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState("");
+  const [feedback, setFeedback] = useState({});
+
+  const [form, setForm] = useFormState(settings);
+  const [metaAccessToken, setMetaAccessToken] = useState("");
+  const [metaTestEventCode, setMetaTestEventCode] = useState("");
+  const [ga4ApiSecret, setGa4ApiSecret] = useState("");
+
+  const [logs, setLogs] = useState([]);
+  const [logsTotal, setLogsTotal] = useState(0);
+  const [logFilters, setLogFilters] = useState({ provider: "", status: "", event: "" });
+  const [logPage, setLogPage] = useState(0);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState("");
+
+  const [ga4ValidationResult, setGa4ValidationResult] = useState(null);
+  const [metaTestResult, setMetaTestResult] = useState(null);
+  const [ga4TestResult, setGa4TestResult] = useState(null);
+
+  const hasLoadedRef = useRef(false);
+
+  async function loadSettings() {
+    setLoading(true);
+    setMessage("");
+    try {
+      const data = await getTrackingSettings();
+      setSettings(data.settings);
+      setEventMapping(data.eventMapping);
+      setMappingDraft(data.eventMapping);
+    } catch (err) {
+      setMessage(err.message || "Gagal mengambil pengaturan tracking");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Refresh diam-diam (tanpa toggle loading) — dipakai setelah test/validate supaya
+  // status "Last test"/"Last validation" di Overview ikut update tanpa panel berkedip.
+  async function refreshSettingsQuietly() {
+    try {
+      const data = await getTrackingSettings();
+      setSettings(data.settings);
+    } catch {
+      // diabaikan — status last test tetap tampil dari state sebelumnya
+    }
+  }
+
+  useEffect(() => {
+    if (!active || hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+    loadSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  useEffect(() => {
+    if (subTab === "logs" && active) loadLogs(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subTab, active]);
+
+  async function loadLogs(page) {
+    setLogsLoading(true);
+    setLogsError("");
+    try {
+      const data = await getTrackingLogs({
+        provider: logFilters.provider,
+        status: logFilters.status,
+        event: logFilters.event,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      });
+      setLogs(data.logs);
+      setLogsTotal(data.total);
+      setLogPage(page);
+    } catch (err) {
+      setLogsError(err.message || "Gagal mengambil delivery log");
+    } finally {
+      setLogsLoading(false);
+    }
+  }
+
+  async function saveSection(fields, secretPatch, feedbackKey) {
+    setSaving(feedbackKey);
+    setFeedback((prev) => ({ ...prev, [feedbackKey]: null }));
+    try {
+      const patch = { ...secretPatch };
+      for (const field of fields) patch[field] = form[field];
+      const updated = await updateTrackingSettings(patch);
+      setSettings(updated);
+      setFeedback((prev) => ({ ...prev, [feedbackKey]: { tone: "success", text: "Pengaturan tersimpan." } }));
+      setMetaAccessToken("");
+      setMetaTestEventCode("");
+      setGa4ApiSecret("");
+    } catch (err) {
+      setFeedback((prev) => ({ ...prev, [feedbackKey]: { tone: "error", text: err.message || "Event belum tersimpan. Periksa kembali isian Anda." } }));
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function handleClearSecret(field, feedbackKey) {
+    setSaving(feedbackKey);
+    try {
+      const updated = field === "meta_test_event_code" ? await clearMetaTestEventCode() : await clearTrackingSecret(field);
+      setSettings(updated);
+      setFeedback((prev) => ({ ...prev, [feedbackKey]: { tone: "success", text: "Secret berhasil dihapus." } }));
+    } catch (err) {
+      setFeedback((prev) => ({ ...prev, [feedbackKey]: { tone: "error", text: err.message || "Gagal menghapus secret." } }));
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function handleTestMeta() {
+    setSaving("meta_test");
+    setMetaTestResult(null);
+    try {
+      const result = await testMetaCapi();
+      setMetaTestResult({ tone: "success", text: `Event test terkirim (HTTP ${result.responseCode}). Cek Meta Events Manager > Test Events.` });
+    } catch (err) {
+      setMetaTestResult({ tone: "error", text: err.message || "Event belum terkirim karena Access Token Meta belum dikonfigurasi." });
+    } finally {
+      setSaving("");
+      refreshSettingsQuietly();
+    }
+  }
+
+  async function handleValidateGa4() {
+    setSaving("ga4_validate");
+    setGa4ValidationResult(null);
+    try {
+      const result = await validateGa4Payload();
+      setGa4ValidationResult(result.validationMessages);
+    } catch (err) {
+      setFeedback((prev) => ({ ...prev, ga4: { tone: "error", text: err.message || "Gagal memvalidasi payload GA4." } }));
+    } finally {
+      setSaving("");
+      refreshSettingsQuietly();
+    }
+  }
+
+  async function handleSendGa4Test() {
+    setSaving("ga4_test");
+    setGa4TestResult(null);
+    try {
+      const result = await sendGa4RealtimeTest();
+      setGa4TestResult({ tone: "success", text: result.instructions });
+    } catch (err) {
+      setGa4TestResult({ tone: "error", text: err.message || "Event belum terkirim karena Measurement ID/API Secret GA4 belum dikonfigurasi." });
+    } finally {
+      setSaving("");
+      refreshSettingsQuietly();
+    }
+  }
+
+  function updateMappingDraft(eventName, patch) {
+    setMappingDraft((prev) => ({
+      ...prev,
+      [eventName]: {
+        ...prev[eventName],
+        ...patch,
+        meta: { ...prev[eventName].meta, ...(patch.meta || {}) },
+        ga4: { ...prev[eventName].ga4, ...(patch.ga4 || {}) },
+      },
+    }));
+  }
+
+  async function handleSaveMapping() {
+    setSaving("mapping");
+    setFeedback((prev) => ({ ...prev, mapping: null }));
+    try {
+      const patch = Object.fromEntries(
+        Object.entries(mappingDraft).map(([name, def]) => [
+          name,
+          { enabled: def.enabled, meta: { eventName: def.meta.eventName, channel: def.meta.channel }, ga4: { eventName: def.ga4.eventName, channel: def.ga4.channel } },
+        ])
+      );
+      const updated = await updateEventMapping(patch);
+      setEventMapping(updated);
+      setMappingDraft(updated);
+      setFeedback((prev) => ({ ...prev, mapping: { tone: "success", text: "Event mapping tersimpan." } }));
+    } catch (err) {
+      setFeedback((prev) => ({ ...prev, mapping: { tone: "error", text: err.message || "Gagal menyimpan event mapping." } }));
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function handleResetMapping() {
+    setSaving("mapping_reset");
+    try {
+      const updated = await resetEventMapping();
+      setEventMapping(updated);
+      setMappingDraft(updated);
+      setFeedback((prev) => ({ ...prev, mapping: { tone: "success", text: "Event mapping dikembalikan ke default." } }));
+    } catch (err) {
+      setFeedback((prev) => ({ ...prev, mapping: { tone: "error", text: err.message || "Gagal reset event mapping." } }));
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function handleDisableMeta() {
+    setSaving("meta");
+    setFeedback((prev) => ({ ...prev, meta: null }));
+    try {
+      const updated = await updateTrackingSettings({ meta_browser_enabled: false, meta_server_enabled: false });
+      setSettings(updated);
+      setForm("meta_browser_enabled", false);
+      setForm("meta_server_enabled", false);
+      setFeedback((prev) => ({ ...prev, meta: { tone: "success", text: "Meta Pixel/CAPI dinonaktifkan." } }));
+    } catch (err) {
+      setFeedback((prev) => ({ ...prev, meta: { tone: "error", text: err.message || "Gagal menonaktifkan Meta." } }));
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function handleDisableGa4() {
+    setSaving("ga4");
+    setFeedback((prev) => ({ ...prev, ga4: null }));
+    try {
+      const updated = await updateTrackingSettings({ ga4_browser_enabled: false, ga4_server_enabled: false });
+      setSettings(updated);
+      setForm("ga4_browser_enabled", false);
+      setForm("ga4_server_enabled", false);
+      setFeedback((prev) => ({ ...prev, ga4: { tone: "success", text: "GA4 dinonaktifkan." } }));
+    } catch (err) {
+      setFeedback((prev) => ({ ...prev, ga4: { tone: "error", text: err.message || "Gagal menonaktifkan GA4." } }));
+    } finally {
+      setSaving("");
+    }
+  }
+
+  if (!active) return null;
+  if (loading || !settings || !form) {
+    return (
+      <div className={`p-8 text-center text-sm font-semibold text-neutral-500 ${glassCard}`}>
+        Memuat pengaturan tracking...
+      </div>
+    );
+  }
+
+  const environment = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "Development" : "Production";
+
+  return (
+    <div className="space-y-5">
+      {message && (
+        <div className="rounded-2xl border border-coral/20 bg-coral-light/80 px-3 py-2 text-xs font-semibold text-coral">{message}</div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TrackingSubNav active={subTab} onChange={setSubTab} />
+        <StatusBadge tone={environment === "Production" ? "mint" : "gold"}>Environment: {environment}</StatusBadge>
+      </div>
+
+      {subTab === "overview" && (
+        <div className="space-y-5">
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <TrackingStatusCard
+              icon={Target}
+              title="Meta Pixel"
+              tone="violet"
+              onConfigure={() => setSubTab("meta")}
+              rows={[
+                { label: "Browser tracking", value: settings.meta_browser_enabled ? "Aktif" : "Nonaktif", tone: settings.meta_browser_enabled ? "mint" : "" },
+                { label: "Pixel ID", value: settings.meta_pixel_id ? "Configured" : "Not configured", tone: settings.meta_pixel_id ? "mint" : "coral" },
+                { label: "Last test", value: settings.last_meta_test_at ? relativeTimeLabel(settings.last_meta_test_at) : "Belum pernah" },
+                { label: "Status", value: settings.last_meta_test_status || "-", tone: settings.last_meta_test_status === "success" ? "mint" : settings.last_meta_test_status === "failed" ? "coral" : "" },
+              ]}
+            />
+            <TrackingStatusCard
+              icon={Target}
+              title="Meta Conversions API"
+              tone="navy"
+              onConfigure={() => setSubTab("meta")}
+              configureLabel="Test Server Event"
+              rows={[
+                { label: "Server tracking", value: settings.meta_server_enabled ? "Aktif" : "Nonaktif", tone: settings.meta_server_enabled ? "mint" : "" },
+                { label: "Access token", value: settings.meta_access_token_configured ? "Configured" : "Not configured", tone: settings.meta_access_token_configured ? "mint" : "coral" },
+                { label: "Test event code", value: settings.meta_test_event_code_configured ? "Configured" : "Not configured" },
+                { label: "Last delivery", value: settings.last_meta_test_at ? relativeTimeLabel(settings.last_meta_test_at) : "Belum pernah" },
+              ]}
+            />
+            <TrackingStatusCard
+              icon={BarChart3}
+              title="Google Analytics 4"
+              tone="mint"
+              onConfigure={() => setSubTab("ga4")}
+              rows={[
+                { label: "Browser tracking", value: settings.ga4_browser_enabled ? "Aktif" : "Nonaktif", tone: settings.ga4_browser_enabled ? "mint" : "" },
+                { label: "Measurement ID", value: settings.ga4_measurement_id || "Not configured", tone: settings.ga4_measurement_id ? "mint" : "coral" },
+                { label: "Last detected status", value: settings.last_ga4_test_status || "-" },
+              ]}
+            />
+            <TrackingStatusCard
+              icon={BarChart3}
+              title="GA4 Measurement Protocol"
+              tone="gold"
+              onConfigure={() => setSubTab("ga4")}
+              configureLabel="Validate Payload"
+              rows={[
+                { label: "Server tracking", value: settings.ga4_server_enabled ? "Aktif" : "Nonaktif", tone: settings.ga4_server_enabled ? "mint" : "" },
+                { label: "API secret", value: settings.ga4_api_secret_configured ? "Configured" : "Not configured", tone: settings.ga4_api_secret_configured ? "mint" : "coral" },
+                { label: "Last validation", value: settings.last_ga4_test_at ? relativeTimeLabel(settings.last_ga4_test_at) : "Belum pernah" },
+              ]}
+            />
+            <TrackingStatusCard
+              icon={Cookie}
+              title="Consent"
+              tone="coral"
+              onConfigure={() => setSubTab("consent")}
+              rows={[
+                { label: "Banner", value: settings.consent_banner_enabled ? "Aktif" : "Nonaktif", tone: settings.consent_banner_enabled ? "mint" : "" },
+                { label: "Analytics default", value: settings.default_analytics_consent },
+                { label: "Marketing default", value: settings.default_marketing_consent },
+                { label: "Versi consent", value: settings.consent_version },
+              ]}
+            />
+          </div>
+          <div className="rounded-2xl border border-[#3525cd]/15 bg-[#e2dfff]/60 px-4 py-3 text-xs font-semibold leading-relaxed text-[#3525cd]">
+            Tab ini hanya mengelola pengiriman event, bukan dashboard ROAS/CTR/CPC. Lihat performa iklan/laporan langsung di Meta Events Manager dan Google Analytics.
+          </div>
+        </div>
+      )}
+
+      {subTab === "meta" && (
+        <IntegrationCard
+          id="tracking-meta"
+          icon={Target}
+          title="Meta Pixel & Conversions API"
+          description="Browser Pixel + server-side Conversions API dengan dedup event_id."
+          tone="violet"
+          enabled={form.meta_browser_enabled}
+          onToggle={(v) => setForm("meta_browser_enabled", v)}
+          feedback={feedback.meta}
+          footer={
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <SaveButton
+                label="Save Configuration"
+                saving={saving === "meta"}
+                onClick={() =>
+                  saveSection(
+                    ["meta_browser_enabled", "meta_server_enabled", "meta_pixel_id", "meta_graph_api_version", "exclude_admin_routes", "exclude_authenticated_admins", "tracking_debug_enabled"],
+                    {
+                      ...(metaAccessToken ? { meta_access_token: metaAccessToken } : {}),
+                      ...(metaTestEventCode ? { meta_test_event_code: metaTestEventCode } : {}),
+                    },
+                    "meta"
+                  )
+                }
+              />
+              <button type="button" onClick={handleTestMeta} disabled={saving === "meta_test"} className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-[#3525cd] transition active:scale-[0.98] disabled:opacity-60 ${glassButton}`}>
+                <FlaskConical size={15} />
+                {saving === "meta_test" ? "Mengirim..." : "Test Meta CAPI"}
+              </button>
+              <button type="button" onClick={() => handleClearSecret("meta_test_event_code", "meta")} disabled={saving === "meta"} className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-neutral-600 transition active:scale-[0.98] disabled:opacity-60 ${glassButton}`}>
+                Clear Test Event Code
+              </button>
+              <button
+                type="button"
+                onClick={handleDisableMeta}
+                disabled={saving === "meta"}
+                className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-coral transition active:scale-[0.98] disabled:opacity-60 ${glassButton}`}
+              >
+                Disable Integration
+              </button>
+            </div>
+          }
+        >
+          <FormRow>
+            <div>
+              <label className={labelClass}>Meta Pixel / Dataset ID</label>
+              <input className={inputClass} value={form.meta_pixel_id || ""} onChange={(e) => setForm("meta_pixel_id", e.target.value.replace(/\D/g, ""))} placeholder="123456789012345" />
+            </div>
+            <div>
+              <label className={labelClass}>Graph API Version</label>
+              <input className={inputClass} value={form.meta_graph_api_version || ""} onChange={(e) => setForm("meta_graph_api_version", e.target.value)} placeholder="v21.0" />
+            </div>
+          </FormRow>
+          <div>
+            <label className={labelClass}>Meta Access Token</label>
+            <input className={inputClass} type="password" value={metaAccessToken} onChange={(e) => setMetaAccessToken(e.target.value)} placeholder={settings.meta_access_token_configured ? "•••••••• (biarkan kosong jika tidak diganti)" : "Access token dari Meta Events Manager"} />
+            <SecretHint configured={settings.meta_access_token_configured} />
+          </div>
+          <div>
+            <label className={labelClass}>Meta Test Event Code</label>
+            <input className={inputClass} type="password" value={metaTestEventCode} onChange={(e) => setMetaTestEventCode(e.target.value)} placeholder={settings.meta_test_event_code_configured ? "•••••••• (biarkan kosong jika tidak diganti)" : "TEST12345"} />
+            <SecretHint configured={settings.meta_test_event_code_configured} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2.5">
+            <div>
+              <div className="text-xs font-bold text-navy">Enable Meta Conversions API (server)</div>
+              <div className="text-[11px] font-semibold text-neutral-500">Butuh Pixel ID + Access Token sebelum bisa diaktifkan.</div>
+            </div>
+            <Toggle checked={Boolean(form.meta_server_enabled)} onChange={(v) => setForm("meta_server_enabled", v)} />
+          </div>
+          <FormRow>
+            <div className="flex items-center justify-between gap-2 rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2.5">
+              <span className="text-xs font-bold text-navy">Exclude admin routes</span>
+              <Toggle checked={Boolean(form.exclude_admin_routes)} onChange={(v) => setForm("exclude_admin_routes", v)} />
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2.5">
+              <span className="text-xs font-bold text-navy">Exclude admin users</span>
+              <Toggle checked={Boolean(form.exclude_authenticated_admins)} onChange={(v) => setForm("exclude_authenticated_admins", v)} />
+            </div>
+          </FormRow>
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2.5">
+            <span className="text-xs font-bold text-navy">Enable debug logging</span>
+            <Toggle checked={Boolean(form.tracking_debug_enabled)} onChange={(v) => setForm("tracking_debug_enabled", v)} />
+          </div>
+          {metaTestResult && (
+            <div className={`rounded-2xl border px-3 py-2 text-xs font-semibold leading-relaxed ${metaTestResult.tone === "success" ? "border-mint/20 bg-mint-light/80 text-mint" : "border-coral/20 bg-coral-light/80 text-coral"}`} role="status" aria-live="polite">
+              {metaTestResult.text}
+            </div>
+          )}
+        </IntegrationCard>
+      )}
+
+      {subTab === "ga4" && (
+        <IntegrationCard
+          id="tracking-ga4"
+          icon={BarChart3}
+          title="Google Analytics 4"
+          description="gtag.js browser tracking + Measurement Protocol server-side."
+          tone="mint"
+          enabled={form.ga4_browser_enabled}
+          onToggle={(v) => setForm("ga4_browser_enabled", v)}
+          feedback={feedback.ga4}
+          footer={
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <SaveButton
+                label="Save Configuration"
+                saving={saving === "ga4"}
+                onClick={() =>
+                  saveSection(
+                    ["ga4_browser_enabled", "ga4_server_enabled", "ga4_measurement_id", "ga4_region", "tracking_debug_enabled"],
+                    ga4ApiSecret ? { ga4_api_secret: ga4ApiSecret } : {},
+                    "ga4"
+                  )
+                }
+              />
+              <button type="button" onClick={handleValidateGa4} disabled={saving === "ga4_validate"} className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-[#3525cd] transition active:scale-[0.98] disabled:opacity-60 ${glassButton}`}>
+                <FlaskConical size={15} />
+                {saving === "ga4_validate" ? "Memvalidasi..." : "Validate GA4 Payload"}
+              </button>
+              <button type="button" onClick={handleSendGa4Test} disabled={saving === "ga4_test"} className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-[#006c49] transition active:scale-[0.98] disabled:opacity-60 ${glassButton}`}>
+                {saving === "ga4_test" ? "Mengirim..." : "Send Realtime Test"}
+              </button>
+              <button type="button" onClick={handleDisableGa4} disabled={saving === "ga4"} className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-coral transition active:scale-[0.98] disabled:opacity-60 ${glassButton}`}>
+                Disable Integration
+              </button>
+            </div>
+          }
+        >
+          <FormRow>
+            <div>
+              <label className={labelClass}>GA4 Measurement ID</label>
+              <input className={inputClass} value={form.ga4_measurement_id || ""} onChange={(e) => setForm("ga4_measurement_id", e.target.value.toUpperCase())} placeholder="G-XXXXXXXXXX" />
+            </div>
+            <div>
+              <label className={labelClass}>Region Endpoint</label>
+              <select className={inputClass} value={form.ga4_region || "global"} onChange={(e) => setForm("ga4_region", e.target.value)}>
+                <option value="global">Global</option>
+                <option value="eu">EU</option>
+              </select>
+            </div>
+          </FormRow>
+          <div>
+            <label className={labelClass}>GA4 Measurement Protocol API Secret</label>
+            <input className={inputClass} type="password" value={ga4ApiSecret} onChange={(e) => setGa4ApiSecret(e.target.value)} placeholder={settings.ga4_api_secret_configured ? "•••••••• (biarkan kosong jika tidak diganti)" : "API secret dari GA4 Admin > Data Streams"} />
+            <SecretHint configured={settings.ga4_api_secret_configured} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2.5">
+            <div>
+              <div className="text-xs font-bold text-navy">Enable GA4 Measurement Protocol (server)</div>
+              <div className="text-[11px] font-semibold text-neutral-500">Butuh Measurement ID + API Secret sebelum bisa diaktifkan.</div>
+            </div>
+            <Toggle checked={Boolean(form.ga4_server_enabled)} onChange={(v) => setForm("ga4_server_enabled", v)} />
+          </div>
+          {form.tracking_debug_enabled && environment === "Production" && (
+            <div className="rounded-2xl border border-coral/20 bg-coral-light/80 px-3 py-2 text-xs font-semibold text-coral">
+              Peringatan: debug mode aktif di environment Production.
+            </div>
+          )}
+          <div className="rounded-2xl border border-neutral-border/70 bg-white/60 px-3 py-2 text-[11px] font-semibold leading-relaxed text-neutral-500">
+            Validation endpoint hanya memeriksa struktur payload — event validasi TIDAK masuk ke report GA4. Verifikasi API Secret dengan tombol "Send Realtime Test" lalu cek GA4 Realtime/DebugView.
+          </div>
+          {ga4ValidationResult && (
+            <div className="rounded-2xl border border-neutral-border/70 bg-white/70 p-3 text-xs font-semibold text-navy">
+              {ga4ValidationResult.length === 0 ? (
+                <span className="text-mint">Tidak ada pesan validasi — payload valid.</span>
+              ) : (
+                <ul className="space-y-1.5">
+                  {ga4ValidationResult.map((m, i) => (
+                    <li key={i} className="rounded-lg bg-coral-light/60 px-2 py-1.5 text-coral">{m.description || m.validationCode}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {ga4TestResult && (
+            <div className={`rounded-2xl border px-3 py-2 text-xs font-semibold leading-relaxed ${ga4TestResult.tone === "success" ? "border-mint/20 bg-mint-light/80 text-mint" : "border-coral/20 bg-coral-light/80 text-coral"}`} role="status" aria-live="polite">
+              {ga4TestResult.text}
+            </div>
+          )}
+        </IntegrationCard>
+      )}
+
+      {subTab === "consent" && (
+        <IntegrationCard
+          id="tracking-consent"
+          icon={Cookie}
+          title="Cookie Consent"
+          description="Necessary selalu aktif. Analytics mengontrol GA4, Marketing mengontrol Meta Pixel/CAPI."
+          tone="coral"
+          enabled={form.consent_banner_enabled}
+          onToggle={(v) => setForm("consent_banner_enabled", v)}
+          feedback={feedback.consent}
+          footer={
+            <SaveButton
+              label="Save Configuration"
+              saving={saving === "consent"}
+              onClick={() =>
+                saveSection(
+                  ["consent_banner_enabled", "consent_version", "default_analytics_consent", "default_marketing_consent", "privacy_policy_url", "cookie_policy_url", "banner_title", "banner_description"],
+                  {},
+                  "consent"
+                )
+              }
+            />
+          }
+        >
+          <FormRow>
+            <div>
+              <label className={labelClass}>Default Analytics Consent</label>
+              <select className={inputClass} value={form.default_analytics_consent || "denied"} onChange={(e) => setForm("default_analytics_consent", e.target.value)}>
+                <option value="denied">Denied (disarankan)</option>
+                <option value="granted">Granted</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Default Marketing Consent</label>
+              <select className={inputClass} value={form.default_marketing_consent || "denied"} onChange={(e) => setForm("default_marketing_consent", e.target.value)}>
+                <option value="denied">Denied (disarankan)</option>
+                <option value="granted">Granted</option>
+              </select>
+            </div>
+          </FormRow>
+          <div>
+            <label className={labelClass}>Consent Version</label>
+            <input className={inputClass} value={form.consent_version || "1"} onChange={(e) => setForm("consent_version", e.target.value)} placeholder="1" />
+            <div className="mt-1.5 text-[11px] font-semibold leading-relaxed text-neutral-500">Naikkan versi ini untuk meminta persetujuan ulang ke semua pengguna.</div>
+          </div>
+          <div>
+            <label className={labelClass}>Judul Banner</label>
+            <input className={inputClass} value={form.banner_title || ""} onChange={(e) => setForm("banner_title", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelClass}>Deskripsi Banner</label>
+            <textarea className={areaClass} value={form.banner_description || ""} onChange={(e) => setForm("banner_description", e.target.value)} />
+          </div>
+          <FormRow>
+            <div>
+              <label className={labelClass}>Privacy Policy URL</label>
+              <input className={inputClass} value={form.privacy_policy_url || ""} onChange={(e) => setForm("privacy_policy_url", e.target.value)} placeholder="/privacy" />
+            </div>
+            <div>
+              <label className={labelClass}>Cookie Policy URL</label>
+              <input className={inputClass} value={form.cookie_policy_url || ""} onChange={(e) => setForm("cookie_policy_url", e.target.value)} placeholder="/privacy" />
+            </div>
+          </FormRow>
+        </IntegrationCard>
+      )}
+
+      {subTab === "mapping" && mappingDraft && (
+        <div className={`p-5 ${glassPanel}`}>
+          <SectionTitle
+            icon={GitBranch}
+            title="Event Mapping"
+            subtitle="Registry typed internal event -> Meta/GA4. GA4 hanya boleh satu channel per event untuk mencegah double counting."
+            tone="violet"
+          />
+          <div className="space-y-3">
+            {Object.entries(mappingDraft).map(([name, def]) => (
+              <div key={name} className="rounded-2xl border border-neutral-border/70 bg-white/60 p-3.5">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-bold text-navy">{name}</div>
+                    <div className="text-[11px] font-medium text-neutral-500">{def.trigger}</div>
+                  </div>
+                  <Toggle checked={Boolean(def.enabled)} onChange={(v) => updateMappingDraft(name, { enabled: v })} />
+                </div>
+                <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Meta Event Name</label>
+                    <input className={inputClass} value={def.meta.eventName} onChange={(e) => updateMappingDraft(name, { meta: { eventName: e.target.value } })} />
+                    <select className={`${inputClass} mt-1.5`} value={def.meta.channel} onChange={(e) => updateMappingDraft(name, { meta: { channel: e.target.value } })}>
+                      {META_CHANNEL_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>GA4 Event Name</label>
+                    <input className={inputClass} value={def.ga4.eventName} onChange={(e) => updateMappingDraft(name, { ga4: { eventName: e.target.value } })} />
+                    <select className={`${inputClass} mt-1.5`} value={def.ga4.channel} onChange={(e) => updateMappingDraft(name, { ga4: { channel: e.target.value } })}>
+                      {GA4_CHANNEL_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {def.allowedParams.map((p) => (
+                    <span key={p} className="rounded-full bg-[#e2dfff]/70 px-2 py-0.5 text-[10px] font-semibold text-[#3525cd]">{p}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <InlineSaveFeedback feedback={feedback.mapping} />
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <SaveButton label="Simpan Event Mapping" saving={saving === "mapping"} onClick={handleSaveMapping} />
+            <button type="button" onClick={handleResetMapping} disabled={saving === "mapping_reset"} className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-neutral-600 transition active:scale-[0.98] disabled:opacity-60 ${glassButton}`}>
+              <RefreshCw size={15} className={saving === "mapping_reset" ? "animate-spin" : ""} />
+              Reset ke Default
+            </button>
+          </div>
+        </div>
+      )}
+
+      {subTab === "logs" && (
+        <div className={`p-5 ${glassPanel}`}>
+          <SectionTitle icon={ScrollText} title="Delivery Logs" subtitle="Log pengiriman server-side (Meta CAPI/GA4 MP). Retensi 30 hari, tidak berisi data mentah pengguna." tone="navy" />
+          <div className="mb-3 grid gap-2 sm:grid-cols-4">
+            <select className={inputClass} value={logFilters.provider} onChange={(e) => setLogFilters((prev) => ({ ...prev, provider: e.target.value }))}>
+              <option value="">Semua Provider</option>
+              <option value="meta">Meta</option>
+              <option value="ga4">GA4</option>
+            </select>
+            <select className={inputClass} value={logFilters.status} onChange={(e) => setLogFilters((prev) => ({ ...prev, status: e.target.value }))}>
+              <option value="">Semua Status</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+              <option value="skipped">Skipped</option>
+            </select>
+            <input className={inputClass} placeholder="Nama event" value={logFilters.event} onChange={(e) => setLogFilters((prev) => ({ ...prev, event: e.target.value }))} />
+            <button type="button" onClick={() => loadLogs(0)} className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-[#3525cd] ${glassButton}`}>
+              <RefreshCw size={15} className={logsLoading ? "animate-spin" : ""} />
+              Refresh
+            </button>
+          </div>
+
+          {logsError && <div className="mb-3 rounded-2xl border border-coral/20 bg-coral-light/80 px-3 py-2 text-xs font-semibold text-coral">{logsError}</div>}
+
+          {logsLoading ? (
+            <div className="py-10 text-center text-xs font-semibold text-neutral-500">Memuat delivery log...</div>
+          ) : logs.length === 0 ? (
+            <div className="py-10 text-center text-xs font-semibold text-neutral-500">Belum ada delivery log.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[10px] font-bold uppercase tracking-wide text-neutral-400">
+                    <th className="pb-2 pr-3">Time</th>
+                    <th className="pb-2 pr-3">Event</th>
+                    <th className="pb-2 pr-3">Provider</th>
+                    <th className="pb-2 pr-3">Channel</th>
+                    <th className="pb-2 pr-3">Status</th>
+                    <th className="pb-2 pr-3">Code</th>
+                    <th className="pb-2 pr-3">Attempts</th>
+                    <th className="pb-2">Env</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((row) => (
+                    <tr key={row.id} className="border-t border-neutral-border/60">
+                      <td className="py-2 pr-3 font-semibold text-neutral-500">{new Date(row.created_at).toLocaleString("id-ID")}</td>
+                      <td className="py-2 pr-3 font-semibold text-navy">{row.internal_event_name}</td>
+                      <td className="py-2 pr-3">{row.provider}</td>
+                      <td className="py-2 pr-3">{row.channel}</td>
+                      <td className="py-2 pr-3">
+                        <StatusBadge tone={row.delivery_status === "success" ? "mint" : row.delivery_status === "failed" ? "coral" : "gold"}>{row.delivery_status}</StatusBadge>
+                      </td>
+                      <td className="py-2 pr-3">{row.response_code ?? "-"}</td>
+                      <td className="py-2 pr-3">{row.attempt_count}</td>
+                      <td className="py-2">{row.environment}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <PaginationControls page={logPage} pageSize={PAGE_SIZE} total={logsTotal} onPageChange={loadLogs} />
+          <div className="mt-2 text-[11px] font-semibold text-neutral-400">Log otomatis dibersihkan setelah 30 hari.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [overview, setOverview] = useState(null);
@@ -1445,13 +2246,15 @@ export default function AdminPage({ user, onLogout }) {
   }
 
   const activeTabLabel = tabs.find((tab) => tab.id === activeTab)?.label || "Overview";
-  const pageTitle = activeTab === "overview" ? "Overview Dashboard" : activeTab === "finance" ? "Laporan Keuangan" : activeTab === "integrations" ? "Integrations" : activeTab === "data" ? "Data Management" : activeTab === "audit" ? "System Activity Feed" : activeTabLabel;
+  const pageTitle = activeTab === "overview" ? "Overview Dashboard" : activeTab === "finance" ? "Laporan Keuangan" : activeTab === "integrations" ? "Integrations" : activeTab === "tracking" ? "Tracking & Analytics" : activeTab === "data" ? "Data Management" : activeTab === "audit" ? "System Activity Feed" : activeTabLabel;
   const pageSubtitle = activeTab === "overview"
     ? "Real-time performance metrics dan ringkasan operasional FinePro."
     : activeTab === "finance"
     ? "Pantau uang masuk, biaya, dan profit/loss FinePro dalam bahasa sederhana."
     : activeTab === "integrations"
     ? "Connect and manage your third-party tools and internal automation engines."
+    : activeTab === "tracking"
+    ? "Kelola Meta Pixel/CAPI, GA4/Measurement Protocol, consent, event mapping, dan delivery log."
     : activeTab === "data"
     ? "Configure user profiles, household asset structures, and monitor system integrity."
     : activeTab === "audit"
@@ -2542,6 +3345,8 @@ export default function AdminPage({ user, onLogout }) {
           </section>
         </div>
       )}
+
+      {activeTab === "tracking" && <TrackingTab active={activeTab === "tracking"} adminEmail={user?.email} />}
 
       {activeTab === "data" && (
         <div className="space-y-6">

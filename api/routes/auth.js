@@ -10,6 +10,8 @@ import { OAuth2Client } from 'google-auth-library';
 import pool from '../db.js';
 import { generateToken, authMiddleware, adminRoleForEmail } from '../middleware/auth.js';
 import { sendMail, addSubscriberToList } from '../services/mailer.js';
+import { trackBusinessEvent } from '../lib/tracking/trackingService.js';
+import { linkToUser as linkAttributionToUser, getByAnonymousId } from '../lib/tracking/attribution.js';
 
 const router = Router();
 const isLocalDev = process.env.LOCAL_DEV === 'true';
@@ -311,9 +313,50 @@ router.post('/register', authLimiter, async (req, res) => {
     // Masukkan ke list Mailketing — best-effort, di-skip diam-diam kalau list_id belum diatur di Admin Console.
     addSubscriberToList({ email, name }).catch((err) => console.error('Gagal menambahkan ke list Mailketing:', err));
 
+    // Tracking: registrasi & trial FinePro mulai bersamaan (tidak ada endpoint start-trial terpisah).
+    // event_id sama dipakai browser (Meta Pixel) supaya CompleteRegistration/StartTrial ter-dedup dengan server (CAPI).
+    // Dijalankan setelah insert user & response terkirim — kegagalan tracking tidak pernah menggagalkan registrasi.
+    const registrationEventId = crypto.randomUUID();
+    const trialEventId = crypto.randomUUID();
+    const anonymousId = typeof req.body?.anonymousId === 'string' ? req.body.anonymousId.slice(0, 100) : null;
+    const requestContext = { clientIp: req.ip, userAgent: req.get('user-agent') || '' };
+
+    (async () => {
+      let attribution = null;
+      if (anonymousId) {
+        await linkAttributionToUser(anonymousId, newUser.id).catch(() => {});
+        attribution = await getByAnonymousId(anonymousId).catch(() => null);
+      }
+      const attributionParams = attribution
+        ? {
+            utm_source: attribution.first_utm_source,
+            utm_medium: attribution.first_utm_medium,
+            utm_campaign: attribution.first_utm_campaign,
+            utm_content: attribution.first_utm_content,
+            utm_term: attribution.first_utm_term,
+          }
+        : {};
+
+      await trackBusinessEvent({
+        eventName: 'registration_completed',
+        eventId: registrationEventId,
+        user: { id: newUser.id, email: newUser.email },
+        requestContext,
+        parameters: { method: 'email', source: 'web', ...attributionParams },
+      });
+      await trackBusinessEvent({
+        eventName: 'trial_started',
+        eventId: trialEventId,
+        user: { id: newUser.id, email: newUser.email },
+        requestContext,
+        parameters: { trial_days: TRIAL_DAYS, plan_id: 'trial', source: 'web' },
+      });
+    })().catch((err) => console.error('Tracking registrasi/trial gagal (diabaikan):', err.message));
+
     res.status(201).json({
       message: 'Registrasi berhasil! Cek email kamu untuk verifikasi sebelum bisa masuk.',
       verificationRequired: true,
+      trackingEventIds: { registration_completed: registrationEventId, trial_started: trialEventId },
     });
   } catch (err) {
     console.error('Register error:', err);

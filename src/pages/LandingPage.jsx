@@ -4,6 +4,7 @@
 // konsisten dengan sisa aplikasi dan tidak menambah dependency baru.
 
 import { useEffect, useState } from "react";
+import { useTracking, openPrivacySettings } from "../components/tracking/TrackingProvider.jsx";
 import {
   ArrowRight,
   BarChart3,
@@ -890,6 +891,7 @@ function Footer({ onLogin }) {
           <a href="/privacy" className="hover:text-violet">Kebijakan Privasi</a>
           <a href="mailto:hello@finepro.my.id" className="hover:text-violet">Kontak</a>
           <button type="button" onClick={onLogin} className="hover:text-violet">Masuk</button>
+          <button type="button" onClick={openPrivacySettings} className="hover:text-violet">Pengaturan Privasi</button>
         </nav>
       </Container>
       <Container className="mt-6 border-t border-neutral-border/60 pt-4">
@@ -902,6 +904,8 @@ function Footer({ onLogin }) {
 }
 
 export default function LandingPage({ onGetStarted, onLogin }) {
+  const { trackEvent } = useTracking() || {};
+
   // Smooth scroll khusus selama landing page aktif — dibersihkan lagi saat
   // unmount supaya tidak mengubah perilaku scroll di halaman app/dashboard.
   useEffect(() => {
@@ -910,10 +914,20 @@ export default function LandingPage({ onGetStarted, onLogin }) {
     return () => { document.documentElement.style.scrollBehavior = prev; };
   }, []);
 
+  useEffect(() => {
+    trackEvent?.("view_landing_page", { parameters: { content_name: "landing_page", page_path: "/" } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleGetStarted(source) {
+    trackEvent?.("primary_cta_clicked", { parameters: { content_name: source || "get_started", method: "cta" } });
+    onGetStarted();
+  }
+
   return (
     <div className="app-glow-bg min-h-screen overflow-x-hidden">
-      <NavBar onGetStarted={onGetStarted} onLogin={onLogin} />
-      <Hero onGetStarted={onGetStarted} />
+      <NavBar onGetStarted={() => handleGetStarted("navbar")} onLogin={onLogin} />
+      <Hero onGetStarted={() => handleGetStarted("hero")} />
       <PainPoints />
       <Solution />
       <Features />
@@ -924,7 +938,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
       <ExtraFeatures />
       <QuickFacts />
       <Roadmap />
-      <CtaSection onGetStarted={onGetStarted} />
+      <CtaSection onGetStarted={() => handleGetStarted("cta_section")} />
       <Faq />
       <Footer onLogin={onLogin} />
     </div>

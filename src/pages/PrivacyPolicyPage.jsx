@@ -116,7 +116,7 @@ const sections = [
     title: "8. Cookie dan Teknologi Pelacakan",
     body: [
       {
-        text: "Fine Pro dapat menggunakan cookie atau teknologi serupa untuk menjaga sesi login Anda tetap aktif dan mengingat preferensi tampilan. Cookie ini bersifat fungsional dan tidak digunakan untuk pelacakan iklan pihak ketiga. Anda dapat mengatur preferensi cookie melalui pengaturan browser."
+        text: "Fine Pro menggunakan cookie fungsional untuk menjaga sesi login Anda tetap aktif dan mengingat preferensi tampilan. Dengan persetujuan Anda, kami juga dapat menggunakan Google Analytics (GA4) untuk memahami penggunaan aplikasi, serta Meta Pixel/Conversions API untuk mengukur efektivitas iklan. Data finansial pribadi Anda (saldo, transaksi, nominal, isi struk) TIDAK PERNAH dikirim ke Google atau Meta dalam bentuk apa pun. Anda dapat menerima, menolak, atau mengatur preferensi cookie analitik/marketing kapan saja lewat banner consent atau tombol \"Pengaturan Privasi\" di footer, serta lewat pengaturan browser."
       }
     ]
   },

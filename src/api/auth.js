@@ -2,13 +2,16 @@
 // Autentikasi via API lokal (Express.js + JWT), menggantikan Supabase Auth.
 
 import { API_BASE, apiFetch, setToken, getToken } from "./apiClient.js";
+import { getOrCreateAnonymousId } from "../lib/tracking/anonymousId.js";
 
 // Registrasi tidak lagi auto-login — akun baru wajib verifikasi email dulu
 // (lihat verifyEmail di bawah), jadi respons di sini hanya berisi pesan info.
+// anonymousId dikirim supaya server bisa menautkan UTM first/last-touch yang
+// sudah tercatat sebelum registrasi (lihat api/lib/tracking/attribution.js).
 export async function signUp(email, password, name) {
   return apiFetch('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password, name }),
+    body: JSON.stringify({ email, password, name, anonymousId: getOrCreateAnonymousId() }),
   });
 }
 

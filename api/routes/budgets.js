@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { trackBusinessEvent } from '../lib/tracking/trackingService.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -38,6 +40,12 @@ router.put('/', async (req, res) => {
     const { category, amount } = req.body;
     if (!category) return res.status(400).json({ error: 'category wajib diisi' });
 
+    const existing = await pool.query(
+      'SELECT 1 FROM budgets WHERE household_id = $1 AND category = $2',
+      [householdId, category]
+    );
+    const isNewBudget = existing.rows.length === 0;
+
     await pool.query(
       `INSERT INTO budgets (household_id, category, amount)
        VALUES ($1, $2, $3)
@@ -47,6 +55,17 @@ router.put('/', async (req, res) => {
     );
 
     res.json({ success: true });
+
+    // Tracking: nilai budget TIDAK PERNAH dikirim ke provider (lihat allowlist parameter event ini). Hanya budget baru yang trigger event.
+    if (isNewBudget) {
+      trackBusinessEvent({
+        eventName: 'budget_created',
+        eventId: crypto.randomUUID(),
+        user: { id: req.user.userId, email: req.user.email },
+        requestContext: { clientIp: req.ip, userAgent: req.get('user-agent') || '' },
+        parameters: { source: 'web' },
+      });
+    }
   } catch (err) {
     console.error('Upsert budget error:', err);
     res.status(500).json({ error: 'Gagal menyimpan budget' });

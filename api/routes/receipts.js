@@ -10,6 +10,7 @@
 // (default Claude Haiku). Lihat api/services/receiptExtraction.js.
 
 import { Router } from 'express';
+import crypto from 'crypto';
 import multer from 'multer';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -18,6 +19,7 @@ import { isAiConfigured } from '../services/aiProvider.js';
 import { normalizeTransactionCategory } from '../services/categoryMatcher.js';
 import { extractText, tryRegexExtraction, parseReceiptText, sanitizeDate } from '../services/receiptExtraction.js';
 import { assertQuotaAvailable, getQuotaStatus, recordAiUsage } from '../services/aiUsage.js';
+import { trackBusinessEvent } from '../lib/tracking/trackingService.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -140,6 +142,15 @@ router.post('/scan', (req, res) => {
         type,
         suggested_category: category,
         note: parsed.note || ''
+      });
+
+      // Tracking: isi struk/merchant/nominal TIDAK PERNAH dikirim ke provider (lihat allowlist parameter event ini).
+      trackBusinessEvent({
+        eventName: 'receipt_uploaded',
+        eventId: crypto.randomUUID(),
+        user: { id: req.user.userId, email: req.user.email },
+        requestContext: { clientIp: req.ip, userAgent: req.get('user-agent') || '' },
+        parameters: { source: 'web' },
       });
     } catch (err) {
       console.error('Scan receipt error:', err);

@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { checkBudgetThreshold } from '../services/transactionEffects.js';
+import { trackBusinessEvent } from '../lib/tracking/trackingService.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -150,6 +152,14 @@ router.post('/', async (req, res) => {
       walletId = defaultWallet.rows[0]?.id || null;
     }
 
+    // Dihitung SEBELUM insert supaya "transaksi pertama household" terdeteksi akurat
+    // (setelah insert, COUNT selalu >= 1).
+    const countBefore = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM transactions WHERE household_id = $1',
+      [householdId]
+    );
+    const isFirstTransaction = countBefore.rows[0].count === 0;
+
     const result = await pool.query(
       `INSERT INTO transactions (household_id, created_by, date, type, category, amount, note, wallet_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -164,6 +174,17 @@ router.post('/', async (req, res) => {
       checkBudgetThreshold(householdId, category, date, Number(amount)).catch((err) =>
         console.error('Budget threshold check error:', err)
       );
+    }
+
+    // Tracking: nominal/kategori transaksi TIDAK PERNAH dikirim ke provider (lihat allowlist parameter event ini).
+    if (isFirstTransaction) {
+      trackBusinessEvent({
+        eventName: 'first_transaction_created',
+        eventId: crypto.randomUUID(),
+        user: { id: req.user.userId, email: req.user.email },
+        requestContext: { clientIp: req.ip, userAgent: req.get('user-agent') || '' },
+        parameters: { source: 'web' },
+      });
     }
   } catch (err) {
     console.error('Create transaction error:', err);

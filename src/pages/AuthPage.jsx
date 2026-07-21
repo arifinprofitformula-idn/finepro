@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../hooks/useAuth.js";
 import { translateAuthError, forgotPassword, resetPassword } from "../api/auth.js";
+import { useTracking } from "../components/tracking/TrackingProvider.jsx";
+import { trackMetaBrowserEvent } from "../lib/tracking/metaPixelClient.js";
 import {
   ArrowRight,
   BarChart3,
@@ -187,6 +189,8 @@ function SignupBenefits() {
 
 export default function AuthPage({ onBack, initialMode } = {}) {
   const { login, signup, loginWithGoogle, verifyEmailToken, resendVerificationEmail } = useAuth();
+  const { trackEvent } = useTracking() || {};
+  const registrationStartedRef = useRef(false);
   const [mode, setMode] = useState(initialMode === "signup" ? "signup" : "login"); // login | signup | forgot | reset | verify
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -284,11 +288,27 @@ export default function AuthPage({ onBack, initialMode } = {}) {
     setResendStatus("");
     try {
       if (mode === "signup") {
-        await signup(trimmedEmail, password, trimmedName);
+        if (!registrationStartedRef.current) {
+          registrationStartedRef.current = true;
+          trackEvent?.("registration_started", { parameters: { method: "email", source: "web" } });
+        }
+
+        const data = await signup(trimmedEmail, password, trimmedName);
         setEmail(trimmedEmail);
         setMsg("");
         setMsgType("");
         setSignupSubmitted(true);
+
+        // Meta browser CompleteRegistration/StartTrial pakai event_id YANG SAMA dengan
+        // yang sudah dikirim server (CAPI) untuk registrasi ini — lihat api/routes/auth.js.
+        // Hanya dikirim setelah registrasi benar-benar sukses (respons 201 diterima di sini).
+        const ids = data?.trackingEventIds;
+        if (ids?.registration_completed) {
+          trackMetaBrowserEvent({ eventName: "CompleteRegistration", eventId: ids.registration_completed, parameters: { method: "email" } });
+        }
+        if (ids?.trial_started) {
+          trackMetaBrowserEvent({ eventName: "StartTrial", eventId: ids.trial_started, parameters: {} });
+        }
       } else if (mode === "forgot") {
         await forgotPassword(trimmedEmail);
         setEmail(trimmedEmail);

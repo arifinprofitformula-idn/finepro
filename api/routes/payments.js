@@ -12,6 +12,8 @@ import { addSubscriberToList } from '../services/mailer.js';
 import { PLAN_MONTHS, getAllPlanPricing, getPlanPricing, getTopupPricing } from '../services/pricing.js';
 import { applyTopupCredit, getCreditBalances, grantInitialAiCredit } from '../services/aiCredits.js';
 import { getAiQuotaConfig } from '../services/aiUsage.js';
+import { trackBusinessEvent } from '../lib/tracking/trackingService.js';
+import { deriveEventId } from '../lib/tracking/idempotency.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROOF_UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'payment-proofs');
@@ -182,6 +184,28 @@ async function moveNewSubscriberToPaidList(householdId) {
   await addSubscriberToList({ email: owner.email, name: owner.name, listId: mailketing.paid_list_id });
 }
 
+async function trackSubscriptionPurchase(orderId, householdId, plan) {
+  const [paymentRow, ownerRow] = await Promise.all([
+    pool.query('SELECT amount FROM payments WHERE order_id = $1', [orderId]),
+    pool.query(
+      `SELECT u.id, u.email FROM users u
+       JOIN household_members hm ON hm.user_id = u.id
+       WHERE hm.household_id = $1 AND hm.role = 'owner' LIMIT 1`,
+      [householdId]
+    ),
+  ]);
+  const amount = Number(paymentRow.rows[0]?.amount || 0);
+  const owner = ownerRow.rows[0];
+  if (!owner) return;
+
+  await trackBusinessEvent({
+    eventName: 'subscription_purchased',
+    eventId: deriveEventId(orderId),
+    user: { id: owner.id, email: owner.email },
+    parameters: { currency: 'IDR', value: amount, plan_id: plan, transaction_id: orderId, method: 'checkout' },
+  });
+}
+
 export async function applyPaymentStatus(payment, nextStatus) {
   if (!payment || payment.status === 'paid' || nextStatus === 'pending') {
     return payment?.status || 'pending';
@@ -259,6 +283,15 @@ export async function applyPaymentStatus(payment, nextStatus) {
         console.error('Gagal memindahkan subscriber ke list Mailketing paid:', err)
       );
     }
+
+    // Tracking: value HANYA nominal pembelian paket FinePro (bukan data keuangan pengguna).
+    // event_id diturunkan deterministik dari order_id (bukan random) supaya browser (Meta Pixel,
+    // di halaman /payment/finish) dan server (dipanggil dari webhook async, tanpa req/res user)
+    // menghasilkan event_id IDENTIK tanpa perlu koordinasi tambahan — dedup Meta tetap valid.
+    // transaction_id = order_id juga menjamin idempotency di sisi Meta/GA4 kalau webhook terpanggil dua kali.
+    trackSubscriptionPurchase(payment.order_id, payment.household_id, payment.plan).catch((err) =>
+      console.error('Tracking subscription_purchased gagal (diabaikan):', err.message)
+    );
 
     return 'paid';
   }
