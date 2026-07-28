@@ -130,4 +130,86 @@ router.delete('/drafts/:id', async (req, res) => {
   }
 });
 
+// POST /api/transaction-analysis/feedback — user feedback for learning
+router.post('/feedback', authMiddleware, async (req, res) => {
+  try {
+    const { feedback_type, draft_id, transaction_id, corrected_fields } = req.body;
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.status(400).json({ error: 'Belum ada household' });
+
+    // If draft_id is provided, load the original analysis
+    let originalAnalysis = null;
+    let ocrText = '';
+    if (draft_id) {
+      const draft = await pool.query(
+        'SELECT analysis FROM transaction_analysis_drafts WHERE id = $1 AND household_id = $2',
+        [draft_id, householdId]
+      );
+      if (draft.rows.length > 0) {
+        originalAnalysis = draft.rows[0].analysis;
+        ocrText = originalAnalysis?.ocr_text || '';
+      }
+    } else if (transaction_id) {
+      // Load from transaction — no analysis stored, reconstruct what we can
+      const tx = await pool.query(
+        'SELECT category, amount, note, type as transaction_type, date as transaction_date FROM transactions WHERE id = $1 AND household_id = $2',
+        [transaction_id, householdId]
+      );
+      if (tx.rows.length > 0) {
+        originalAnalysis = tx.rows[0];
+      }
+    }
+
+    const { processFeedback } = await import('../services/feedbackLearning.js');
+    const result = await processFeedback({
+      householdId,
+      userId: req.user.userId,
+      feedbackType: feedback_type,
+      originalAnalysis,
+      correctedFields: corrected_fields || {},
+      channel: 'web',
+      draftId: draft_id,
+      transactionId: transaction_id,
+      ocrText,
+    });
+
+    res.json({
+      success: true,
+      result,
+      message: result.personal_rule
+        ? 'Terima kasih! Feedback diterima dan sistem belajar untuk kasus serupa ke depan.'
+        : 'Terima kasih! Feedback diterima.'
+    });
+  } catch (err) {
+    console.error('Feedback error:', err);
+    res.status(500).json({ error: err.message || 'Gagal memproses feedback' });
+  }
+});
+
+// POST /api/transaction-analysis/bootstrap — learn from existing transaction history
+router.post('/bootstrap', authMiddleware, async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.status(400).json({ error: 'Belum ada household' });
+
+    const { bootstrapWalletIdentifiers } = await import('../services/walletIdentifiers.js');
+    const { learnFromHistory } = await import('../services/merchantMapping.js');
+
+    const [walletResult, merchantResult] = await Promise.all([
+      bootstrapWalletIdentifiers(householdId).catch(() => ({ scanned: 0, created: 0 })),
+      learnFromHistory(householdId).catch(() => ({ scanned: 0, created: 0 })),
+    ]);
+
+    res.json({
+      success: true,
+      wallet_identifiers: walletResult,
+      merchant_mappings: merchantResult,
+      message: `Bootstrap selesai. ${walletResult.created} wallet identifier + ${merchantResult.created} merchant mapping baru.`,
+    });
+  } catch (err) {
+    console.error('Bootstrap error:', err);
+    res.status(500).json({ error: 'Gagal bootstrap' });
+  }
+});
+
 export default router;
