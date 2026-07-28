@@ -240,124 +240,104 @@ async function processReceipt(req, res) {
         });
       }
 
-      const rawText = await extractText(req.file.buffer);
-      let parsed = tryRegexExtraction(rawText);
-      let usedAi = false;
+      // --- UNIFIED ANALYSIS (same engine as WhatsApp + Web) ---
+      const { analyzeTransactionImage, confirmDraft } = await import('../services/transactionImageAnalysisService.js');
+      const { resolveWalletId } = await import('../services/walletResolver.js');
 
-      if (!parsed) {
-        if (!isAiConfigured(aiConfig)) {
-          return res.status(503).json({
-            error: 'AI belum dikonfigurasi',
-            message: 'Foto tidak bisa dibaca otomatis dan fitur AI belum dikonfigurasi. Catat manual dulu di web.',
-          });
-        }
-        try {
-          usedAi = true;
-          parsed = await parseReceiptText(rawText, { aiConfig });
-        } catch (parseErr) {
-          console.error('Telegram parse receipt error:', parseErr);
-          await recordAiUsage({
-            householdId,
-            userId: user.id,
-            feature: 'receipt_scan',
-            source: 'telegram',
-            usedAi,
-            provider: usedAi ? aiConfig.provider : null,
-            model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
-            metadata: { status: 'failed', reason: 'ai_parse_error', telegram_id: telegramId },
-          });
-          await pool.query(
-            `INSERT INTO telegram_receipts (household_id, created_by, telegram_id, raw_text, status, error_message)
-             VALUES ($1, $2, $3, $4, 'failed', $5)`,
-            [householdId, user.id, telegramId, rawText, 'Gagal membaca hasil dari AI']
-          );
-          return res.status(502).json({
-            error: 'Gagal membaca foto',
-            message: 'Foto tidak terbaca dengan jelas. Coba foto ulang dengan pencahayaan lebih baik, atau catat manual di web.',
-          });
-        }
+      let analysis;
+      try {
+        analysis = await analyzeTransactionImage({
+          imageBuffer: req.file.buffer,
+          mimeType: req.file.mimetype,
+          userId: user.id,
+          householdId,
+          channel: 'telegram',
+        });
+      } catch (aiErr) {
+        console.error('Telegram unified analysis error:', aiErr);
+        await recordAiUsage({
+          householdId, userId: user.id, feature: 'receipt_scan', source: 'telegram',
+          usedAi: true, provider: aiConfig?.provider || null,
+          model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+          metadata: { status: 'failed', reason: 'analysis_error', telegram_id: telegramId },
+        });
+        return res.status(502).json({
+          error: 'Gagal membaca foto',
+          message: 'Foto tidak terbaca dengan jelas. Coba foto ulang dengan pencahayaan lebih baik, atau catat manual di web.',
+        });
       }
 
-      const amount = Number(parsed.amount) || 0;
-      const date = sanitizeDate(parsed.date, rawText);
-      const type = parsed.type === 'income' ? 'income' : 'expense';
-      const docType = parsed.document_type === 'transfer' ? 'transfer' : 'receipt';
-      const category = await normalizeTransactionCategory(
-        householdId,
-        type,
-        `${parsed.suggested_category || ''} ${parsed.note || ''}`.trim() || (type === 'income' ? 'Transfer Masuk' : 'Lainnya')
-      );
-      const note = parsed.note || null;
-
-      if (amount <= 0) {
+      const amount = analysis.amount;
+      if (!amount || amount <= 0) {
         await recordAiUsage({
-          householdId,
-          userId: user.id,
-          feature: 'receipt_scan',
-          source: 'telegram',
-          usedAi,
-          provider: usedAi ? aiConfig.provider : null,
-          model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
+          householdId, userId: user.id, feature: 'receipt_scan', source: 'telegram',
+          usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
+          model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
           metadata: { status: 'failed', reason: 'amount_not_found', telegram_id: telegramId },
         });
-        await pool.query(
-          `INSERT INTO telegram_receipts (household_id, created_by, telegram_id, doc_type, raw_text, extracted, status, error_message)
-           VALUES ($1, $2, $3, $4, $5, $6, 'failed', $7)`,
-          [householdId, user.id, telegramId, docType, rawText, JSON.stringify(parsed), 'Nominal tidak terbaca']
-        );
         return res.status(422).json({
           error: 'Nominal tidak terbaca',
           message: 'Nominal di foto tidak terbaca. Coba foto yang lebih jelas, atau catat manual di web.',
         });
       }
 
-      await fs.mkdir(UPLOAD_DIR, { recursive: true });
-      const filename = `${crypto.randomUUID()}.jpg`;
-      const imagePath = path.join(UPLOAD_DIR, filename);
-      await fs.writeFile(imagePath, req.file.buffer);
-      const publicImagePath = `/uploads/telegram/${filename}`;
+      // Auto-confirm if confidence is high enough
+      let transaction;
+      if (!analysis.needs_confirmation && (analysis.overall_confidence || 0) >= 0.9) {
+        const result = await confirmDraft(analysis.draft_id, user.id, householdId);
+        transaction = result.transaction;
+      } else {
+        // Save image for later confirmation
+        await fs.mkdir(UPLOAD_DIR, { recursive: true });
+        const filename = `${crypto.randomUUID()}.jpg`;
+        const imagePath = path.join(UPLOAD_DIR, filename);
+        await fs.writeFile(imagePath, req.file.buffer);
 
-      const walletId = await resolveDefaultWalletId(householdId);
+        // Return draft for user confirmation via inline buttons
+        const typeLabel = analysis.transaction_type === 'income' ? 'Pemasukan'
+          : analysis.transaction_type === 'transfer' ? 'Transfer'
+          : 'Pengeluaran';
+        const amountLabel = new Intl.NumberFormat('id-ID').format(amount);
+        const walletLabel = analysis.source_wallet_name || 'belum diketahui';
+        const categoryLabel = analysis.category || 'belum dikategorikan';
+        const merchantLabel = analysis.merchant ? ` — ${analysis.merchant}` : '';
 
-      const txResult = await pool.query(
-        `INSERT INTO transactions (household_id, created_by, date, type, category, amount, note, wallet_id, source)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'telegram')
-         RETURNING id, to_char(date, 'YYYY-MM-DD') as date, type, category, amount, note`,
-        [householdId, user.id, date, type, category, amount, note, walletId]
-      );
-      const transaction = txResult.rows[0];
+        const confirmFields = analysis.confirmation_fields || [];
+        let needsMsg = '';
+        if (confirmFields.length > 0) {
+          needsMsg = '\n\nBeberapa data belum pasti. Silakan konfirmasi di web finepro.my.id.';
+        }
 
-      if (type === 'expense') {
-        checkBudgetThreshold(householdId, category, date, amount).catch((err) =>
-          console.error('Telegram budget threshold check error:', err)
-        );
+        await recordAiUsage({
+          householdId, userId: user.id, feature: 'receipt_scan', source: 'telegram',
+          usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
+          model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+          metadata: { status: 'draft', draft_id: analysis.draft_id, telegram_id: telegramId },
+        });
+
+        return res.json({
+          draft_id: analysis.draft_id,
+          needs_confirmation: analysis.needs_confirmation,
+          confirmation_fields: confirmFields,
+          message: `Tercatat (draft): ${typeLabel} Rp${amountLabel} — ${categoryLabel}${merchantLabel} menggunakan ${walletLabel} pada ${analysis.transaction_date}.${needsMsg}`,
+        });
       }
 
-      await pool.query(
-        'INSERT INTO receipt_scans (household_id, created_by) VALUES ($1, $2)',
-        [householdId, user.id]
-      );
+      // Transaction saved — record usage
       await recordAiUsage({
-        householdId,
-        userId: user.id,
-        feature: 'receipt_scan',
-        source: 'telegram',
-        usedAi,
-        provider: usedAi ? aiConfig.provider : null,
-        model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
-        metadata: { status: 'success', parser: parsed.source || (usedAi ? 'ai' : 'regex'), telegram_id: telegramId, transaction_id: transaction.id },
+        householdId, userId: user.id, feature: 'receipt_scan', source: 'telegram',
+        usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
+        model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+        metadata: { status: 'success', draft_id: analysis.draft_id, transaction_id: transaction.id, telegram_id: telegramId },
       });
-      await pool.query(
-        `INSERT INTO telegram_receipts (household_id, created_by, telegram_id, doc_type, image_path, raw_text, extracted, transaction_id, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'success')`,
-        [householdId, user.id, telegramId, docType, publicImagePath, rawText, JSON.stringify(parsed), transaction.id]
-      );
+      await pool.query('INSERT INTO receipt_scans (household_id, created_by) VALUES ($1, $2)', [householdId, user.id]);
 
-      const typeLabel = type === 'income' ? 'Pemasukan' : 'Pengeluaran';
-      const amountLabel = new Intl.NumberFormat('id-ID').format(amount);
+      const typeLabel = transaction.type === 'income' ? 'Pemasukan' : 'Pengeluaran';
+      const amountLabel = new Intl.NumberFormat('id-ID').format(Number(transaction.amount));
+      const note = transaction.note || '';
       res.json({
         transaction,
-        message: `Tercatat: ${typeLabel} Rp${amountLabel} — ${category}${note ? ` (${note})` : ''} pada ${date}.`,
+        message: `Tercatat: ${typeLabel} Rp${amountLabel} — ${transaction.category}${note ? ` (${note})` : ''} pada ${transaction.date}.`,
       });
     } catch (err) {
       console.error('Telegram receipt error:', err);

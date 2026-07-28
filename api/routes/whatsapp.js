@@ -196,145 +196,104 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
 
   const aiConfig = await getSetting('ai');
 
-  // OCR
-  let rawText;
+  // --- UNIFIED ANALYSIS (same engine as Telegram + Web) ---
+  const { analyzeTransactionImage, confirmDraft } = await import('../services/transactionImageAnalysisService.js');
+
+  let analysis;
   try {
-    rawText = await extractText(imageBuffer);
-  } catch (ocrErr) {
-    console.error('WhatsApp OCR error:', ocrErr);
+    analysis = await analyzeTransactionImage({
+      imageBuffer,
+      mimeType,
+      userId: user.id,
+      householdId,
+      channel: 'whatsapp',
+    });
+  } catch (aiErr) {
+    console.error('WhatsApp unified analysis error:', aiErr);
     await pool.query(
       `INSERT INTO whatsapp_receipts (household_id, created_by, whatsapp_id, raw_text, status, error_message)
        VALUES ($1, $2, $3, $4, 'failed', $5)`,
-      [householdId, user.id, whatsappId, '', 'Gagal membaca teks dari gambar']
+      [householdId, user.id, whatsappId, '', 'OCR atau AI gagal membaca gambar']
     );
     return {
-      status: 'ocr_failed',
-      message: 'Foto tidak terbaca. Coba foto ulang dengan pencahayaan lebih baik, atau catat manual di web.',
+      status: 'parse_failed',
+      message: 'Foto tidak terbaca dengan jelas. Coba foto ulang dengan pencahayaan lebih baik, atau catat manual di web.',
     };
   }
 
-  // Parse — regex dulu, fallback ke AI
-  let parsed = tryRegexExtraction(rawText);
-  let usedAi = false;
-
-  if (!parsed) {
-    if (!isAiConfigured(aiConfig)) {
-      return {
-        status: 'ai_not_configured',
-        message: 'Foto tidak bisa dibaca otomatis dan fitur AI belum dikonfigurasi. Catat manual dulu di web.',
-      };
-    }
-    try {
-      usedAi = true;
-      parsed = await parseReceiptText(rawText, { aiConfig });
-    } catch (parseErr) {
-      console.error('WhatsApp AI parse error:', parseErr);
-      await recordAiUsage({
-        householdId,
-        userId: user.id,
-        feature: 'receipt_scan',
-        source: 'whatsapp',
-        usedAi,
-        provider: aiConfig.provider || null,
-        model: aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null,
-        metadata: { status: 'failed', reason: 'ai_parse_error', whatsapp_id: whatsappId },
-      });
-      await pool.query(
-        `INSERT INTO whatsapp_receipts (household_id, created_by, whatsapp_id, raw_text, status, error_message)
-         VALUES ($1, $2, $3, $4, 'failed', $5)`,
-        [householdId, user.id, whatsappId, rawText, 'Gagal membaca hasil dari AI']
-      );
-      return {
-        status: 'parse_failed',
-        message: 'Foto tidak terbaca dengan jelas. Coba foto ulang dengan pencahayaan lebih baik, atau catat manual di web.',
-      };
-    }
-  }
-
-  const amount = Number(parsed.amount) || 0;
-  const date = sanitizeDate(parsed.date, rawText);
-  const type = parsed.type === 'income' ? 'income' : 'expense';
-  const docType = parsed.document_type === 'transfer' ? 'transfer' : 'receipt';
-  const category = await normalizeTransactionCategory(
-    householdId,
-    type,
-    `${parsed.suggested_category || ''} ${parsed.note || ''}`.trim() || (type === 'income' ? 'Transfer Masuk' : 'Lainnya')
-  );
-  const note = parsed.note || null;
-
-  if (amount <= 0) {
+  const amount = analysis.amount;
+  if (!amount || amount <= 0) {
     await recordAiUsage({
-      householdId,
-      userId: user.id,
-      feature: 'receipt_scan',
-      source: 'whatsapp',
-      usedAi,
-      provider: usedAi ? aiConfig.provider : null,
-      model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
+      householdId, userId: user.id, feature: 'receipt_scan', source: 'whatsapp',
+      usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
+      model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
       metadata: { status: 'failed', reason: 'amount_not_found', whatsapp_id: whatsappId },
     });
-    await pool.query(
-      `INSERT INTO whatsapp_receipts (household_id, created_by, whatsapp_id, doc_type, raw_text, extracted, status, error_message)
-       VALUES ($1, $2, $3, $4, $5, $6, 'failed', $7)`,
-      [householdId, user.id, whatsappId, docType, rawText, JSON.stringify(parsed), 'Nominal tidak terbaca']
-    );
     return {
       status: 'amount_not_found',
       message: 'Nominal di foto tidak terbaca. Coba foto yang lebih jelas, atau catat manual di web.',
     };
   }
 
-  // Simpan gambar
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  const filename = `${crypto.randomUUID()}.jpg`;
-  const imagePath = path.join(UPLOAD_DIR, filename);
-  await fs.writeFile(imagePath, imageBuffer);
-  const publicImagePath = `/uploads/whatsapp/${filename}`;
+  // Auto-confirm if confidence is high enough
+  let transaction;
+  if (!analysis.needs_confirmation && (analysis.overall_confidence || 0) >= 0.9) {
+    const result = await confirmDraft(analysis.draft_id, user.id, householdId);
+    transaction = result.transaction;
+  } else {
+    // Save image for later
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    const filename = `${crypto.randomUUID()}.jpg`;
+    const imagePath = path.join(UPLOAD_DIR, filename);
+    await fs.writeFile(imagePath, imageBuffer);
 
-  const walletId = await resolveDefaultWalletId(householdId);
+    await recordAiUsage({
+      householdId, userId: user.id, feature: 'receipt_scan', source: 'whatsapp',
+      usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
+      model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+      metadata: { status: 'draft', draft_id: analysis.draft_id, whatsapp_id: whatsappId },
+    });
 
-  // Insert transaksi
-  const txResult = await pool.query(
-    `INSERT INTO transactions (household_id, created_by, date, type, category, amount, note, wallet_id, source)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'whatsapp')
-     RETURNING id, to_char(date, 'YYYY-MM-DD') as date, type, category, amount, note`,
-    [householdId, user.id, date, type, category, amount, note, walletId]
-  );
-  const transaction = txResult.rows[0];
+    const typeLabel = analysis.transaction_type === 'income' ? 'Pemasukan'
+      : analysis.transaction_type === 'transfer' ? 'Transfer'
+      : 'Pengeluaran';
+    const amountLabel = new Intl.NumberFormat('id-ID').format(amount);
+    const walletLabel = analysis.source_wallet_name || 'belum diketahui';
+    const categoryLabel = analysis.category || 'belum dikategorikan';
+    const merchantLabel = analysis.merchant ? ` — ${analysis.merchant}` : '';
+    const needsMsg = (analysis.needs_confirmation)
+      ? '\n\nBeberapa data belum pasti. Silakan konfirmasi di web finepro.my.id.'
+      : '';
 
-  if (type === 'expense') {
-    checkBudgetThreshold(householdId, category, date, amount).catch((err) =>
-      console.error('WhatsApp budget threshold check error:', err)
-    );
+    return {
+      status: 'draft',
+      draft_id: analysis.draft_id,
+      message: `Tercatat (draft): ${typeLabel} Rp${amountLabel} — ${categoryLabel}${merchantLabel} menggunakan ${walletLabel} pada ${analysis.transaction_date}.${needsMsg}`,
+    };
   }
 
-  await pool.query(
-    'INSERT INTO receipt_scans (household_id, created_by) VALUES ($1, $2)',
-    [householdId, user.id]
-  );
+  // Transaction saved
+  await pool.query('INSERT INTO receipt_scans (household_id, created_by) VALUES ($1, $2)', [householdId, user.id]);
   await recordAiUsage({
-    householdId,
-    userId: user.id,
-    feature: 'receipt_scan',
-    source: 'whatsapp',
-    usedAi,
-    provider: usedAi ? aiConfig.provider : null,
-    model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
-    metadata: { status: 'success', parser: parsed.source || (usedAi ? 'ai' : 'regex'), whatsapp_id: whatsappId, transaction_id: transaction.id },
+    householdId, userId: user.id, feature: 'receipt_scan', source: 'whatsapp',
+    usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
+    model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+    metadata: { status: 'success', draft_id: analysis.draft_id, transaction_id: transaction.id, whatsapp_id: whatsappId },
   });
   await pool.query(
     `INSERT INTO whatsapp_receipts (household_id, created_by, whatsapp_id, doc_type, image_path, raw_text, extracted, transaction_id, status)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'success')`,
-    [householdId, user.id, whatsappId, docType, publicImagePath, rawText, JSON.stringify(parsed), transaction.id]
+    [householdId, user.id, whatsappId, 'receipt', '', '', JSON.stringify(analysis), transaction.id]
   );
 
-  const typeLabel = type === 'income' ? 'Pemasukan' : 'Pengeluaran';
-  const amountLabel = new Intl.NumberFormat('id-ID').format(amount);
+  const typeLabel = transaction.type === 'income' ? 'Pemasukan' : 'Pengeluaran';
+  const amountLabel = new Intl.NumberFormat('id-ID').format(Number(transaction.amount));
+  const note = transaction.note || '';
 
   return {
     status: 'success',
     transaction,
-    message: `Tercatat: ${typeLabel} Rp${amountLabel} — ${category}${note ? ` (${note})` : ''} pada ${date}.`,
+    message: `Tercatat: ${typeLabel} Rp${amountLabel} — ${transaction.category}${note ? ` (${note})` : ''} pada ${transaction.date}.`,
   };
 }
 
