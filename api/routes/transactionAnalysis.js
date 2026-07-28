@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '../middleware/auth.js';
-import { analyzeTransactionImage, confirmDraft, cancelDraft } from '../services/transactionImageAnalysisService.js';
+import { analyzeTransactionImage, confirmDraft, cancelDraft, analyzeWithPreprocessing } from '../services/transactionImageAnalysisService.js';
 import pool from '../db.js';
 
 const router = Router();
@@ -32,7 +32,7 @@ async function getUserHouseholdId(userId) {
 
 /**
  * POST /api/transaction-analysis/image
- * Analyze a transaction image and return structured draft.
+ * Analyze a transaction image WITH full preprocessing pipeline (Sprint 3).
  * Body: multipart with 'image' file, optional 'conversation_context' text.
  */
 router.post('/image', (req, res) => {
@@ -44,9 +44,9 @@ router.post('/image', (req, res) => {
       const householdId = await getUserHouseholdId(req.user.userId);
       if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
 
-      const result = await analyzeTransactionImage({
+      // Use preprocessing wrapper (Sprint 3)
+      const result = await analyzeWithPreprocessing({
         imageBuffer: req.file.buffer,
-        mimeType: req.file.mimetype,
         userId: req.user.userId,
         householdId,
         channel: 'web',

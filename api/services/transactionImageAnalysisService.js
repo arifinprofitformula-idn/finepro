@@ -687,6 +687,161 @@ export async function confirmDraft(draftId, userId, householdId, corrections = {
 
 // ---------- Cancel Draft ----------
 
+
+// ── Sprint 3: Preprocessing Pipeline Wrapper ──────────────────
+
+/**
+ * Analyze transaction image WITH full preprocessing pipeline.
+ *
+ * Pipeline:
+ * 1. Detect multiple transactions
+ * 2. Check image quality
+ * 3. Preprocess (normalize, contrast, denoise, crop)
+ * 4. Crop document to receipt area
+ * 5. Analyze each (OCR → regex → AI)
+ * 6. Fallback to vision model if needed
+ *
+ * @param {object} params
+ * @param {Buffer} params.imageBuffer
+ * @param {string} params.userId
+ * @param {string} params.householdId
+ * @param {string} params.channel
+ * @returns {object} single transaction analysis or { transactions: [...] } for multiple
+ */
+export async function analyzeWithPreprocessing({
+  imageBuffer,
+  userId,
+  householdId,
+  channel = 'web',
+  conversationContext = null,
+  config = {},
+}) {
+  // 1. Check for multiple transactions
+  const { detectMultipleTransactions } = await import('./multiTransactionDetector.js');
+  const multiResult = await detectMultipleTransactions(imageBuffer);
+
+  if (multiResult.count > 1) {
+    // Analyze each receipt separately
+    const results = [];
+    for (const receipt of multiResult.receipts) {
+      try {
+        const result = await analyzeTransactionImage({
+          imageBuffer: receipt.buffer,
+          mimeType: 'image/png',
+          userId,
+          householdId,
+          channel,
+          conversationContext,
+        });
+        results.push({
+          receipt_index: receipt.index,
+          confidence: receipt.confidence,
+          ...result,
+        });
+      } catch (e) {
+        console.error(`Error analyzing receipt ${receipt.index}:`, e);
+        results.push({
+          receipt_index: receipt.index,
+          error: e.message,
+        });
+      }
+    }
+    return { transaction_count: multiResult.count, transactions: results };
+  }
+
+  // 2. Single receipt - preprocess
+  const { preprocessImage } = await import('./imagePreprocessor.js');
+  const { assessImageQuality, getQualityRecommendation } = await import('./imageQualityScore.js');
+  const { autoCropReceipt } = await import('./documentCropper.js');
+
+  // Check quality
+  const qualityAssessment = await assessImageQuality(imageBuffer);
+  let processingBuffer = imageBuffer;
+
+  // Recommend to user if quality is poor
+  if (qualityAssessment.recommendation === 'reject') {
+    const recommendation = await getQualityRecommendation(imageBuffer);
+    return {
+      error: recommendation.message,
+      quality_score: qualityAssessment.score,
+      quality_issues: qualityAssessment.issues,
+    };
+  }
+
+  // Preprocess if quality is acceptable
+  if (qualityAssessment.score >= 50) {
+    try {
+      const preprocessed = await preprocessImage(imageBuffer, {
+        normalize: true,
+        enhanceContrast: true,
+        denoise: qualityAssessment.score < 70,
+        autoRotate: true,
+        autoScale: true,
+      });
+      processingBuffer = preprocessed.buffer;
+    } catch (e) {
+      console.error('Preprocessing error (non-fatal):', e);
+      // Continue with original
+    }
+  }
+
+  // 3. Auto-crop if needed
+  try {
+    const cropResult = await autoCropReceipt(processingBuffer);
+    if (cropResult.crop_applied) {
+      processingBuffer = cropResult.buffer;
+    }
+  } catch (e) {
+    console.error('Cropping error (non-fatal):', e);
+  }
+
+  // 4. Analyze with preprocessing metadata
+  try {
+    const result = await analyzeTransactionImage({
+      imageBuffer: processingBuffer,
+      mimeType: 'image/png',
+      userId,
+      householdId,
+      channel,
+      conversationContext,
+    });
+    
+    // Add preprocessing metadata
+    result.preprocessing_applied = true;
+    result.quality_score = qualityAssessment.score;
+    result.quality_recommendation = qualityAssessment.recommendation;
+    
+    return result;
+  } catch (analyzeError) {
+    // 5. Fallback to vision if regular analysis fails
+    if (config.enable_vision_fallback !== false) {
+      try {
+        const { analyzeReceiptWithVision, isVisionResultUsable } = await import('./visionFallback.js');
+        
+        const visionResult = await analyzeReceiptWithVision(
+          processingBuffer,
+          config,
+          { channel }
+        );
+        
+        if (visionResult.success && isVisionResultUsable(visionResult.analysis)) {
+          return {
+            ...visionResult.analysis,
+            used_vision_fallback: true,
+            vision_provider: visionResult.used_provider,
+            original_error: analyzeError.message,
+          };
+        }
+      } catch (visionError) {
+        console.error('Vision fallback error:', visionError);
+      }
+    }
+    
+    // Both analysis and vision failed
+    throw analyzeError;
+  }
+}
+
 export async function cancelDraft(draftId, householdId) {
   const result = await pool.query(
     `UPDATE transaction_analysis_drafts SET status = 'cancelled', updated_at = now()
