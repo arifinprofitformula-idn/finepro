@@ -316,11 +316,19 @@ function buildUserPrompt(context = {}) {
  */
 function parseVisionResponse(responseText) {
   try {
-    // Try to extract JSON from response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
+    const text = String(responseText || '').trim();
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    let raw = fenced?.[1]?.trim() || text;
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (_) {
+      const start = raw.indexOf('{');
+      const end = raw.lastIndexOf('}');
+      if (start === -1 || end === -1 || end <= start) return null;
+      parsed = JSON.parse(raw.slice(start, end + 1));
+    }
 
     // Normalize fields
     return {
@@ -351,20 +359,22 @@ function parseVisionResponse(responseText) {
 /**
  * Check if vision model result is usable.
  */
-export function isVisionResultUsable(analysis, minConfidence = 0.6) {
+export function isVisionResultUsable(analysis, minConfidence = 0.5) {
   if (!analysis) return false;
 
-  const requiredFields = ['transaction_type', 'amount', 'merchant'];
+  const requiredFields = ['transaction_type', 'amount'];
   const hasRequired = requiredFields.every((f) => analysis[f]);
 
   if (!hasRequired) return false;
 
-  // Check if confidence is above threshold
+  // Confidence bersifat opsional dari vision model — kalau tidak ada,
+  // jangan tolak hasil valid hanya karena model tidak melampirkan skor.
   const { confidence } = analysis;
-  if (!confidence) return false;
+  if (!confidence) return true;
 
   const scores = Object.values(confidence).filter((v) => typeof v === 'number');
-  const avgConfidence = scores.length > 0 ? scores.reduce((a, b) => a + b) / scores.length : 0;
+  if (scores.length === 0) return true;
+  const avgConfidence = scores.reduce((a, b) => a + b) / scores.length;
 
   return avgConfidence >= minConfidence;
 }

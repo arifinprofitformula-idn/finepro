@@ -36,6 +36,73 @@ function normalizeText(value) {
     .trim();
 }
 
+function extractJsonObject(text) {
+  const input = String(text || '').trim();
+  if (!input) throw new Error('AI tidak mengembalikan respons');
+
+  const fenced = input.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidates = [];
+  if (fenced?.[1]) candidates.push(fenced[1].trim());
+  candidates.push(input.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim());
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (_) {
+      // Continue with bracket extraction below.
+    }
+  }
+
+  const source = candidates[0] || input;
+  const start = source.indexOf('{');
+  if (start === -1) throw new Error('AI tidak mengembalikan JSON valid');
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < source.length; i += 1) {
+    const ch = source[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === '{') depth += 1;
+    if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        const jsonText = source.slice(start, i + 1);
+        return JSON.parse(jsonText);
+      }
+    }
+  }
+
+  throw new Error('AI mengembalikan JSON tidak lengkap');
+}
+
+function findDefaultCategory(categories, type) {
+  const normalizedType = type === 'income' ? 'income' : 'expense';
+  const preferredNames = normalizedType === 'income'
+    ? ['gaji usaha', 'lainnya']
+    : ['kebutuhan pokok', 'rumah tangga', 'lainnya'];
+
+  for (const preferred of preferredNames) {
+    const found = categories.find((c) => c.type === normalizedType && normalizeText(c.name) === preferred);
+    if (found) return found;
+  }
+  return categories.find((c) => c.type === normalizedType && c.is_default)
+    || categories.find((c) => c.type === normalizedType)
+    || null;
+}
+
 async function getUserWallets(householdId) {
   const result = await pool.query(
     `SELECT id, name, is_default
@@ -288,13 +355,7 @@ export async function analyzeTransactionImage({
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const raw = text.trim()
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```$/i, '')
-      .trim();
-
-    parsed = JSON.parse(raw);
+    parsed = extractJsonObject(text);
   }
 
   // 5. Normalize and enrich
@@ -328,33 +389,39 @@ export async function analyzeTransactionImage({
 // ---------- Enrichment ----------
 
 async function enrichAnalysis(parsed, { ocrText, wallets, categories, householdId }) {
+  const normalizedType = parsed.transaction_type || parsed.type || 'uncertain';
+  const normalizedDate = parsed.transaction_date || parsed.date || null;
+  const normalizedCategory = parsed.category || parsed.suggested_category || null;
+  const normalizedMerchant = parsed.merchant || parsed.note || null;
+  const isRegexResult = parsed.source === 'regex';
+
   const result = {
     document_type: parsed.document_type || 'unknown',
-    transaction_type: parsed.transaction_type || 'uncertain',
+    transaction_type: normalizedType,
     amount: Number(parsed.amount) || 0,
     currency: parsed.currency || 'IDR',
-    transaction_date: sanitizeDate(parsed.transaction_date, ocrText),
+    transaction_date: sanitizeDate(normalizedDate, ocrText),
     transaction_time: parsed.transaction_time || null,
-    merchant: parsed.merchant || null,
+    merchant: normalizedMerchant || null,
     sender_name: parsed.sender_name || null,
     recipient_name: parsed.recipient_name || null,
     source_wallet_id: parsed.source_wallet_id || null,
     source_wallet_name: parsed.source_wallet_name || null,
     destination_wallet_id: parsed.destination_wallet_id || null,
     destination_wallet_name: parsed.destination_wallet_name || null,
-    category: parsed.category || null,
+    category: normalizedCategory || null,
     subcategory: parsed.subcategory || null,
-    description: parsed.description || parsed.note || '',
+    description: parsed.description || parsed.note || normalizedMerchant || '',
     reference_number: parsed.reference_number || null,
     admin_fee: Number(parsed.admin_fee) || 0,
     confidence: {
-      transaction_type: parsed.confidence?.transaction_type ?? 0.5,
-      amount: parsed.confidence?.amount ?? 0.5,
-      transaction_date: parsed.confidence?.transaction_date ?? 0.5,
-      merchant: parsed.confidence?.merchant ?? 0.5,
+      transaction_type: parsed.confidence?.transaction_type ?? (isRegexResult ? 0.92 : 0.5),
+      amount: parsed.confidence?.amount ?? (isRegexResult ? 0.95 : 0.5),
+      transaction_date: parsed.confidence?.transaction_date ?? (isRegexResult ? 0.85 : 0.5),
+      merchant: parsed.confidence?.merchant ?? (normalizedMerchant ? 0.75 : 0.5),
       source_wallet: parsed.confidence?.source_wallet ?? 0.5,
       destination_wallet: parsed.confidence?.destination_wallet ?? 0.5,
-      category: parsed.confidence?.category ?? 0.5,
+      category: parsed.confidence?.category ?? (normalizedCategory ? 0.75 : 0.5),
     },
     needs_confirmation: false,
     confirmation_fields: [],
@@ -387,6 +454,16 @@ async function enrichAnalysis(parsed, { ocrText, wallets, categories, householdI
     if (def) {
       result.source_wallet_id = def.id;
       result.source_wallet_name = def.name;
+      if (result.confidence.source_wallet < 0.75) result.confidence.source_wallet = 0.75;
+    }
+  }
+
+  if (result.transaction_type === 'income' && !result.destination_wallet_id && !result.source_wallet_id) {
+    const def = wallets.find((w) => w.is_default);
+    if (def) {
+      result.destination_wallet_id = def.id;
+      result.destination_wallet_name = def.name;
+      if (result.confidence.destination_wallet < 0.75) result.confidence.destination_wallet = 0.75;
     }
   }
 
@@ -425,6 +502,16 @@ async function enrichAnalysis(parsed, { ocrText, wallets, categories, householdI
     } catch (e) { /* mapping failure is non-fatal */ }
   }
 
+  if (result.transaction_type !== 'transfer' && !result.category) {
+    const fallbackCategory = findDefaultCategory(categories, result.transaction_type);
+    if (fallbackCategory) {
+      result.category = fallbackCategory.name;
+      result.category_id = fallbackCategory.id;
+      result.category_source = 'default_fallback';
+      if (result.confidence.category < 0.72) result.confidence.category = 0.72;
+    }
+  }
+
   // Sprint 2: Wallet identifier matching — if no wallet from name matching
   if (!result.source_wallet_id && result.transaction_type !== 'income') {
     try {
@@ -435,8 +522,13 @@ async function enrichAnalysis(parsed, { ocrText, wallets, categories, householdI
     } catch (e) { /* wallet id failure is non-fatal */ }
   }
 
-  // Compute overall confidence
-  const confValues = Object.values(result.confidence);
+  // Compute overall confidence from relevant fields only.
+  // Jangan menghukum expense karena destination_wallet kosong, atau income karena source_wallet kosong.
+  const relevantConfidenceKeys = ['transaction_type', 'amount', 'transaction_date'];
+  if (result.transaction_type === 'expense') relevantConfidenceKeys.push('source_wallet', 'category');
+  if (result.transaction_type === 'income') relevantConfidenceKeys.push((result.destination_wallet_id ? 'destination_wallet' : 'source_wallet'), 'category');
+  if (result.transaction_type === 'transfer') relevantConfidenceKeys.push('source_wallet', 'destination_wallet');
+  const confValues = relevantConfidenceKeys.map((key) => result.confidence[key]).filter((v) => typeof v === 'number');
   result.overall_confidence = confValues.length > 0
     ? Math.round((confValues.reduce((a, b) => a + b, 0) / confValues.length) * 100) / 100
     : 0.5;
@@ -491,15 +583,24 @@ export function validateAnalysis(analysis) {
     required.push('category');
   }
 
-  // Confidence-based flags — fields with low confidence but not already required
+  // Confidence-based flags — hanya cek field yang relevan untuk tipe transaksi.
+  // Expense tidak membutuhkan destination_wallet; income tidak wajib source_wallet.
   const confChecks = [
     { field: 'transaction_type', key: 'transaction_type', threshold: 0.7 },
     { field: 'amount', key: 'amount', threshold: 0.85 },
     { field: 'transaction_date', key: 'transaction_date', threshold: 0.7 },
-    { field: 'source_wallet', key: 'source_wallet', threshold: 0.7 },
-    { field: 'destination_wallet', key: 'destination_wallet', threshold: 0.7 },
-    { field: 'category', key: 'category', threshold: 0.7 },
   ];
+
+  if (analysis.transaction_type === 'expense') {
+    confChecks.push({ field: 'source_wallet', key: 'source_wallet', threshold: 0.7 });
+    confChecks.push({ field: 'category', key: 'category', threshold: 0.7 });
+  } else if (analysis.transaction_type === 'income') {
+    confChecks.push({ field: 'destination_wallet', key: analysis.destination_wallet_id ? 'destination_wallet' : 'source_wallet', threshold: 0.7 });
+    confChecks.push({ field: 'category', key: 'category', threshold: 0.7 });
+  } else if (analysis.transaction_type === 'transfer') {
+    confChecks.push({ field: 'source_wallet', key: 'source_wallet', threshold: 0.7 });
+    confChecks.push({ field: 'destination_wallet', key: 'destination_wallet', threshold: 0.7 });
+  }
 
   for (const check of confChecks) {
     const confValue = analysis.confidence?.[check.key] ?? 0;
@@ -511,7 +612,7 @@ export function validateAnalysis(analysis) {
   const allConfirmationFields = [...new Set([...required, ...lowConfFields])];
   const hasRequired = required.length > 0;
   const hasLowConf = lowConfFields.length > 0;
-  const overallLow = (analysis.overall_confidence || 0) < 0.9;
+  const overallLow = (analysis.overall_confidence || 0) < 0.75;
 
   return {
     needs_confirmation: hasRequired || hasLowConf || overallLow,

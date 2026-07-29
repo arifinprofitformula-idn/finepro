@@ -187,7 +187,16 @@ async function parseWithAiProvider(rawText, options = {}) {
   });
 
   const raw = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start === -1 || end === -1 || end <= start) {
+      throw new Error('AI tidak mengembalikan JSON valid untuk struk');
+    }
+    return JSON.parse(raw.slice(start, end + 1));
+  }
 }
 
 // Provider registry — nambah provider baru (mis. model lokal, provider lain)

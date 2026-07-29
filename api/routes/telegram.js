@@ -298,7 +298,7 @@ async function processReceipt(req, res) {
 
       // Auto-confirm if confidence is high enough
       let transaction;
-      if (!analysis.needs_confirmation && (analysis.overall_confidence || 0) >= 0.9) {
+      if (!analysis.needs_confirmation && (analysis.overall_confidence || 0) >= 0.75) {
         const result = await confirmDraft(analysis.draft_id, user.id, householdId);
         transaction = result.transaction;
       } else {
