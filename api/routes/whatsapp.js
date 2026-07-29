@@ -196,29 +196,45 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
 
   const aiConfig = await getSetting('ai');
 
-  // --- UNIFIED ANALYSIS (same engine as Telegram + Web) ---
-  const { analyzeTransactionImage, confirmDraft } = await import('../services/transactionImageAnalysisService.js');
+  // --- UNIFIED ANALYSIS WITH PREPROCESSING (same engine as Telegram + Web) ---
+  const { analyzeTransactionImage, confirmDraft, analyzeWithPreprocessing } = await import('../services/transactionImageAnalysisService.js');
 
   let analysis;
   try {
-    analysis = await analyzeTransactionImage({
+    analysis = await analyzeWithPreprocessing({
       imageBuffer,
-      mimeType,
       userId: user.id,
       householdId,
       channel: 'whatsapp',
     });
   } catch (aiErr) {
-    console.error('WhatsApp unified analysis error:', aiErr);
+    console.error('WhatsApp unified preprocessing+analysis error:', aiErr);
+    const errorMsg = String(aiErr.message || '');
+
+    // Classify error
+    let status = 'parse_failed';
+    let userMessage = 'Foto tidak terbaca dengan jelas. Coba foto ulang dengan pencahayaan lebih baik, atau catat manual di web.';
+
+    if (errorMsg.includes('AI belum dikonfigurasi') || errorMsg.includes('belum dikonfigurasi')) {
+      status = 'ai_not_configured';
+      userMessage = 'Fitur AI belum dikonfigurasi. Admin perlu mengaktifkan AI terlebih dahulu di pengaturan.';
+    } else if (errorMsg.includes('kuota') || errorMsg.includes('quota')) {
+      status = 'quota';
+      userMessage = 'Kuota scan harian sudah habis. Catat manual di web dulu ya, atau upgrade paket.';
+    } else if (errorMsg.includes('kualitas gambar') || errorMsg.includes('reject')) {
+      status = 'poor_quality';
+      userMessage = 'Kualitas foto terlalu rendah. Coba foto ulang dengan pencahayaan yang lebih baik.';
+    } else if (errorMsg.includes('resolusi') || errorMsg.includes('invalid dimensions')) {
+      status = 'invalid_dimensions';
+      userMessage = 'Ukuran foto tidak sesuai. Pastikan foto tidak terlalu kecil atau terlalu besar.';
+    }
+
     await pool.query(
       `INSERT INTO whatsapp_receipts (household_id, created_by, whatsapp_id, raw_text, status, error_message)
        VALUES ($1, $2, $3, $4, 'failed', $5)`,
-      [householdId, user.id, whatsappId, '', 'OCR atau AI gagal membaca gambar']
+      [householdId, user.id, whatsappId, '', errorMsg.slice(0, 500)]
     );
-    return {
-      status: 'parse_failed',
-      message: 'Foto tidak terbaca dengan jelas. Coba foto ulang dengan pencahayaan lebih baik, atau catat manual di web.',
-    };
+    return { status, message: userMessage };
   }
 
   const amount = analysis.amount;

@@ -240,30 +240,43 @@ async function processReceipt(req, res) {
         });
       }
 
-      // --- UNIFIED ANALYSIS (same engine as WhatsApp + Web) ---
-      const { analyzeTransactionImage, confirmDraft } = await import('../services/transactionImageAnalysisService.js');
+      // --- UNIFIED ANALYSIS WITH PREPROCESSING (same engine as WhatsApp + Web) ---
+      const { analyzeWithPreprocessing, confirmDraft } = await import('../services/transactionImageAnalysisService.js');
       const { resolveWalletId } = await import('../services/walletResolver.js');
 
       let analysis;
       try {
-        analysis = await analyzeTransactionImage({
+        analysis = await analyzeWithPreprocessing({
           imageBuffer: req.file.buffer,
-          mimeType: req.file.mimetype,
           userId: user.id,
           householdId,
           channel: 'telegram',
         });
       } catch (aiErr) {
-        console.error('Telegram unified analysis error:', aiErr);
+        console.error('Telegram unified preprocessing+analysis error:', aiErr);
+        const errorMsg = String(aiErr.message || '');
+
+        let userMessage = 'Foto tidak terbaca dengan jelas. Coba foto ulang dengan pencahayaan lebih baik, atau catat manual di web.';
+
+        if (errorMsg.includes('AI belum dikonfigurasi') || errorMsg.includes('belum dikonfigurasi')) {
+          userMessage = 'Fitur AI belum dikonfigurasi. Admin perlu mengaktifkan AI terlebih dahulu di pengaturan.';
+        } else if (errorMsg.includes('kuota') || errorMsg.includes('quota')) {
+          userMessage = 'Kuota scan harian sudah habis. Catat manual di web dulu ya, atau upgrade paket.';
+        } else if (errorMsg.includes('kualitas gambar') || errorMsg.includes('reject')) {
+          userMessage = 'Kualitas foto terlalu rendah. Coba foto ulang dengan pencahayaan yang lebih baik.';
+        } else if (errorMsg.includes('resolusi') || errorMsg.includes('invalid dimensions')) {
+          userMessage = 'Ukuran foto tidak sesuai. Pastikan foto tidak terlalu kecil atau terlalu besar.';
+        }
+
         await recordAiUsage({
           householdId, userId: user.id, feature: 'receipt_scan', source: 'telegram',
           usedAi: true, provider: aiConfig?.provider || null,
           model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
-          metadata: { status: 'failed', reason: 'analysis_error', telegram_id: telegramId },
+          metadata: { status: 'failed', reason: 'analysis_error', telegram_id: telegramId, error_message: errorMsg.slice(0, 200) },
         });
         return res.status(502).json({
           error: 'Gagal membaca foto',
-          message: 'Foto tidak terbaca dengan jelas. Coba foto ulang dengan pencahayaan lebih baik, atau catat manual di web.',
+          message: userMessage,
         });
       }
 
