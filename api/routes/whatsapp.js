@@ -242,7 +242,7 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
     await recordAiUsage({
       householdId, userId: user.id, feature: 'receipt_scan', source: 'whatsapp',
       usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
-      model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+      model: aiConfig?.['9router_model'] || aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
       metadata: { status: 'failed', reason: 'amount_not_found', whatsapp_id: whatsappId },
     });
     return {
@@ -266,7 +266,7 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
     await recordAiUsage({
       householdId, userId: user.id, feature: 'receipt_scan', source: 'whatsapp',
       usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
-      model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+      model: aiConfig?.['9router_model'] || aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
       metadata: { status: 'draft', draft_id: analysis.draft_id, whatsapp_id: whatsappId },
     });
 
@@ -293,7 +293,7 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
   await recordAiUsage({
     householdId, userId: user.id, feature: 'receipt_scan', source: 'whatsapp',
     usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
-    model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+    model: aiConfig?.['9router_model'] || aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
     metadata: { status: 'success', draft_id: analysis.draft_id, transaction_id: transaction.id, whatsapp_id: whatsappId },
   });
   await pool.query(
@@ -543,7 +543,7 @@ router.post('/webhook', async (req, res) => {
           source: 'whatsapp',
           usedAi: true,
           provider: aiConfig.provider || null,
-          model: aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null,
+          model: aiConfig['9router_model'] || aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null,
           metadata: { status: 'accepted', whatsapp_id: waId, text_length: text.length },
           label: 'Kuota chat AI WhatsApp',
         });

@@ -39,6 +39,9 @@ const DEFAULTS = {
     sumopod_model: 'gpt-4o-mini',
     anthropic_api_key: '',
     anthropic_model: 'claude-sonnet-4-5',
+    '9router_api_key': '',
+    '9router_base_url': 'https://9router.finepro.my.id/v1',
+    '9router_model': 'Combo-3-Subscription',
     insights_daily_limit: 3,
     receipt_scan_monthly_limit: 30,
   },
@@ -103,7 +106,7 @@ const SECRET_FIELDS = {
   mailketing: ['api_token'],
   midtrans: ['server_key', 'client_key'],
   xendit: ['secret_key', 'callback_verification_token'],
-  ai: ['sumopod_api_key', 'anthropic_api_key'],
+  ai: ['sumopod_api_key', 'anthropic_api_key', '9router_api_key'],
   ape_epi: ['api_key'],
   web_push: ['vapid_private_key'],
   telegram: ['bot_token', 'n8n_shared_secret'],
@@ -124,6 +127,9 @@ const ALLOWED_FIELDS = {
     'sumopod_model',
     'anthropic_api_key',
     'anthropic_model',
+    '9router_api_key',
+    '9router_base_url',
+    '9router_model',
     'model',
     'insights_daily_limit',
     'receipt_scan_monthly_limit'
@@ -190,17 +196,23 @@ function envFallback(key) {
   if (key === 'ai') {
     const sumopodKey = process.env.SUMOPOD_API_KEY || '';
     const anthropicKey = process.env.ANTHROPIC_API_KEY || '';
+    const routerKey = process.env.NINE_ROUTER_API_KEY || process.env.ROUTER9_API_KEY || process.env['9ROUTER_API_KEY'] || '';
     const hasSumopod = Boolean(sumopodKey && sumopodKey !== 'isi-sumopod-api-key');
     const hasAnthropic = Boolean(anthropicKey && anthropicKey !== 'isi-anthropic-api-key');
+    const has9Router = Boolean(routerKey && routerKey !== 'isi-9router-api-key');
+    const defaultProvider = has9Router ? '9router' : (hasAnthropic && !hasSumopod ? 'anthropic' : 'sumopod');
     return {
-      enabled: hasSumopod || hasAnthropic,
-      provider: process.env.AI_PROVIDER || (hasAnthropic && !hasSumopod ? 'anthropic' : 'sumopod'),
+      enabled: hasSumopod || hasAnthropic || has9Router,
+      provider: process.env.AI_PROVIDER || defaultProvider,
       sumopod_api_key: sumopodKey,
       sumopod_base_url: process.env.SUMOPOD_BASE_URL || DEFAULTS.ai.sumopod_base_url,
       sumopod_model: process.env.SUMOPOD_MODEL || DEFAULTS.ai.sumopod_model,
       anthropic_api_key: anthropicKey,
       anthropic_model: process.env.ANTHROPIC_MODEL || DEFAULTS.ai.anthropic_model,
-      model: process.env.SUMOPOD_MODEL || process.env.ANTHROPIC_MODEL || DEFAULTS.ai.sumopod_model,
+      '9router_api_key': routerKey,
+      '9router_base_url': process.env.NINE_ROUTER_BASE_URL || process.env.ROUTER9_BASE_URL || process.env['9ROUTER_BASE_URL'] || DEFAULTS.ai['9router_base_url'],
+      '9router_model': process.env.NINE_ROUTER_MODEL || process.env.ROUTER9_MODEL || process.env['9ROUTER_MODEL'] || DEFAULTS.ai['9router_model'],
+      model: process.env.NINE_ROUTER_MODEL || process.env.ROUTER9_MODEL || process.env['9ROUTER_MODEL'] || process.env.SUMOPOD_MODEL || process.env.ANTHROPIC_MODEL || DEFAULTS.ai['9router_model'],
       insights_daily_limit: Number(process.env.AI_INSIGHTS_DAILY_LIMIT || DEFAULTS.ai.insights_daily_limit),
       receipt_scan_monthly_limit: Number(process.env.RECEIPT_SCAN_MONTHLY_LIMIT || DEFAULTS.ai.receipt_scan_monthly_limit),
     };

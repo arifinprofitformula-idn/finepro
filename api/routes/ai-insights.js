@@ -237,7 +237,7 @@ router.post('/insights', async (req, res) => {
       source: 'web',
       usedAi: true,
       provider: aiConfig.provider || null,
-      model: aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null,
+      model: aiConfig['9router_model'] || aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null,
       metadata: { status: 'success' },
     });
 

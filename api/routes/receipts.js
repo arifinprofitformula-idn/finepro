@@ -103,7 +103,7 @@ router.post('/scan', (req, res) => {
             source: 'web',
             usedAi,
             provider: usedAi ? aiConfig.provider : null,
-            model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
+            model: usedAi ? (aiConfig['9router_model'] || aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
             metadata: { status: 'failed', reason: 'ai_parse_error' },
           });
           return res.status(502).json({ error: 'Gagal membaca hasil dari AI, coba lagi dengan foto yang lebih jelas' });
@@ -124,7 +124,7 @@ router.post('/scan', (req, res) => {
         source: 'web',
         usedAi,
         provider: usedAi ? aiConfig.provider : null,
-        model: usedAi ? (aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
+        model: usedAi ? (aiConfig['9router_model'] || aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null) : null,
         metadata: { status: 'success', parser: parsed.source || (usedAi ? 'ai' : 'regex') },
       });
 

@@ -6,12 +6,13 @@
 //
 // Supported providers:
 // - Anthropic Claude (claude-3.5-sonnet with vision)
-// - OpenAI GPT-4V (via SumoPod or direct)
+// - OpenAI GPT-4V (via SumoPod, 9Router, or direct)
 
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
 const SUMOPOD_BASE_URL = 'https://ai.sumopod.com/v1';
+const NINE_ROUTER_BASE_URL = 'https://9router.finepro.my.id/v1';
 
 // ── Main vision fallback ───────────────────────────────────────────
 
@@ -21,9 +22,10 @@ const SUMOPOD_BASE_URL = 'https://ai.sumopod.com/v1';
  *
  * @param {Buffer} imageBuffer
  * @param {object} config - AI provider config
- * @param {string} config.provider - 'anthropic' or 'sumopod'
+ * @param {string} config.provider - 'anthropic', 'sumopod', or '9router'
  * @param {string} config.anthropic_api_key
  * @param {string} config.sumopod_api_key
+ * @param {string} config.9router_api_key
  * @param {string} config.model - optional override
  * @param {object} context - additional context (wallets, categories, rules, etc)
  * @returns {object} {
@@ -51,6 +53,8 @@ export async function analyzeReceiptWithVision(imageBuffer, config = {}, context
     return analyzeWithClaude(imageBuffer, config, context);
   } else if (provider === 'sumopod') {
     return analyzeWithGPT4V(imageBuffer, config, context);
+  } else if (provider === '9router') {
+    return analyzeWith9RouterVision(imageBuffer, config, context);
   } else {
     throw new Error(`Unsupported vision provider: ${provider}`);
   }
@@ -181,6 +185,67 @@ async function analyzeWithGPT4V(imageBuffer, config, context) {
       analysis: {},
       raw_response: '',
       used_provider: 'sumopod/gpt-4v',
+      error: error.message,
+    };
+  }
+}
+
+// ── 9Router Vision (OpenAI-compatible) ──────────────────────────────
+
+async function analyzeWith9RouterVision(imageBuffer, config, context) {
+  if (!config['9router_api_key']) {
+    throw new Error('9Router API key not configured');
+  }
+
+  const client = new OpenAI({
+    apiKey: config['9router_api_key'],
+    baseURL: config['9router_base_url'] || NINE_ROUTER_BASE_URL,
+  });
+
+  const base64Image = imageBuffer.toString('base64');
+  const userPrompt = buildUserPrompt(context);
+  const model = config['9router_model'] || config.model || 'Combo-3-Subscription';
+
+  try {
+    const response = await client.chat.completions.create({
+      model,
+      max_tokens: 1500,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/png;base64,${base64Image}`,
+              },
+            },
+            {
+              type: 'text',
+              text: userPrompt,
+            },
+          ],
+        },
+      ],
+    });
+
+    const rawResponse = response.choices?.[0]?.message?.content || '';
+    const analysis = parseVisionResponse(rawResponse);
+
+    return {
+      success: !!analysis,
+      analysis: analysis || {},
+      raw_response: rawResponse,
+      used_provider: '9router',
+      model_used: model,
+    };
+  } catch (error) {
+    console.error('9Router vision error:', error);
+    return {
+      success: false,
+      analysis: {},
+      raw_response: '',
+      used_provider: '9router',
       error: error.message,
     };
   }

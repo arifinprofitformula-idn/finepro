@@ -271,7 +271,7 @@ async function processReceipt(req, res) {
         await recordAiUsage({
           householdId, userId: user.id, feature: 'receipt_scan', source: 'telegram',
           usedAi: true, provider: aiConfig?.provider || null,
-          model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+          model: aiConfig?.['9router_model'] || aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
           metadata: { status: 'failed', reason: 'analysis_error', telegram_id: telegramId, error_message: errorMsg.slice(0, 200) },
         });
         return res.status(502).json({
@@ -285,7 +285,7 @@ async function processReceipt(req, res) {
         await recordAiUsage({
           householdId, userId: user.id, feature: 'receipt_scan', source: 'telegram',
           usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
-          model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+          model: aiConfig?.['9router_model'] || aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
           metadata: { status: 'failed', reason: 'amount_not_found', telegram_id: telegramId },
         });
         return res.status(422).json({
@@ -324,7 +324,7 @@ async function processReceipt(req, res) {
         await recordAiUsage({
           householdId, userId: user.id, feature: 'receipt_scan', source: 'telegram',
           usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
-          model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+          model: aiConfig?.['9router_model'] || aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
           metadata: { status: 'draft', draft_id: analysis.draft_id, telegram_id: telegramId },
         });
 
@@ -340,7 +340,7 @@ async function processReceipt(req, res) {
       await recordAiUsage({
         householdId, userId: user.id, feature: 'receipt_scan', source: 'telegram',
         usedAi: analysis.used_ai, provider: aiConfig?.provider || null,
-        model: aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
+        model: aiConfig?.['9router_model'] || aiConfig?.sumopod_model || aiConfig?.anthropic_model || null,
         metadata: { status: 'success', draft_id: analysis.draft_id, transaction_id: transaction.id, telegram_id: telegramId },
       });
       await pool.query('INSERT INTO receipt_scans (household_id, created_by) VALUES ($1, $2)', [householdId, user.id]);
@@ -436,7 +436,7 @@ router.post('/chat', telegramServiceMiddleware, async (req, res) => {
         source: 'telegram',
         usedAi: true,
         provider: aiConfig.provider || null,
-        model: aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null,
+        model: aiConfig['9router_model'] || aiConfig.sumopod_model || aiConfig.anthropic_model || aiConfig.model || null,
         metadata: {
           status: 'accepted',
           telegram_id,

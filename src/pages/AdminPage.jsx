@@ -2265,12 +2265,27 @@ export default function AdminPage({ user, onLogout }) {
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   const activeAiProvider = ai.provider || "sumopod";
+  const aiProviderReady = activeAiProvider === "anthropic"
+    ? hasSecret(ai, "anthropic_api_key")
+    : activeAiProvider === "9router"
+    ? hasSecret(ai, "9router_api_key")
+    : hasSecret(ai, "sumopod_api_key");
+  const aiBaseUrlReady = activeAiProvider === "anthropic"
+    ? true
+    : activeAiProvider === "9router"
+    ? hasText(ai["9router_base_url"])
+    : hasText(ai.sumopod_base_url);
+  const aiModelReady = activeAiProvider === "anthropic"
+    ? hasText(ai.anthropic_model || ai.model)
+    : activeAiProvider === "9router"
+    ? hasText(ai["9router_model"] || ai.model)
+    : hasText(ai.sumopod_model || ai.model);
   const aiProgress = integrationProgress([
     ai.enabled,
     hasText(activeAiProvider),
-    activeAiProvider === "anthropic" ? hasSecret(ai, "anthropic_api_key") : hasSecret(ai, "sumopod_api_key"),
-    activeAiProvider === "anthropic" ? true : hasText(ai.sumopod_base_url),
-    activeAiProvider === "anthropic" ? hasText(ai.anthropic_model || ai.model) : hasText(ai.sumopod_model || ai.model),
+    aiProviderReady,
+    aiBaseUrlReady,
+    aiModelReady,
     hasNonNegativeNumber(aiQuota.trial_insight_total),
     hasNonNegativeNumber(aiQuota.trial_scan_total),
     hasNonNegativeNumber(aiQuota.free_insight_monthly),
@@ -2838,6 +2853,7 @@ export default function AdminPage({ user, onLogout }) {
                 <select className={inputClass} value={ai.provider || "sumopod"} onChange={(e) => setAi("provider", e.target.value)}>
                   <option value="sumopod">SumoPod AI</option>
                   <option value="anthropic">Anthropic</option>
+                  <option value="9router">9Router</option>
                 </select>
               </div>
               <div>
@@ -2864,6 +2880,21 @@ export default function AdminPage({ user, onLogout }) {
               <label className={labelClass}>Anthropic API Key</label>
               <input className={inputClass} type="password" value={ai.anthropic_api_key || ""} onChange={(e) => setAi("anthropic_api_key", e.target.value)} placeholder={ai.anthropic_api_key_masked || "API key baru"} />
               <SecretHint configured={ai.anthropic_api_key_configured} />
+            </div>
+            <FormRow>
+              <div>
+                <label className={labelClass}>Base URL 9Router</label>
+                <input className={inputClass} value={ai["9router_base_url"] || ""} onChange={(e) => setAi("9router_base_url", e.target.value)} placeholder="https://9router.finepro.my.id/v1" />
+              </div>
+              <div>
+                <label className={labelClass}>Model 9Router</label>
+                <input className={inputClass} value={ai["9router_model"] || ai.model || ""} onChange={(e) => setAi("9router_model", e.target.value)} placeholder="Combo-3-Subscription" />
+              </div>
+            </FormRow>
+            <div>
+              <label className={labelClass}>9Router API Key</label>
+              <input className={inputClass} type="password" value={ai["9router_api_key"] || ""} onChange={(e) => setAi("9router_api_key", e.target.value)} placeholder={ai["9router_api_key_masked"] || "API key baru"} />
+              <SecretHint configured={ai["9router_api_key_configured"]} />
             </div>
           </IntegrationCard>
 
