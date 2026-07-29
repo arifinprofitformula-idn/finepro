@@ -674,6 +674,95 @@ function buildFingerprint(analysis) {
   return crypto.createHash('sha256').update(parts.join('|')).digest('hex');
 }
 
+
+async function analyzeWithVisionFallback({
+  imageBuffer,
+  processingBuffer,
+  userId,
+  householdId,
+  channel,
+  config,
+  qualityAssessment,
+  originalError = null,
+}) {
+  const { analyzeReceiptWithVision, isVisionResultUsable } = await import('./visionFallback.js');
+
+  const [wallets, categories, recentTx] = await Promise.all([
+    getUserWallets(householdId),
+    getUserCategories(householdId),
+    getRecentTransactions(householdId, 10).catch(() => []),
+  ]);
+
+  const buffersToTry = [];
+  // Vision models generally read the original compressed image better than
+  // aggressive OCR preprocessing. Try original first, then processed as backup.
+  if (imageBuffer) buffersToTry.push({ label: 'original', buffer: imageBuffer });
+  if (processingBuffer && processingBuffer !== imageBuffer) buffersToTry.push({ label: 'processed', buffer: processingBuffer });
+
+  let lastVisionError = null;
+  let lastVisionResult = null;
+
+  for (const candidate of buffersToTry) {
+    try {
+      const visionResult = await analyzeReceiptWithVision(
+        candidate.buffer,
+        config,
+        { channel, wallets, categories, recentTx }
+      );
+      lastVisionResult = visionResult;
+
+      if (visionResult.success && isVisionResultUsable(visionResult.analysis)) {
+        const enrichedVision = await enrichAnalysis(visionResult.analysis, {
+          ocrText: '',
+          wallets,
+          categories,
+          householdId,
+        });
+
+        if (!enrichedVision.amount || enrichedVision.amount <= 0) {
+          lastVisionError = new Error(`Vision ${candidate.label} tidak menemukan nominal`);
+          continue;
+        }
+
+        const imageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
+        const draftId = await saveDraft({
+          householdId,
+          userId,
+          channel,
+          imageHash,
+          analysis: enrichedVision,
+        });
+        const dupCheck = await checkDuplicate(householdId, enrichedVision, imageHash, draftId);
+
+        return {
+          draft_id: draftId,
+          ...enrichedVision,
+          image_hash: imageHash,
+          used_ai: true,
+          ocr_text_length: 0,
+          duplicate_check: dupCheck,
+          preprocessing_applied: true,
+          quality_score: qualityAssessment?.score ?? null,
+          quality_recommendation: qualityAssessment?.recommendation ?? null,
+          used_vision_fallback: true,
+          vision_source_buffer: candidate.label,
+          vision_provider: visionResult.used_provider,
+          vision_model: visionResult.model_used,
+          original_error: originalError?.message || null,
+        };
+      }
+    } catch (visionError) {
+      lastVisionError = visionError;
+      console.error(`Vision fallback ${candidate.label} error:`, visionError);
+    }
+  }
+
+  const reason = lastVisionError?.message
+    || lastVisionResult?.error
+    || 'Vision fallback tidak menghasilkan data transaksi yang cukup';
+  throw new Error(`Nominal tidak terbaca setelah OCR dan vision fallback: ${reason}`);
+}
+
 // ---------- Confirm Draft (save actual transaction) ----------
 
 export async function confirmDraft(draftId, userId, householdId, corrections = {}) {
@@ -901,59 +990,66 @@ export async function analyzeWithPreprocessing({
     result.preprocessing_applied = true;
     result.quality_score = qualityAssessment.score;
     result.quality_recommendation = qualityAssessment.recommendation;
+
+    // CRITICAL: analyzeTransactionImage can return a technically successful result
+    // with amount=0 OR low confidence after OCR/LLM text extraction. In real WA/TG
+    // this previously bypassed vision fallback and produced "Nominal tidak terbaca"
+    // or worse: a wrong nominal draft. Try direct vision before returning an unsafe result.
+    const lowConfidenceCore = (result.confidence?.amount ?? 1) < 0.85
+      || (result.confidence?.transaction_date ?? 1) < 0.7
+      || (result.confidence?.transaction_type ?? 1) < 0.7;
+    const confirmationDueToCore = (result.confirmation_fields || [])
+      .some((field) => ['amount', 'transaction_date', 'transaction_type'].includes(field));
+    const unsafeAnalysis = !result.amount
+      || result.amount <= 0
+      || result.transaction_type === 'uncertain'
+      || lowConfidenceCore
+      || confirmationDueToCore;
+
+    if (unsafeAnalysis && config.enable_vision_fallback !== false) {
+      console.warn('Analysis returned unsafe/low-confidence result; trying vision fallback', {
+        channel,
+        amount: result.amount,
+        transaction_type: result.transaction_type,
+        confidence: result.confidence,
+        confirmation_fields: result.confirmation_fields,
+        draft_id: result.draft_id,
+      });
+      try {
+        const visionFallbackResult = await analyzeWithVisionFallback({
+          imageBuffer,
+          processingBuffer,
+          userId,
+          householdId,
+          channel,
+          config,
+          qualityAssessment,
+          originalError: new Error('analysis_unsafe_or_low_confidence'),
+        });
+
+        // Keep DB clean: the low-confidence draft has been superseded by a vision draft.
+        await cancelDraft(result.draft_id, householdId).catch(() => {});
+        return visionFallbackResult;
+      } catch (visionError) {
+        console.error('Vision fallback after unsafe analysis failed:', visionError);
+      }
+    }
     
     return result;
   } catch (analyzeError) {
     // 5. Fallback to vision if regular analysis fails
     if (config.enable_vision_fallback !== false) {
       try {
-        const { analyzeReceiptWithVision, isVisionResultUsable } = await import('./visionFallback.js');
-        
-        const [wallets, categories, recentTx] = await Promise.all([
-          getUserWallets(householdId),
-          getUserCategories(householdId),
-          getRecentTransactions(householdId, 10).catch(() => []),
-        ]);
-
-        const visionResult = await analyzeReceiptWithVision(
+        return await analyzeWithVisionFallback({
+          imageBuffer,
           processingBuffer,
+          userId,
+          householdId,
+          channel,
           config,
-          { channel, wallets, categories, recentTx }
-        );
-        
-        if (visionResult.success && isVisionResultUsable(visionResult.analysis)) {
-          const enrichedVision = await enrichAnalysis(visionResult.analysis, {
-            ocrText: '',
-            wallets,
-            categories,
-            householdId,
-          });
-          const imageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
-          const draftId = await saveDraft({
-            householdId,
-            userId,
-            channel,
-            imageHash,
-            analysis: enrichedVision,
-          });
-          const dupCheck = await checkDuplicate(householdId, enrichedVision, imageHash, draftId);
-
-          return {
-            draft_id: draftId,
-            ...enrichedVision,
-            image_hash: imageHash,
-            used_ai: true,
-            ocr_text_length: 0,
-            duplicate_check: dupCheck,
-            preprocessing_applied: true,
-            quality_score: qualityAssessment.score,
-            quality_recommendation: qualityAssessment.recommendation,
-            used_vision_fallback: true,
-            vision_provider: visionResult.used_provider,
-            vision_model: visionResult.model_used,
-            original_error: analyzeError.message,
-          };
-        }
+          qualityAssessment,
+          originalError: analyzeError,
+        });
       } catch (visionError) {
         console.error('Vision fallback error:', visionError);
       }

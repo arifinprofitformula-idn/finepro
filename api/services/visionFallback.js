@@ -330,22 +330,52 @@ function parseVisionResponse(responseText) {
       parsed = JSON.parse(raw.slice(start, end + 1));
     }
 
-    // Normalize fields
+    // Normalize fields — support alternative field names from different vision models
+    // (e.g. 9Router returns "toko", "subtotal", "items"; Claude returns "merchant", "amount")
+    const amount = parseFloat(
+      parsed.amount
+      || parsed.subtotal
+      || parsed.total
+      || parsed.grand_total
+      || parsed.grand
+      || parsed.total_amount
+      || 0
+    ) || 0;
+
+    const merchant = parsed.merchant || parsed.toko || parsed.store_name || '';
+    const description = parsed.description || parsed.note || '';
+    
+    // If items array exists, build description from them
+    let finalDescription = description;
+    if (parsed.items && Array.isArray(parsed.items) && parsed.items.length > 0) {
+      const itemsText = parsed.items
+        .map((item) => {
+          if (typeof item === 'string') return item;
+          const name = item.nama || item.name || item.product || '';
+          const price = item.harga || item.price || '';
+          return price ? `${name} (${price})` : name;
+        })
+        .filter(Boolean)
+        .join(', ')
+        .slice(0, 200);
+      if (itemsText) finalDescription = itemsText;
+    }
+
     return {
       transaction_type: parsed.transaction_type || 'expense',
-      amount: parseFloat(parsed.amount) || 0,
+      amount,
       currency: parsed.currency || 'IDR',
-      merchant: parsed.merchant || '',
+      merchant,
       category: parsed.category || '',
       subcategory: parsed.subcategory || null,
-      description: parsed.description || '',
-      transaction_date: parsed.transaction_date || '',
-      source_wallet_name: parsed.source_wallet_name || '',
+      description: finalDescription || '',
+      transaction_date: parsed.transaction_date || parsed.tanggal || parsed.date || '',
+      source_wallet_name: parsed.source_wallet_name || parsed.payment_method || '',
       destination_wallet_name: parsed.destination_wallet_name || '',
-      reference_number: parsed.reference_number || '',
+      reference_number: parsed.reference_number || parsed.invoice || parsed.no_transaksi || '',
       confidence: parsed.confidence || {
-        amount: 0.7,
-        merchant: 0.7,
+        amount: amount > 0 ? 0.8 : 0.3,  // higher confidence if amount was extracted
+        merchant: merchant ? 0.8 : 0.5,
         category: 0.6,
         transaction_date: 0.7,
       },
