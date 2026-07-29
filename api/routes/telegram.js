@@ -306,9 +306,11 @@ async function processReceipt(req, res) {
 
       // Auto-confirm if confidence is high enough
       let transaction;
+      let alreadyExisted = false;
       if (!analysis.needs_confirmation && (analysis.overall_confidence || 0) >= 0.75) {
         const result = await confirmDraft(analysis.draft_id, user.id, householdId);
         transaction = result.transaction;
+        alreadyExisted = result.already_existed || false;
       } else {
         // Save image for later confirmation
         await fs.mkdir(UPLOAD_DIR, { recursive: true });

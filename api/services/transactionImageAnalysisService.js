@@ -772,6 +772,21 @@ export async function confirmDraft(draftId, userId, householdId, corrections = {
   );
 
   if (draftResult.rows.length === 0) {
+    // Idempotent: if draft is already confirmed, return existing transaction silently
+    const confirmed = await pool.query(
+      `SELECT t.id, to_char(t.date, 'YYYY-MM-DD') as date, t.type, t.category,
+              t.amount, t.note, t.created_at, t.wallet_id, d.status as draft_status
+       FROM transaction_analysis_drafts d
+       JOIN transactions t ON t.household_id = d.household_id
+         AND t.created_by = d.user_id
+         AND t.created_at > d.created_at - interval '1 minute'
+       WHERE d.id = $1 AND d.household_id = $2 AND d.status = 'confirmed'
+       ORDER BY t.created_at DESC LIMIT 1`,
+      [draftId, householdId]
+    );
+    if (confirmed.rows.length > 0) {
+      return { transaction: confirmed.rows[0], already_existed: true };
+    }
     throw new Error('Draft tidak ditemukan atau sudah dikonfirmasi');
   }
 
