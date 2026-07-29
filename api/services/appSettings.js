@@ -279,7 +279,9 @@ export async function getSetting(key) {
   const result = await pool.query('SELECT value, updated_by FROM app_settings WHERE key = $1', [key]);
   const row = result.rows[0];
   const stored = row?.value || {};
-  const shouldUseStored = Boolean(row?.updated_by) || hasUsefulValue(key, stored);
+  // CRITICAL FIX: if row exists in DB (regardless of updated_by), ALWAYS use stored value
+  // Updated_by can be null for system-managed settings, but stored data is still the source of truth
+  const shouldUseStored = Boolean(row) && (row.value || typeof row.value === 'object');
   const merged = { ...(DEFAULTS[key] || {}), ...envFallback(key), ...(shouldUseStored ? stored : {}) };
   return merged;
 }
