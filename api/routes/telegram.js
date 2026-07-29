@@ -251,6 +251,8 @@ async function processReceipt(req, res) {
           userId: user.id,
           householdId,
           channel: 'telegram',
+          conversationContext: req.body.caption || req.body.text || null,
+          config: aiConfig,
         });
       } catch (aiErr) {
         console.error('Telegram unified preprocessing+analysis error:', aiErr);

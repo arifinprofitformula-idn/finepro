@@ -160,6 +160,9 @@ function fallbackConfig(providerName) {
     sumopod_model: process.env.SUMOPOD_RECEIPT_MODEL || process.env.SUMOPOD_MODEL || 'gpt-4o-mini',
     anthropic_api_key: process.env.ANTHROPIC_API_KEY || '',
     anthropic_model: process.env.ANTHROPIC_HAIKU_MODEL || process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5',
+    '9router_api_key': process.env.NINE_ROUTER_API_KEY || process.env.ROUTER9_API_KEY || process.env['9ROUTER_API_KEY'] || '',
+    '9router_base_url': process.env.NINE_ROUTER_BASE_URL || process.env.ROUTER9_BASE_URL || process.env['9ROUTER_BASE_URL'] || 'https://9router.finepro.my.id/v1',
+    '9router_model': process.env.NINE_ROUTER_MODEL || process.env.ROUTER9_MODEL || process.env['9ROUTER_MODEL'] || 'Combo-3-Subscription',
   };
 }
 
@@ -193,6 +196,7 @@ async function parseWithAiProvider(rawText, options = {}) {
 const PARSE_PROVIDERS = {
   sumopod: parseWithAiProvider,
   anthropic: parseWithAiProvider,
+  '9router': parseWithAiProvider,
   'claude-haiku': parseWithAiProvider,
 };
 

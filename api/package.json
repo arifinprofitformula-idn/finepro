@@ -22,6 +22,7 @@
     "node-tesseract-ocr": "^2.2.1",
     "openai": "^6.46.0",
     "pg": "^8.13.0",
+    "sharp": "^0.35.3",
     "web-push": "^3.6.7"
   }
 }

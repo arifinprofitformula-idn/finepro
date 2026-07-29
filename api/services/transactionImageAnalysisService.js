@@ -758,31 +758,21 @@ export async function analyzeWithPreprocessing({
   const qualityAssessment = await assessImageQuality(imageBuffer);
   let processingBuffer = imageBuffer;
 
-  // Recommend to user if quality is poor
-  if (qualityAssessment.recommendation === 'reject') {
-    const recommendation = await getQualityRecommendation(imageBuffer);
-    return {
-      error: recommendation.message,
-      quality_score: qualityAssessment.score,
-      quality_issues: qualityAssessment.issues,
-    };
-  }
-
-  // Preprocess if quality is acceptable
-  if (qualityAssessment.score >= 50) {
-    try {
-      const preprocessed = await preprocessImage(imageBuffer, {
-        normalize: true,
-        enhanceContrast: true,
-        denoise: qualityAssessment.score < 70,
-        autoRotate: true,
-        autoScale: true,
-      });
-      processingBuffer = preprocessed.buffer;
-    } catch (e) {
-      console.error('Preprocessing error (non-fatal):', e);
-      // Continue with original
-    }
+  // Do NOT hard-reject based on heuristic quality scoring. Telegram/WhatsApp
+  // compression and dark UI screenshots can score poorly even when the receipt
+  // is readable. Use the score only as metadata and let OCR + vision decide.
+  try {
+    const preprocessed = await preprocessImage(imageBuffer, {
+      normalize: true,
+      enhanceContrast: true,
+      denoise: qualityAssessment.score < 70,
+      autoRotate: true,
+      autoScale: true,
+    });
+    processingBuffer = preprocessed.buffer;
+  } catch (e) {
+    console.error('Preprocessing error (non-fatal):', e);
+    // Continue with original and let OCR/vision fallback decide.
   }
 
   // 3. Auto-crop if needed
@@ -818,17 +808,48 @@ export async function analyzeWithPreprocessing({
       try {
         const { analyzeReceiptWithVision, isVisionResultUsable } = await import('./visionFallback.js');
         
+        const [wallets, categories, recentTx] = await Promise.all([
+          getUserWallets(householdId),
+          getUserCategories(householdId),
+          getRecentTransactions(householdId, 10).catch(() => []),
+        ]);
+
         const visionResult = await analyzeReceiptWithVision(
           processingBuffer,
           config,
-          { channel }
+          { channel, wallets, categories, recentTx }
         );
         
         if (visionResult.success && isVisionResultUsable(visionResult.analysis)) {
+          const enrichedVision = await enrichAnalysis(visionResult.analysis, {
+            ocrText: '',
+            wallets,
+            categories,
+            householdId,
+          });
+          const imageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
+          const draftId = await saveDraft({
+            householdId,
+            userId,
+            channel,
+            imageHash,
+            analysis: enrichedVision,
+          });
+          const dupCheck = await checkDuplicate(householdId, enrichedVision, imageHash, draftId);
+
           return {
-            ...visionResult.analysis,
+            draft_id: draftId,
+            ...enrichedVision,
+            image_hash: imageHash,
+            used_ai: true,
+            ocr_text_length: 0,
+            duplicate_check: dupCheck,
+            preprocessing_applied: true,
+            quality_score: qualityAssessment.score,
+            quality_recommendation: qualityAssessment.recommendation,
             used_vision_fallback: true,
             vision_provider: visionResult.used_provider,
+            vision_model: visionResult.model_used,
             original_error: analyzeError.message,
           };
         }

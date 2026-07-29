@@ -14,8 +14,10 @@ import sharp from 'sharp';
 
 const MIN_WIDTH = 200;
 const MIN_HEIGHT = 200;
-const MAX_WIDTH = 4000;
-const MAX_HEIGHT = 4000;
+// Foto HP modern sering 4032x3024 atau lebih. Jangan tolak foto jelas hanya
+// karena sedikit di atas 4000px; sharp akan downscale di tahap autoScale.
+const MAX_WIDTH = 12000;
+const MAX_HEIGHT = 12000;
 const BLUR_THRESHOLD = 100; // Laplacian variance threshold for blur detect
 
 // ── Main preprocessing pipeline ────────────────────────────────────

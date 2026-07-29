@@ -206,6 +206,8 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
       userId: user.id,
       householdId,
       channel: 'whatsapp',
+      conversationContext: caption || null,
+      config: aiConfig,
     });
   } catch (aiErr) {
     console.error('WhatsApp unified preprocessing+analysis error:', aiErr);
