@@ -331,7 +331,8 @@ function parseVisionResponse(responseText) {
     }
 
     // Normalize fields — support alternative field names from different vision models
-    // (e.g. 9Router returns "toko", "subtotal", "items"; Claude returns "merchant", "amount")
+    // (e.g. 9Router returns "toko"/"subtotal"/"items" for receipt, or
+    // "total_bayar"/"waktu_transaksi"/"data_pembelian" for payment screenshots)
     const amount = parseFloat(
       parsed.amount
       || parsed.subtotal
@@ -339,11 +340,26 @@ function parseVisionResponse(responseText) {
       || parsed.grand_total
       || parsed.grand
       || parsed.total_amount
+      || parsed.total_bayar
+      || parsed.rp_bayar
+      || parsed.rp_stroom_token
+      || parsed.nominal
+      || parsed.jumlah
       || 0
     ) || 0;
 
-    const merchant = parsed.merchant || parsed.toko || parsed.store_name || '';
-    const description = parsed.description || parsed.note || '';
+    const merchant = parsed.merchant
+      || parsed.toko
+      || parsed.store_name
+      || parsed.jenis_pembelian
+      || parsed.layanan
+      || parsed.merchant_name
+      || '';
+
+    const description = parsed.description
+      || parsed.note
+      || parsed.keterangan
+      || '';
     
     // If items array exists, build description from them
     let finalDescription = description;
@@ -361,23 +377,45 @@ function parseVisionResponse(responseText) {
       if (itemsText) finalDescription = itemsText;
     }
 
+    // Extract from nested structures (e.g. data_pembelian from BYOND receipt)
+    if (!finalDescription && parsed.data_pembelian) {
+      const dp = parsed.data_pembelian;
+      finalDescription = dp.jenis_pembelian || dp.merchant || '';
+    }
+    if (!merchant && parsed.data_pembelian?.jenis_pembelian) {
+      // Use jenis_pembelian as merchant fallback
+    }
+
+    const transactionType = parsed.transaction_type
+      || (amount > 0 ? 'expense' : 'expense');
+
     return {
-      transaction_type: parsed.transaction_type || 'expense',
+      transaction_type: transactionType,
       amount,
-      currency: parsed.currency || 'IDR',
+      currency: parsed.currency || parsed.mata_uang || 'IDR',
       merchant,
       category: parsed.category || '',
       subcategory: parsed.subcategory || null,
       description: finalDescription || '',
-      transaction_date: parsed.transaction_date || parsed.tanggal || parsed.date || '',
-      source_wallet_name: parsed.source_wallet_name || parsed.payment_method || '',
+      transaction_date: parsed.transaction_date
+        || parsed.tanggal
+        || parsed.date
+        || parsed.waktu_transaksi
+        || (parsed.data_pembelian?.tanggal || ''),
+      source_wallet_name: parsed.source_wallet_name
+        || parsed.payment_method
+        || parsed.rekening_sumber?.bank || '',
       destination_wallet_name: parsed.destination_wallet_name || '',
-      reference_number: parsed.reference_number || parsed.invoice || parsed.no_transaksi || '',
+      reference_number: parsed.reference_number
+        || parsed.invoice
+        || parsed.no_transaksi
+        || parsed.nomor_transaksi
+        || parsed.data_pembelian?.nomor_transaksi || parsed.data_pembelian?.nomor_struk || '',
       confidence: parsed.confidence || {
-        amount: amount > 0 ? 0.8 : 0.3,  // higher confidence if amount was extracted
+        amount: amount > 0 ? 0.8 : 0.3,
         merchant: merchant ? 0.8 : 0.5,
         category: 0.6,
-        transaction_date: 0.7,
+        transaction_date: parsed.transaction_date || parsed.waktu_transaksi || parsed.data_pembelian?.tanggal ? 0.8 : 0.5,
       },
     };
   } catch (e) {

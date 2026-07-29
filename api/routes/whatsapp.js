@@ -239,6 +239,13 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
     return { status, message: userMessage };
   }
 
+  // Handle multi-transaction results (detected by multiTransactionDetector)
+  if (analysis.transaction_count && Array.isArray(analysis.transactions) && analysis.transactions.length > 0) {
+    const bestTx = analysis.transactions.find(t => !t.needs_confirmation)
+      || analysis.transactions.sort((a, b) => (b.overall_confidence || 0) - (a.overall_confidence || 0))[0];
+    analysis = bestTx;
+  }
+
   const amount = analysis.amount;
   if (!amount || amount <= 0) {
     await recordAiUsage({
