@@ -37,12 +37,17 @@ app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 
-// Global rate limit — 100 request/menit per IP (safety net, selain auth yang sudah punya limit sendiri)
+// Global rate limit — melonggarkan limit dan bypass localhost agar tidak diblokir jika dipanggil internal
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 menit
-  max: 100,
+  max: 500, // Longgarkan ke 500 request/menit
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Lewati rate limit untuk localhost / request internal
+    const ip = req.ip || req.connection.remoteAddress || '';
+    return ip.includes('127.0.0.1') || ip.includes('::1') || ip === 'localhost';
+  },
   message: { error: 'Terlalu banyak permintaan. Silakan coba lagi nanti.' },
 });
 app.use('/api', globalLimiter);

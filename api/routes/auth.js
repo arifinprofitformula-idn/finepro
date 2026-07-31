@@ -20,8 +20,11 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
-  skip: () => isLocalDev,
+  limit: 50, // Longgarkan dari 10 ke 50 percobaan per 15 menit
+  skip: (req) => {
+    const ip = req.ip || req.connection.remoteAddress || '';
+    return ip.includes('127.0.0.1') || ip.includes('::1') || ip === 'localhost';
+  },
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Terlalu banyak percobaan, coba lagi beberapa menit lagi' },
