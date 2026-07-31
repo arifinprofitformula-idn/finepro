@@ -63,6 +63,33 @@ router.post('/image', (req, res) => {
 });
 
 /**
+ * GET /api/transaction-analysis/drafts
+ * List pending analysis drafts for the current household.
+ * Used by HistoryPage so WhatsApp/Telegram draft replies are actionable in web.
+ */
+router.get('/drafts', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
+
+    const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 50);
+    const result = await pool.query(
+      `SELECT id, source_channel, analysis, created_at, updated_at
+       FROM transaction_analysis_drafts
+       WHERE household_id = $1 AND status = 'pending'
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [householdId, limit]
+    );
+
+    res.json({ drafts: result.rows });
+  } catch (err) {
+    console.error('List drafts error:', err);
+    res.status(500).json({ error: 'Gagal memuat draft transaksi' });
+  }
+});
+
+/**
  * POST /api/transaction-analysis/drafts/:id/confirm
  * Confirm a draft and save as actual transaction.
  * Body: optional corrections object { category, amount, wallet_id, ... }

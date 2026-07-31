@@ -8,10 +8,10 @@ import { useEffect, useMemo, useState } from "react";
 import TransactionItem from "../components/TransactionItem.jsx";
 import TransactionModal from "../components/TransactionModal.jsx";
 import { useTransactionHistory } from "../hooks/useTransactionHistory.js";
-import { deleteTransaction, downloadBackup, exportTransactionsCsv, updateTransaction } from "../api/transactions.js";
+import { cancelTransactionDraft, confirmTransactionDraft, deleteTransaction, downloadBackup, exportTransactionsCsv, getPendingTransactionDrafts, updateTransaction } from "../api/transactions.js";
 import { getWallets } from "../api/wallets.js";
-import { monthLabel, monthRangeFromKey } from "../utils/format.js";
-import { Archive, CalendarDays, Download, Loader2, Search } from "lucide-react";
+import { fmtRp, monthLabel, monthRangeFromKey } from "../utils/format.js";
+import { AlertCircle, Archive, CalendarDays, CheckCircle2, Download, Loader2, Search, XCircle } from "lucide-react";
 
 export default function HistoryPage({ household, categoriesExpense, categoriesIncome, onDataChanged, selectedMonthKey }) {
   const periodRange = useMemo(() => monthRangeFromKey(selectedMonthKey), [selectedMonthKey]);
@@ -19,12 +19,32 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
   const { filters, transactions, hasMore, loading, loadingMore, applyFilters, loadMore, refresh, defaultFilters } = useTransactionHistory(periodFilters);
   const [searchInput, setSearchInput] = useState("");
   const [wallets, setWallets] = useState([]);
+  const [drafts, setDrafts] = useState([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [draftActionId, setDraftActionId] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [editingTx, setEditingTx] = useState(null);
 
   useEffect(() => {
     getWallets().then(setWallets).catch(() => setWallets([]));
+  }, [household.id]);
+
+  async function refreshDrafts() {
+    setDraftsLoading(true);
+    try {
+      setDrafts(await getPendingTransactionDrafts(20));
+    } catch (err) {
+      console.error("Gagal memuat draft transaksi", err);
+      setDrafts([]);
+    } finally {
+      setDraftsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    refreshDrafts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [household.id]);
 
   // Debounce pencarian catatan — hindari fetch tiap ketikan.
@@ -90,6 +110,40 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
       await onDataChanged?.();
     } catch (err) {
       alert("Gagal menghapus transaksi: " + err.message);
+    }
+  }
+
+  async function handleConfirmDraft(draft) {
+    const a = draft.analysis || {};
+    const amount = Number(a.amount || 0);
+    if (!confirm(`Konfirmasi draft ${a.category || 'Lainnya'} senilai ${fmtRp(amount)}?`)) return;
+
+    setDraftActionId(draft.id);
+    try {
+      await confirmTransactionDraft(draft.id);
+      await refreshDrafts();
+      await refresh();
+      await onDataChanged?.();
+    } catch (err) {
+      alert("Gagal mengonfirmasi draft: " + err.message);
+    } finally {
+      setDraftActionId(null);
+    }
+  }
+
+  async function handleCancelDraft(draft) {
+    const a = draft.analysis || {};
+    const amount = Number(a.amount || 0);
+    if (!confirm(`Batalkan draft ${a.category || 'transaksi'} senilai ${fmtRp(amount)}?`)) return;
+
+    setDraftActionId(draft.id);
+    try {
+      await cancelTransactionDraft(draft.id);
+      await refreshDrafts();
+    } catch (err) {
+      alert("Gagal membatalkan draft: " + err.message);
+    } finally {
+      setDraftActionId(null);
     }
   }
 
@@ -210,6 +264,63 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
           )}
         </div>
       </div>
+
+      {(draftsLoading || drafts.length > 0) && (
+        <div className="gloss-panel mb-4 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-bold text-amber-800">
+              <AlertCircle size={17} />
+              Draft dari WhatsApp/Telegram
+            </div>
+            {draftsLoading && <Loader2 size={16} className="animate-spin text-amber-700" />}
+          </div>
+          <div className="space-y-2">
+            {drafts.map((draft) => {
+              const a = draft.analysis || {};
+              const isBusy = draftActionId === draft.id;
+              const typeLabel = a.transaction_type === 'income' ? 'Pemasukan' : 'Pengeluaran';
+              const merchant = a.merchant ? ` — ${a.merchant}` : '';
+              return (
+                <div key={draft.id} className="rounded-2xl bg-white/80 p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-navy">
+                        {typeLabel} {fmtRp(Number(a.amount || 0))}
+                      </div>
+                      <div className="mt-0.5 text-xs font-medium text-neutral-600">
+                        {a.category || 'Belum dikategorikan'}{merchant}
+                      </div>
+                      <div className="mt-0.5 text-[11px] font-medium text-neutral-400">
+                        {a.source_wallet_name || 'Dompet belum pasti'} · {a.transaction_date || 'Tanggal belum pasti'} · {draft.source_channel || 'bot'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmDraft(draft)}
+                      disabled={isBusy}
+                      className="flex min-h-[38px] items-center justify-center gap-1.5 rounded-full bg-mint px-3 text-xs font-bold text-white disabled:opacity-60"
+                    >
+                      {isBusy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                      Konfirmasi
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCancelDraft(draft)}
+                      disabled={isBusy}
+                      className="flex min-h-[38px] items-center justify-center gap-1.5 rounded-full border border-coral/30 px-3 text-xs font-bold text-coral disabled:opacity-60"
+                    >
+                      <XCircle size={14} />
+                      Batalkan
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="gloss-panel rounded-2xl p-4">
         {loading ? (

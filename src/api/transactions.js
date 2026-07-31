@@ -43,6 +43,23 @@ export async function deleteTransaction(id) {
   await apiFetch(`/transactions/${id}`, { method: 'DELETE' });
 }
 
+export async function getPendingTransactionDrafts(limit = 20) {
+  const data = await apiFetch(`/transaction-analysis/drafts?limit=${limit}`);
+  return data.drafts || [];
+}
+
+export async function confirmTransactionDraft(id, corrections = {}) {
+  const data = await apiFetch(`/transaction-analysis/drafts/${id}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ corrections }),
+  });
+  return data.transaction;
+}
+
+export async function cancelTransactionDraft(id) {
+  await apiFetch(`/transaction-analysis/drafts/${id}`, { method: 'DELETE' });
+}
+
 // Export CSV bukan lewat apiFetch karena responsnya file, bukan JSON —
 // fetch manual supaya tetap bisa kirim header Authorization (bukan link biasa).
 export async function exportMonthCSV(monthKey) {
