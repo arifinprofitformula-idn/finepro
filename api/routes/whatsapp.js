@@ -289,8 +289,8 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
     const categoryLabel = analysis.category || 'belum dikategorikan';
     const merchantLabel = analysis.merchant ? ` — ${analysis.merchant}` : '';
     const needsMsg = (analysis.needs_confirmation)
-      ? '\n\nBeberapa data belum pasti. Silakan konfirmasi di web finepro.my.id.'
-      : '';
+      ? '\n\nBeberapa data belum pasti. Balas *YA* untuk konfirmasi langsung ke sistem, atau *BATAL* untuk membatalkan.'
+      : '\n\nBalas *YA* untuk konfirmasi langsung, atau *BATAL* untuk membatalkan.';
 
     return {
       status: 'draft',
@@ -509,7 +509,7 @@ router.post('/webhook', async (req, res) => {
         return;
       }
 
-      // 2b. Chat AI — cek user sudah terhubung
+      // Ambil user dari whatsapp_id
       const userResult = await pool.query(
         'SELECT id, name, email FROM users WHERE whatsapp_id = $1',
         [waId]
@@ -533,6 +533,72 @@ router.post('/webhook', async (req, res) => {
         return;
       }
 
+      // ── BARU: WhatsApp Auto-Confirm Draft ─────────────────────────
+      const textLower = text.toLowerCase();
+      const isConfirmPattern = ['ya', 'y', 'ok', 'oke', 'konfirmasi', 'betul', 'bener', 'confirm', 'yes', 'sudah'].includes(textLower);
+      const isCancelPattern = ['batal', 'batalkan', 'cancel', 'salah', 'hapus', 'reject'].includes(textLower);
+
+      if (isConfirmPattern || isCancelPattern) {
+        // Cari draft pending terbaru milik user
+        const latestDraftResult = await pool.query(
+          `SELECT id, analysis FROM transaction_analysis_drafts
+           WHERE household_id = $1 AND user_id = $2 AND status = 'pending'
+           ORDER BY created_at DESC LIMIT 1`,
+          [householdId, user.id]
+        );
+        const draft = latestDraftResult.rows[0];
+
+        if (draft) {
+          const a = draft.analysis || {};
+          const amountStr = new Intl.NumberFormat('id-ID').format(Number(a.amount || 0));
+          const typeLabel = a.transaction_type === 'income' ? 'Pemasukan' : 'Pengeluaran';
+          const category = a.category || 'Lainnya';
+
+          if (isConfirmPattern) {
+            const { confirmDraft } = await import('../services/transactionImageAnalysisService.js');
+            try {
+              await confirmDraft(draft.id, user.id, householdId);
+              await sendWaMessage(
+                waId,
+                `Transaksi ${typeLabel} Rp${amountStr} (${category}) berhasil dikonfirmasi! ✅ data sudah masuk ke riwayat.`
+              );
+              return;
+            } catch (confirmErr) {
+              console.error('WhatsApp auto confirm draft error:', confirmErr);
+              await sendWaMessage(
+                waId,
+                `Gagal mengonfirmasi draft secara otomatis: ${confirmErr.message}`
+              );
+              return;
+            }
+          } else if (isCancelPattern) {
+            try {
+              await pool.query(
+                `UPDATE transaction_analysis_drafts SET status = 'rejected', updated_at = now() WHERE id = $1`,
+                [draft.id]
+              );
+              await sendWaMessage(
+                waId,
+                `Draft transaksi ${typeLabel} Rp${amountStr} (${category}) berhasil dibatalkan. ❌`
+              );
+              return;
+            } catch (cancelErr) {
+              console.error('WhatsApp auto cancel draft error:', cancelErr);
+              await sendWaMessage(
+                waId,
+                `Gagal membatalkan draft: ${cancelErr.message}`
+              );
+              return;
+            }
+          }
+        } else {
+          // Jika tidak ada draft pending, biarkan masuk ke alur Chat AI di bawah
+          console.log('User mengirim konfirmasi/batal tapi tidak ada draft pending.');
+        }
+      }
+      // ─────────────────────────────────────────────────────────────
+
+      // 2b. Chat AI — cek user sudah terhubung
       // Cek AI config
       const aiConfig = await getSetting('ai');
       const userName = user.name || user.email?.split('@')[0] || 'Pengguna';

@@ -4,7 +4,7 @@
 // pagination di api/routes/transactions.js), plus unduh CSV (memakai filter
 // aktif) dan cadangan JSON penuh (tidak terpengaruh filter).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import TransactionItem from "../components/TransactionItem.jsx";
 import TransactionModal from "../components/TransactionModal.jsx";
 import { useTransactionHistory } from "../hooks/useTransactionHistory.js";
@@ -42,10 +42,12 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
     }
   }
 
+  const memoRefreshDrafts = useCallback(refreshDrafts, []);
+
   useEffect(() => {
-    refreshDrafts();
+    memoRefreshDrafts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [household.id]);
+  }, [household.id, memoRefreshDrafts]);
 
   // Debounce pencarian catatan — hindari fetch tiap ketikan.
   useEffect(() => {

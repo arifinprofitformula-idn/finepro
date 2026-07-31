@@ -810,6 +810,10 @@ export async function confirmDraft(draftId, userId, householdId, corrections = {
   }
 
   // Save transaction
+  const finalType = ['income', 'expense'].includes(analysis.transaction_type)
+    ? analysis.transaction_type
+    : 'expense'; // Default to expense for safety
+
   const txResult = await pool.query(
     `INSERT INTO transactions (household_id, created_by, date, type, category, amount, note, wallet_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -818,7 +822,7 @@ export async function confirmDraft(draftId, userId, householdId, corrections = {
       householdId,
       userId,
       analysis.transaction_date,
-      analysis.transaction_type === 'transfer' ? 'expense' : analysis.transaction_type,
+      finalType,
       analysis.category || 'Lainnya',
       analysis.amount,
       analysis.description || analysis.merchant || '',
