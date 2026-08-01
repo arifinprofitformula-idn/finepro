@@ -267,7 +267,7 @@ export default function HistoryPage({ household, categoriesExpense, categoriesIn
         </div>
       </div>
 
-      {(draftsLoading || drafts.length > 0) && (
+      {drafts.length > 0 && (
         <div className="gloss-panel mb-4 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm font-bold text-amber-800">
