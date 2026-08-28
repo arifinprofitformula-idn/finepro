@@ -9,7 +9,18 @@ import RouteChangeTracker from "./components/tracking/RouteChangeTracker.jsx";
 import CookieConsentBanner from "./components/tracking/CookieConsentBanner.jsx";
 import "./styles/tailwind.css";
 
-// Registrasi service worker otomatis (vite-plugin-pwa)
+// Registrasi service worker otomatis. Saat worker baru mengambil alih PWA yang
+// sedang terbuka, reload satu kali agar UI tidak terus memakai precache lama.
+const hadServiceWorkerController = Boolean(navigator.serviceWorker?.controller);
+let reloadingForServiceWorkerUpdate = false;
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadServiceWorkerController && !reloadingForServiceWorkerUpdate) {
+      reloadingForServiceWorkerUpdate = true;
+      window.location.reload();
+    }
+  });
+}
 registerSW({ immediate: true });
 
 const isAdminPath = window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/");
