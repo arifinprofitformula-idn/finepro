@@ -1,16 +1,25 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import {
+  reconcileWalletBalance,
+  reverseWalletReconciliation,
+  listWalletReconciliations,
+} from '../services/walletReconciliationService.js';
 
 const router = Router();
 router.use(authMiddleware);
 
-async function getUserHouseholdId(userId) {
+async function getUserMembership(userId) {
   const result = await pool.query(
-    'SELECT household_id FROM household_members WHERE user_id = $1 LIMIT 1',
+    'SELECT household_id, role FROM household_members WHERE user_id = $1 LIMIT 1',
     [userId]
   );
-  return result.rows[0]?.household_id || null;
+  return result.rows[0] || null;
+}
+
+async function getUserHouseholdId(userId) {
+  return (await getUserMembership(userId))?.household_id || null;
 }
 
 // GET /api/wallets — daftar wallet + saldo terhitung
@@ -19,8 +28,9 @@ async function getUserHouseholdId(userId) {
 // memengaruhi total income/expense household.
 router.get('/', async (req, res) => {
   try {
-    const householdId = await getUserHouseholdId(req.user.userId);
-    if (!householdId) return res.json({ wallets: [] });
+    const membership = await getUserMembership(req.user.userId);
+    const householdId = membership?.household_id;
+    if (!householdId) return res.json({ wallets: [], can_reconcile: false });
 
     const result = await pool.query(
       `SELECT
@@ -31,6 +41,7 @@ router.get('/', async (req, res) => {
          ), 0)
          + COALESCE((SELECT SUM(amount) FROM wallet_transfers WHERE to_wallet_id = w.id), 0)
          - COALESCE((SELECT SUM(amount) FROM wallet_transfers WHERE from_wallet_id = w.id), 0)
+         + COALESCE((SELECT SUM(adjustment_amount) FROM wallet_reconciliations WHERE wallet_id = w.id), 0)
          as balance
        FROM wallets w
        WHERE w.household_id = $1
@@ -39,7 +50,8 @@ router.get('/', async (req, res) => {
     );
 
     res.json({
-      wallets: result.rows.map(w => ({ ...w, balance: parseFloat(w.balance) }))
+      wallets: result.rows.map(w => ({ ...w, balance: parseFloat(w.balance), can_reconcile: membership.role === 'owner' })),
+      can_reconcile: membership.role === 'owner'
     });
   } catch (err) {
     res.status(500).json({ error: 'Gagal mengambil data dompet' });
@@ -105,6 +117,7 @@ router.post('/transfer', async (req, res) => {
          ), 0)
          + COALESCE((SELECT SUM(amount) FROM wallet_transfers WHERE to_wallet_id = $1), 0)
          - COALESCE((SELECT SUM(amount) FROM wallet_transfers WHERE from_wallet_id = $1), 0)
+         + COALESCE((SELECT SUM(adjustment_amount) FROM wallet_reconciliations WHERE wallet_id = $1), 0)
          as balance`,
       [from_wallet_id]
     );
@@ -128,6 +141,57 @@ router.post('/transfer', async (req, res) => {
     res.status(500).json({ error: 'Gagal melakukan transfer' });
   } finally {
     client.release();
+  }
+});
+
+
+// POST /api/wallets/:id/reconcile — set baseline saldo aktual tanpa mencemari income/expense.
+router.post('/:id/reconcile', async (req, res) => {
+  try {
+    const membership = await getUserMembership(req.user.userId);
+    if (!membership) return res.status(400).json({ error: 'Belum punya household' });
+    const result = await reconcileWalletBalance({
+      householdId: membership.household_id,
+      walletId: req.params.id,
+      userId: req.user.userId,
+      actualBalance: req.body?.actual_balance,
+      reason: req.body?.reason,
+      note: req.body?.note || '',
+      idempotencyKey: req.get('Idempotency-Key') || req.body?.idempotency_key,
+    });
+    res.status(result.alreadyExisted ? 200 : 201).json({ reconciliation: result });
+  } catch (err) {
+    const status = err.code === 'RECONCILIATION_FORBIDDEN' ? 403 : 400;
+    res.status(status).json({ error: err.message, code: err.code });
+  }
+});
+
+router.get('/:id/reconciliations', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
+    const wallet = await pool.query('SELECT id FROM wallets WHERE id = $1 AND household_id = $2', [req.params.id, householdId]);
+    if (!wallet.rowCount) return res.status(404).json({ error: 'Dompet tidak ditemukan' });
+    const reconciliations = await listWalletReconciliations(req.params.id, householdId, req.query.limit);
+    res.json({ reconciliations });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal mengambil riwayat kalibrasi' });
+  }
+});
+
+router.post('/reconciliations/:id/reverse', async (req, res) => {
+  try {
+    const membership = await getUserMembership(req.user.userId);
+    if (!membership) return res.status(400).json({ error: 'Belum punya household' });
+    const result = await reverseWalletReconciliation({
+      reconciliationId: req.params.id,
+      householdId: membership.household_id,
+      userId: req.user.userId,
+    });
+    res.status(result.alreadyExisted ? 200 : 201).json({ reconciliation: result });
+  } catch (err) {
+    const status = err.code === 'RECONCILIATION_FORBIDDEN' ? 403 : 400;
+    res.status(status).json({ error: err.message, code: err.code });
   }
 });
 

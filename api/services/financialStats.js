@@ -146,6 +146,7 @@ export async function computeFinancialStats(householdId) {
        ), 0)
        + COALESCE((SELECT SUM(amount) FROM wallet_transfers WHERE to_wallet_id = w.id), 0)
        - COALESCE((SELECT SUM(amount) FROM wallet_transfers WHERE from_wallet_id = w.id), 0)
+       + COALESCE((SELECT SUM(adjustment_amount) FROM wallet_reconciliations WHERE wallet_id = w.id), 0)
        as balance
      FROM wallets w WHERE w.household_id = $1`,
     [householdId]

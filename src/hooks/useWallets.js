@@ -3,7 +3,7 @@
 // hook lain (useHousehold.js, useDashboard.js): state + refresh + actions.
 
 import { useState, useCallback, useEffect } from "react";
-import { getWallets, createWallet as apiCreateWallet, transferBetweenWallets as apiTransfer } from "../api/wallets.js";
+import { getWallets, createWallet as apiCreateWallet, transferBetweenWallets as apiTransfer, reconcileWallet as apiReconcile } from "../api/wallets.js";
 
 export function useWallets(householdId) {
   const [wallets, setWallets] = useState([]);
@@ -40,5 +40,11 @@ export function useWallets(householdId) {
     return result;
   }, [refresh]);
 
-  return { wallets, loading, refresh, createWallet, transfer };
+  const reconcile = useCallback(async (payload) => {
+    const result = await apiReconcile(payload);
+    await refresh();
+    return result;
+  }, [refresh]);
+
+  return { wallets, loading, refresh, createWallet, transfer, reconcile };
 }

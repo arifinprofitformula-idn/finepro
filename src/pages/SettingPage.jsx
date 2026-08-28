@@ -11,7 +11,7 @@ import { changePassword, translateAuthError } from "../api/auth.js";
 import { disconnectTelegramLink, startTelegramLink } from "../api/telegram.js";
 import { disconnectWhatsAppLink, startWhatsAppLink } from "../api/whatsapp.js";
 import { subscribeToPush, getPushPermissionState } from "../api/push.js";
-import { monthKey, todayStr } from "../utils/format.js";
+import { fmtRp, monthKey, todayStr } from "../utils/format.js";
 import { hasNativeInstallPrompt, isAppInstalled, runNativeInstallPrompt, subscribeInstallState } from "../utils/pwaInstall.js";
 import {
   ArrowDownLeft,
@@ -94,9 +94,15 @@ export default function SettingPage({
   const [incomeDayMsgType, setIncomeDayMsgType] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const { wallets, createWallet: addWallet, transfer: transferWallets } = useWallets(household.id);
+  const { wallets, createWallet: addWallet, transfer: transferWallets, reconcile: reconcileWallet } = useWallets(household.id);
   const [newWalletName, setNewWalletName] = useState("");
   const [walletSaving, setWalletSaving] = useState(false);
+  const [reconcileTarget, setReconcileTarget] = useState(null);
+  const [actualBalance, setActualBalance] = useState("");
+  const [reconcileReason, setReconcileReason] = useState("missing_history");
+  const [reconcileNote, setReconcileNote] = useState("");
+  const [reconcileSaving, setReconcileSaving] = useState(false);
+  const [reconcileMsg, setReconcileMsg] = useState("");
   const [transferFrom, setTransferFrom] = useState("");
   const [transferTo, setTransferTo] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
@@ -329,6 +335,43 @@ export default function SettingPage({
     }
   }
 
+  function openReconciliation(wallet) {
+    setReconcileTarget(wallet);
+    setActualBalance(String(wallet.balance));
+    setReconcileReason("missing_history");
+    setReconcileNote("");
+    setReconcileMsg("");
+  }
+
+  async function handleReconciliation(e) {
+    e.preventDefault();
+    const actual = Number(actualBalance);
+    if (!Number.isFinite(actual) || actual < 0) {
+      setReconcileMsg("Saldo aktual tidak valid.");
+      return;
+    }
+    if (actual === Number(reconcileTarget.balance)) {
+      setReconcileMsg("Saldo sudah sesuai, tidak perlu dikalibrasi.");
+      return;
+    }
+    setReconcileSaving(true);
+    setReconcileMsg("");
+    try {
+      await reconcileWallet({
+        walletId: reconcileTarget.id,
+        actual_balance: actual,
+        reason: reconcileReason,
+        note: reconcileNote,
+        idempotency_key: crypto.randomUUID(),
+      });
+      setReconcileTarget(null);
+    } catch (err) {
+      setReconcileMsg(err.message);
+    } finally {
+      setReconcileSaving(false);
+    }
+  }
+
   async function handleTransfer(e) {
     e.preventDefault();
     setTransferSaving(true);
@@ -436,6 +479,7 @@ export default function SettingPage({
   }
 
   return (
+    <>
     <div className="max-w-lg mx-auto px-5 pb-28">
       {installCardVisible && (
         <div className="gloss-panel mb-4 rounded-2xl p-4">
@@ -718,7 +762,7 @@ export default function SettingPage({
       <div className="gloss-panel mb-4 rounded-2xl p-4">
         <SectionHeader icon={Wallet} tone="violet" title="Dompet" />
         {wallets.map((w) => (
-          <WalletCard key={w.id} wallet={w} />
+          <WalletCard key={w.id} wallet={w} onReconcile={openReconciliation} />
         ))}
 
         <form onSubmit={handleAddWallet} className="mt-3 flex gap-2">
@@ -923,5 +967,38 @@ export default function SettingPage({
         Keluar
       </button>
     </div>
+
+
+      {reconcileTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy/45 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label="Kalibrasi saldo dompet">
+          <form onSubmit={handleReconciliation} className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+            <h2 className="text-lg font-bold text-navy">Kalibrasi Saldo {reconcileTarget.name}</h2>
+            <p className="mt-1 text-xs leading-5 text-neutral-500">
+              Masukkan saldo nyata saat ini. Transaksi lama tidak diubah. FinePro membuat penyesuaian khusus yang tidak dihitung sebagai pemasukan atau pengeluaran.
+            </p>
+            <div className="mt-4 rounded-2xl bg-violet-light p-3 text-sm">
+              <div className="flex justify-between"><span>Saldo FinePro</span><strong>{fmtRp(reconcileTarget.balance)}</strong></div>
+              <div className="mt-1 flex justify-between"><span>Selisih</span><strong>{fmtRp((Number(actualBalance) || 0) - Number(reconcileTarget.balance))}</strong></div>
+            </div>
+            <label className="mt-4 block text-xs font-semibold text-neutral-600" htmlFor="actual-wallet-balance">Saldo aktual</label>
+            <input id="actual-wallet-balance" type="number" min="0" step="1" required value={actualBalance} onChange={(e) => setActualBalance(e.target.value)} className={`${inputClass} mt-1`} />
+            <label className="mt-3 block text-xs font-semibold text-neutral-600" htmlFor="reconcile-reason">Alasan</label>
+            <select id="reconcile-reason" value={reconcileReason} onChange={(e) => setReconcileReason(e.target.value)} className={`${inputClass} mt-1`}>
+              <option value="missing_history">Transaksi sebelumnya tidak lengkap</option>
+              <option value="unknown_activity">Aktivitas lama tidak diketahui</option>
+              <option value="opening_balance_error">Saldo awal kurang tepat</option>
+              <option value="other">Alasan lain</option>
+            </select>
+            <label className="mt-3 block text-xs font-semibold text-neutral-600" htmlFor="reconcile-note">Catatan (opsional)</label>
+            <input id="reconcile-note" type="text" maxLength="500" value={reconcileNote} onChange={(e) => setReconcileNote(e.target.value)} placeholder="Contoh: lupa mencatat beberapa transaksi" className={`${inputClass} mt-1`} />
+            {reconcileMsg && <div className="mt-3 rounded-xl bg-coral-light px-3 py-2 text-xs font-medium text-coral">{reconcileMsg}</div>}
+            <div className="mt-5 flex gap-2">
+              <button type="button" onClick={() => setReconcileTarget(null)} disabled={reconcileSaving} className={`${outlineBtnClass} flex-1`}>Batal</button>
+              <button type="submit" disabled={reconcileSaving} className={`${primaryBtnClass} flex-1`}>{reconcileSaving ? "Menyimpan..." : "Kalibrasi Saldo"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
   );
 }
