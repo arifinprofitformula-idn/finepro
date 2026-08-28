@@ -76,10 +76,11 @@ router.get('/drafts', async (req, res) => {
     const result = await pool.query(
       `SELECT id, source_channel, analysis, created_at, updated_at
        FROM transaction_analysis_drafts
-       WHERE household_id = $1 AND status = 'pending'
+       WHERE household_id = $1 AND user_id = $2 AND status = 'pending'
+         AND confirmed_transaction_id IS NULL
        ORDER BY created_at DESC
-       LIMIT $2`,
-      [householdId, limit]
+       LIMIT $3`,
+      [householdId, req.user.userId, limit]
     );
 
     res.json({ drafts: result.rows });
@@ -148,7 +149,7 @@ router.delete('/drafts/:id', async (req, res) => {
     const householdId = await getUserHouseholdId(req.user.userId);
     if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
 
-    const cancelled = await cancelDraft(req.params.id, householdId);
+    const cancelled = await cancelDraft(req.params.id, req.user.userId, householdId);
     if (!cancelled) return res.status(404).json({ error: 'Draft tidak ditemukan' });
     res.json({ ok: true });
   } catch (err) {

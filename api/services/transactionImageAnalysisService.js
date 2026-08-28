@@ -763,135 +763,140 @@ async function analyzeWithVisionFallback({
   throw new Error(`Nominal tidak terbaca setelah OCR dan vision fallback: ${reason}`);
 }
 
+// Cancel unselected drafts produced when one image is split into several candidates.
+// Only the selected candidate remains actionable; alternatives must never appear as
+// separate transactions waiting for confirmation.
+export async function cancelAlternativeDrafts(draftIds, selectedDraftId, userId, householdId) {
+  const ids = [...new Set((draftIds || []).filter(Boolean))];
+  if (!selectedDraftId || ids.length < 2) return 0;
+
+  const result = await pool.query(
+    `UPDATE transaction_analysis_drafts
+     SET status = 'cancelled', updated_at = now()
+     WHERE id = ANY($1::uuid[])
+       AND id <> $2
+       AND user_id = $3
+       AND household_id = $4
+       AND status = 'pending'
+     RETURNING id`,
+    [ids, selectedDraftId, userId, householdId]
+  );
+  return result.rowCount;
+}
+
 // ---------- Confirm Draft (save actual transaction) ----------
 
 export async function confirmDraft(draftId, userId, householdId, corrections = {}) {
-  const draftResult = await pool.query(
-    `SELECT * FROM transaction_analysis_drafts WHERE id = $1 AND household_id = $2 AND status = 'pending'`,
-    [draftId, householdId]
-  );
+  const client = await pool.connect();
+  let draft;
+  let transaction;
 
-  if (draftResult.rows.length === 0) {
-    // Idempotent: if draft is already confirmed, return existing transaction silently
-    const confirmed = await pool.query(
-      `SELECT t.id, to_char(t.date, 'YYYY-MM-DD') as date, t.type, t.category,
-              t.amount, t.note, t.created_at, t.wallet_id, d.status as draft_status
-       FROM transaction_analysis_drafts d
-       JOIN transactions t ON t.household_id = d.household_id
-         AND t.created_by = d.user_id
-         AND t.created_at > d.created_at - interval '1 minute'
-       WHERE d.id = $1 AND d.household_id = $2 AND d.status = 'confirmed'
-       ORDER BY t.created_at DESC LIMIT 1`,
-      [draftId, householdId]
-    );
-    if (confirmed.rows.length > 0) {
-      return { transaction: confirmed.rows[0], already_existed: true };
-    }
-    throw new Error('Draft tidak ditemukan atau sudah dikonfirmasi');
-  }
-
-  const draft = draftResult.rows[0];
-  const analysis = { ...JSON.parse(JSON.stringify(draft.analysis)), ...corrections };
-
-  // Resolve wallet
-  let walletId = analysis.source_wallet_id;
-  if (analysis.transaction_type === 'income' && analysis.destination_wallet_id) {
-    walletId = analysis.destination_wallet_id;
-  }
-  if (analysis.transaction_type === 'transfer' && analysis.source_wallet_id) {
-    walletId = analysis.source_wallet_id;
-  }
-  if (!walletId) {
-    const def = await pool.query(
-      'SELECT id FROM wallets WHERE household_id = $1 AND is_default = true LIMIT 1',
-      [householdId]
-    );
-    walletId = def.rows[0]?.id || null;
-  }
-
-  // Save transaction
-  const finalType = ['income', 'expense'].includes(analysis.transaction_type)
-    ? analysis.transaction_type
-    : 'expense'; // Default to expense for safety
-
-  const txResult = await pool.query(
-    `INSERT INTO transactions (household_id, created_by, date, type, category, amount, note, wallet_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING id, to_char(date, 'YYYY-MM-DD') as date, type, category, amount, note, created_at, wallet_id`,
-    [
-      householdId,
-      userId,
-      analysis.transaction_date,
-      finalType,
-      analysis.category || 'Lainnya',
-      analysis.amount,
-      analysis.description || analysis.merchant || '',
-      walletId,
-    ]
-  );
-
-  // Update draft status
-  await pool.query(
-    `UPDATE transaction_analysis_drafts SET status = 'confirmed', confirmed_transaction_id = $1, updated_at = now() WHERE id = $2`,
-    [txResult.rows[0].id, draftId]
-  );
-
-  // Save feedback if corrections were made
-  const correctedFields = Object.keys(corrections);
-  if (correctedFields.length > 0) {
-    await pool.query(
-      `INSERT INTO transaction_analysis_feedback
-       (household_id, user_id, draft_id, transaction_id, original_analysis, corrected_fields, source_channel)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [
-        householdId,
-        userId,
-        draftId,
-        txResult.rows[0].id,
-        JSON.stringify(draft.analysis),
-        JSON.stringify(corrections),
-        draft.source_channel,
-      ]
+  try {
+    await client.query('BEGIN');
+    const draftResult = await client.query(
+      `SELECT * FROM transaction_analysis_drafts
+       WHERE id = $1 AND user_id = $2 AND household_id = $3
+       FOR UPDATE`,
+      [draftId, userId, householdId]
     );
 
-    // Sprint 2: Feed corrections into intelligence layer
-    try {
-      const { processFeedback } = await import('./feedbackLearning.js');
-      await processFeedback({
-        householdId,
-        userId,
-        feedbackType: 'corrected',
-        originalAnalysis: draft.analysis,
-        correctedFields: corrections,
-        channel: draft.source_channel,
-        draftId,
-        transactionId: txResult.rows[0].id,
-        ocrText: draft.analysis?.ocr_text || '',
-      });
-    } catch (e) {
-      console.error('Feedback learning error (non-fatal):', e);
+    if (draftResult.rows.length === 0) throw new Error('Draft tidak ditemukan');
+    draft = draftResult.rows[0];
+
+    if (draft.status === 'confirmed') {
+      if (!draft.confirmed_transaction_id) {
+        throw new Error('Transaksi hasil konfirmasi sudah tidak tersedia');
+      }
+      const existing = await client.query(
+        `SELECT id, to_char(date, 'YYYY-MM-DD') as date, type, category,
+                amount, note, created_at, wallet_id, source
+         FROM transactions WHERE id = $1 AND household_id = $2`,
+        [draft.confirmed_transaction_id, householdId]
+      );
+      if (existing.rows.length === 0) {
+        throw new Error('Transaksi hasil konfirmasi sudah tidak tersedia');
+      }
+      await client.query('COMMIT');
+      return { transaction: existing.rows[0], already_existed: true };
     }
-  } else {
-    // Sprint 2: No corrections — positive feedback, boost merchant mapping
-    try {
-      const { processFeedback } = await import('./feedbackLearning.js');
-      await processFeedback({
-        householdId,
-        userId,
-        feedbackType: 'correct',
-        originalAnalysis: draft.analysis,
-        correctedFields: {},
-        channel: draft.source_channel,
-        draftId,
-        transactionId: txResult.rows[0].id,
-        ocrText: draft.analysis?.ocr_text || '',
-      });
-    } catch (e) {
-      console.error('Feedback learning error (non-fatal):', e);
+
+    if (draft.status !== 'pending') throw new Error('Draft sudah tidak aktif');
+
+    const analysis = { ...JSON.parse(JSON.stringify(draft.analysis)), ...corrections };
+    let walletId = analysis.source_wallet_id;
+    if (analysis.transaction_type === 'income' && analysis.destination_wallet_id) {
+      walletId = analysis.destination_wallet_id;
     }
+    if (analysis.transaction_type === 'transfer' && analysis.source_wallet_id) {
+      walletId = analysis.source_wallet_id;
+    }
+    if (!walletId) {
+      const def = await client.query(
+        'SELECT id FROM wallets WHERE household_id = $1 AND is_default = true LIMIT 1',
+        [householdId]
+      );
+      walletId = def.rows[0]?.id || null;
+    }
+
+    const finalType = ['income', 'expense'].includes(analysis.transaction_type)
+      ? analysis.transaction_type
+      : 'expense';
+    const source = ['whatsapp', 'telegram'].includes(draft.source_channel)
+      ? draft.source_channel
+      : 'receipt_scan';
+    const txResult = await client.query(
+      `INSERT INTO transactions
+       (household_id, created_by, date, type, category, amount, note, wallet_id, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, to_char(date, 'YYYY-MM-DD') as date, type, category,
+                 amount, note, created_at, wallet_id, source`,
+      [householdId, userId, analysis.transaction_date, finalType,
+       analysis.category || 'Lainnya', analysis.amount,
+       analysis.description || analysis.merchant || '', walletId, source]
+    );
+    transaction = txResult.rows[0];
+
+    await client.query(
+      `UPDATE transaction_analysis_drafts
+       SET status = 'confirmed', confirmed_transaction_id = $1, updated_at = now()
+       WHERE id = $2`,
+      [transaction.id, draftId]
+    );
+
+    if (Object.keys(corrections).length > 0) {
+      await client.query(
+        `INSERT INTO transaction_analysis_feedback
+         (household_id, user_id, draft_id, transaction_id, original_analysis, corrected_fields, source_channel)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [householdId, userId, draftId, transaction.id, JSON.stringify(draft.analysis),
+         JSON.stringify(corrections), draft.source_channel]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
   }
 
-  return { transaction: txResult.rows[0] };
+  try {
+    const { processFeedback } = await import('./feedbackLearning.js');
+    await processFeedback({
+      householdId, userId,
+      feedbackType: Object.keys(corrections).length > 0 ? 'corrected' : 'correct',
+      originalAnalysis: draft.analysis,
+      correctedFields: corrections,
+      channel: draft.source_channel,
+      draftId,
+      transactionId: transaction.id,
+      ocrText: draft.analysis?.ocr_text || '',
+    });
+  } catch (error) {
+    console.error('Feedback learning error (non-fatal):', error);
+  }
+
+  return { transaction, already_existed: false };
 }
 
 // ---------- Cancel Draft ----------
@@ -955,7 +960,22 @@ export async function analyzeWithPreprocessing({
         });
       }
     }
-    return { transaction_count: multiResult.count, transactions: results };
+    const candidates = results.filter((item) => item?.draft_id);
+    const selected = candidates.find((item) => !item.needs_confirmation)
+      || [...candidates].sort((a, b) => (b.overall_confidence || 0) - (a.overall_confidence || 0))[0];
+    if (selected?.draft_id) {
+      await cancelAlternativeDrafts(
+        candidates.map((item) => item.draft_id),
+        selected.draft_id,
+        userId,
+        householdId
+      );
+    }
+    return {
+      transaction_count: multiResult.count,
+      transactions: results,
+      selected_draft_id: selected?.draft_id || null,
+    };
   }
 
   // 2. Single receipt - preprocess
@@ -1079,11 +1099,11 @@ export async function analyzeWithPreprocessing({
   }
 }
 
-export async function cancelDraft(draftId, householdId) {
+export async function cancelDraft(draftId, userId, householdId) {
   const result = await pool.query(
     `UPDATE transaction_analysis_drafts SET status = 'cancelled', updated_at = now()
-     WHERE id = $1 AND household_id = $2 AND status = 'pending' RETURNING id`,
-    [draftId, householdId]
+     WHERE id = $1 AND user_id = $2 AND household_id = $3 AND status = 'pending' RETURNING id`,
+    [draftId, userId, householdId]
   );
   return result.rows.length > 0;
 }
