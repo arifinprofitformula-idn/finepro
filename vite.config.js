@@ -12,7 +12,7 @@ export default defineConfig({
       // precache manifest ke dalamnya, sisanya kode kita.
       strategies: "injectManifest",
       srcDir: "src",
-      filename: "sw.js",
+      filename: "sw-v2.js",
       registerType: "autoUpdate",
       includeAssets: ["favicon.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png"],
       manifest: {
