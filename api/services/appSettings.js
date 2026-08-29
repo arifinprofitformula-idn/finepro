@@ -21,6 +21,12 @@ const DEFAULTS = {
     secret_key: '',
     callback_verification_token: '',
   },
+  sumopod_payment: {
+    enabled: false,
+    api_key: '',
+    webhook_token: '',
+    base_url: 'https://api-pay.sumopod.com',
+  },
   payment_gateway: {
     active: 'midtrans',
   },
@@ -106,6 +112,7 @@ const SECRET_FIELDS = {
   mailketing: ['api_token'],
   midtrans: ['server_key', 'client_key'],
   xendit: ['secret_key', 'callback_verification_token'],
+  sumopod_payment: ['api_key', 'webhook_token'],
   ai: ['sumopod_api_key', 'anthropic_api_key', '9router_api_key'],
   ape_epi: ['api_key'],
   web_push: ['vapid_private_key'],
@@ -117,6 +124,7 @@ const ALLOWED_FIELDS = {
   mailketing: ['enabled', 'api_token', 'from_email', 'from_name', 'list_id', 'paid_list_id'],
   midtrans: ['enabled', 'is_production', 'server_key', 'client_key'],
   xendit: ['enabled', 'is_production', 'secret_key', 'callback_verification_token'],
+  sumopod_payment: ['enabled', 'api_key', 'webhook_token', 'base_url'],
   payment_gateway: ['active'],
   manual_payment: ['enabled', 'bank_name', 'account_number', 'account_name', 'instructions'],
   ai: [
@@ -191,6 +199,16 @@ function envFallback(key) {
       is_production: process.env.XENDIT_IS_PRODUCTION === 'true',
       secret_key: secretKey,
       callback_verification_token: callbackToken,
+    };
+  }
+  if (key === 'sumopod_payment') {
+    const apiKey = process.env.SUMOPOD_PAYMENT_API_KEY || '';
+    const webhookToken = process.env.SUMOPOD_PAYMENT_WEBHOOK_TOKEN || process.env.WEBHOOK_TOKEN || '';
+    return {
+      enabled: Boolean(apiKey && webhookToken),
+      api_key: apiKey,
+      webhook_token: webhookToken,
+      base_url: process.env.SUMOPOD_PAYMENT_BASE_URL || DEFAULTS.sumopod_payment.base_url,
     };
   }
   if (key === 'ai') {

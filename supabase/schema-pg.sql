@@ -162,10 +162,13 @@ CREATE TABLE IF NOT EXISTS payments (
   order_id TEXT UNIQUE NOT NULL,
   plan TEXT NOT NULL CHECK (plan IN ('monthly','semiannual','quarterly','annual','lifetime','ai_credit_topup')),
   amount NUMERIC NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','expired')),
   is_promo BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
-  paid_at TIMESTAMPTZ
+  paid_at TIMESTAMPTZ,
+  method TEXT NOT NULL DEFAULT 'midtrans' CHECK (method IN ('midtrans','xendit','sumopod','manual')),
+  provider_payment_id TEXT,
+  payment_link_url TEXT
 );
 
 -- 12. Arisan
@@ -518,6 +521,8 @@ INSERT INTO app_settings (key, value, is_secret)
 VALUES
   ('mailketing', '{"enabled": false, "api_token": "", "from_email": "", "from_name": "Finepro"}', true),
   ('midtrans', '{"enabled": false, "is_production": false, "server_key": "", "client_key": ""}', true),
+  ('sumopod_payment', '{"enabled": false, "api_key": "", "webhook_token": "", "base_url": "https://api-pay.sumopod.com"}', true),
+  ('payment_gateway', '{"active": "midtrans"}', false),
   ('manual_payment', '{"enabled": false, "bank_name": "", "account_number": "", "account_name": "", "instructions": ""}', false),
   ('ai', '{"enabled": false, "provider": "sumopod", "sumopod_api_key": "", "sumopod_base_url": "https://ai.sumopod.com/v1", "sumopod_model": "gpt-4o-mini", "anthropic_api_key": "", "anthropic_model": "claude-sonnet-4-5", "insights_daily_limit": 3, "receipt_scan_monthly_limit": 30}', true),
   ('ai_quota', '{"trial_insight_total": 3, "trial_scan_total": 5, "free_insight_monthly": 1, "free_scan_monthly": 3, "short_scan_monthly": 200, "short_insight_daily": 30, "short_telegram_daily": 500, "short_whatsapp_daily": 500, "annual_scan_monthly": 200, "annual_insight_daily": 30, "annual_telegram_daily": 500, "annual_whatsapp_daily": 500}', false),

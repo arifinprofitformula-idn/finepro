@@ -34,7 +34,7 @@ function StatusIcon({ status, polling }) {
     );
   }
 
-  if (status === "failed") {
+  if (status === "failed" || status === "expired") {
     return (
       <div className="flex h-20 w-20 items-center justify-center rounded-[28px] bg-coral-light text-coral shadow-soft">
         <XCircle size={42} />
@@ -88,8 +88,8 @@ export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard }
             await onPaid?.();
             return;
           }
-          if (nextPayment.status === "failed") {
-            setMessage("Pembayaran gagal atau dibatalkan.");
+          if (nextPayment.status === "failed" || nextPayment.status === "expired") {
+            setMessage(nextPayment.status === "expired" ? "Link pembayaran sudah kedaluwarsa." : "Pembayaran gagal atau dibatalkan.");
             setPolling(false);
             return;
           }
@@ -115,7 +115,7 @@ export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard }
 
   const planLabel = payment?.plan ? PLAN_LABELS[payment.plan] || payment.plan : null;
   const isPaid = payment?.status === "paid";
-  const isFailed = payment?.status === "failed";
+  const isFailed = payment?.status === "failed" || payment?.status === "expired";
 
   return (
     <div className="app-glow-bg min-h-screen px-5 py-8">

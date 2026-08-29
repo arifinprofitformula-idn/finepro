@@ -1,5 +1,5 @@
 // src/lib/payments.js
-// Upgrade langganan lewat gateway aktif (Manual / Midtrans / Xendit) — endpoint
+// Upgrade langganan lewat gateway aktif (Manual / Midtrans / Xendit / SumoPod) — endpoint
 // di api/routes/payments.js. Gateway aktif ditentukan admin di Admin Console.
 // Harga & status promo Early Access dihitung live di backend (lihat getPricing()),
 // tidak lagi di-hardcode di sini supaya harga otomatis kembali normal saat promo habis.
@@ -12,7 +12,7 @@ export async function getPricing() {
   return apiFetch('/payments/pricing');
 }
 
-// Untuk Midtrans: { orderId, token, redirectUrl }. Untuk Xendit: { orderId, invoiceUrl }.
+// Midtrans: { orderId, token, redirectUrl }; Xendit: { orderId, invoiceUrl }; SumoPod: { orderId, paymentId, paymentLinkUrl }.
 export async function createPayment(plan) {
   return apiFetch('/payments/create', {
     method: 'POST',
@@ -58,7 +58,7 @@ export async function getAiCreditBalances() {
   return data.features || {};
 }
 
-// Return: { active: 'manual'|'midtrans'|'xendit', methods: { midtrans, xendit, manual } }
+// Return: { active: 'manual'|'midtrans'|'xendit'|'sumopod', methods: { midtrans, xendit, sumopod, manual } }
 export async function getPaymentMethods() {
   const data = await apiFetch('/payments/methods');
   return { active: data.active, ...(data.methods || {}) };
@@ -73,6 +73,7 @@ export const PAYMENT_STATUS_LABELS = {
   paid: "Berhasil",
   pending: "Menunggu",
   failed: "Gagal",
+  expired: "Kedaluwarsa",
   rejected: "Ditolak"
 };
 

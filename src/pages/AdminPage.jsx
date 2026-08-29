@@ -1894,6 +1894,7 @@ export default function AdminPage({ user, onLogout }) {
   const [mailketing, setMailketing] = useFormState(settings?.mailketing);
   const [midtrans, setMidtrans, replaceMidtrans] = useFormState(settings?.midtrans);
   const [xendit, setXendit, replaceXendit] = useFormState(settings?.xendit);
+  const [sumopodPayment, setSumopodPayment, replaceSumopodPayment] = useFormState(settings?.sumopod_payment);
   const [paymentGateway, setPaymentGateway, replacePaymentGateway] = useFormState(settings?.payment_gateway);
   const [manualPayment, setManualPayment, replaceManualPayment] = useFormState(settings?.manual_payment);
   const [ai, setAi] = useFormState(settings?.ai);
@@ -2117,6 +2118,7 @@ export default function AdminPage({ user, onLogout }) {
     const nextManual = { ...manualPayment, enabled: active === "manual" };
     const nextMidtrans = { ...midtrans, enabled: active === "midtrans" };
     const nextXendit = { ...xendit, enabled: active === "xendit" };
+    const nextSumopod = { ...sumopodPayment, enabled: active === "sumopod" };
 
     setSavingKey("payment_method");
     setMessage("");
@@ -2126,17 +2128,19 @@ export default function AdminPage({ user, onLogout }) {
     }));
     setPaymentMethodFeedback({ tone: "info", text: "Menyimpan metode pembayaran..." });
     try {
-      const [updatedGateway, updatedManual, updatedMidtrans, updatedXendit] = await Promise.all([
+      const [updatedGateway, updatedManual, updatedMidtrans, updatedXendit, updatedSumopod] = await Promise.all([
         updateAdminSetting("payment_gateway", nextGateway),
         updateAdminSetting("manual_payment", nextManual),
         updateAdminSetting("midtrans", nextMidtrans),
         updateAdminSetting("xendit", nextXendit),
+        updateAdminSetting("sumopod_payment", nextSumopod),
       ]);
 
       replacePaymentGateway(updatedGateway);
       replaceManualPayment(updatedManual);
       replaceMidtrans(updatedMidtrans);
       replaceXendit(updatedXendit);
+      replaceSumopodPayment(updatedSumopod);
 
       setSettings((prev) => ({
         ...prev,
@@ -2144,10 +2148,11 @@ export default function AdminPage({ user, onLogout }) {
         manual_payment: updatedManual,
         midtrans: updatedMidtrans,
         xendit: updatedXendit,
+        sumopod_payment: updatedSumopod,
       }));
       setPaymentMethodFeedback({
         tone: "success",
-        text: `Berhasil disimpan. Metode aktif sekarang: ${active === "manual" ? "Transfer Manual" : active === "xendit" ? "Xendit" : "Midtrans"}.`,
+        text: `Berhasil disimpan. Metode aktif sekarang: ${active === "manual" ? "Transfer Manual" : active === "xendit" ? "Xendit" : active === "sumopod" ? "SumoPod QRIS" : "Midtrans"}.`,
       });
       setSettingFeedbacks((prev) => ({
         ...prev,
@@ -2713,11 +2718,12 @@ export default function AdminPage({ user, onLogout }) {
               tone="violet"
             />
             <div className="relative z-10 space-y-4">
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 {[
                   { value: "manual", label: "Transfer Manual", icon: Landmark },
                   { value: "midtrans", label: "Midtrans", icon: CreditCard },
                   { value: "xendit", label: "Xendit", icon: CreditCard },
+                  { value: "sumopod", label: "SumoPod QRIS", icon: QrCode },
                 ].map((method) => {
                   const Icon = method.icon;
                   const active = (paymentGateway.active || "midtrans") === method.value;
@@ -2812,6 +2818,26 @@ export default function AdminPage({ user, onLogout }) {
                       <label className={labelClass}>Callback Verification Token</label>
                       <input className={inputClass} type="password" value={xendit.callback_verification_token || ""} onChange={(e) => setXendit("callback_verification_token", e.target.value)} placeholder={xendit.callback_verification_token_masked || "Token webhook baru"} />
                       <SecretHint configured={xendit.callback_verification_token_configured} />
+                    </div>
+                  </FormRow>
+                </div>
+              )}
+
+              {(paymentGateway.active || "midtrans") === "sumopod" && (
+                <div className="space-y-3">
+                  <div className={`${glassSoft} px-3 py-2 text-sm font-semibold text-[#0b1c30]`}>
+                    SumoPod QRIS akan menjadi satu-satunya gateway aktif. Webhook: https://finepro.my.id/api/webhooks/sumopod
+                  </div>
+                  <FormRow>
+                    <div>
+                      <label className={labelClass}>Payment API Key</label>
+                      <input className={inputClass} type="password" value={sumopodPayment.api_key || ""} onChange={(e) => setSumopodPayment("api_key", e.target.value)} placeholder={sumopodPayment.api_key_masked || "API key baru"} />
+                      <SecretHint configured={sumopodPayment.api_key_configured} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Webhook Token</label>
+                      <input className={inputClass} type="password" value={sumopodPayment.webhook_token || ""} onChange={(e) => setSumopodPayment("webhook_token", e.target.value)} placeholder={sumopodPayment.webhook_token_masked || "Token rahasia webhook"} />
+                      <SecretHint configured={sumopodPayment.webhook_token_configured} />
                     </div>
                   </FormRow>
                 </div>
@@ -3430,6 +3456,7 @@ export default function AdminPage({ user, onLogout }) {
                   <option value="paid">Paid</option>
                   <option value="pending">Pending</option>
                   <option value="failed">Failed</option>
+                  <option value="expired">Expired</option>
                   <option value="rejected">Rejected</option>
                 </select>
                 <select
@@ -3440,6 +3467,7 @@ export default function AdminPage({ user, onLogout }) {
                   <option value="">Semua Metode</option>
                   <option value="midtrans">Midtrans</option>
                   <option value="xendit">Xendit</option>
+                  <option value="sumopod">SumoPod QRIS</option>
                   <option value="manual">Manual</option>
                 </select>
                 <input

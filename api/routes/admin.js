@@ -22,7 +22,7 @@ const adminLoginLimiter = rateLimit({
   message: { error: 'Terlalu banyak percobaan, coba lagi beberapa menit lagi' },
 });
 
-const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'xendit', 'payment_gateway', 'manual_payment', 'ai', 'ai_quota', 'pricing', 'ai_credit', 'ape_epi', 'web_push', 'telegram', 'whatsapp']);
+const SETTING_KEYS = new Set(['mailketing', 'midtrans', 'xendit', 'sumopod_payment', 'payment_gateway', 'manual_payment', 'ai', 'ai_quota', 'pricing', 'ai_credit', 'ape_epi', 'web_push', 'telegram', 'whatsapp']);
 
 function toInt(value, fallback) {
   const n = Number(value);
@@ -517,11 +517,11 @@ router.get('/payments', async (req, res) => {
       params.push(`%${q}%`);
       conditions.push(`(h.name ILIKE $${params.length} OR u.email ILIKE $${params.length})`);
     }
-    if (['pending', 'paid', 'failed', 'rejected'].includes(status)) {
+    if (['pending', 'paid', 'failed', 'expired', 'rejected'].includes(status)) {
       params.push(status);
       conditions.push(`p.status = $${params.length}`);
     }
-    if (['midtrans', 'xendit', 'manual'].includes(method)) {
+    if (['midtrans', 'xendit', 'sumopod', 'manual'].includes(method)) {
       params.push(method);
       conditions.push(`p.method = $${params.length}`);
     }

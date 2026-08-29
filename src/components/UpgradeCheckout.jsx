@@ -127,7 +127,7 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
   const [lifetimeTermsAccepted, setLifetimeTermsAccepted] = useState(false);
 
   useEffect(() => {
-    getPaymentMethods().then(setPaymentMethods).catch(() => setPaymentMethods({ active: null, midtrans: { enabled: false }, xendit: { enabled: false }, manual: { enabled: false } }));
+    getPaymentMethods().then(setPaymentMethods).catch(() => setPaymentMethods({ active: null, midtrans: { enabled: false }, xendit: { enabled: false }, sumopod: { enabled: false }, manual: { enabled: false } }));
     getPricing().then(setPricing).catch(() => setPricing(null));
   }, []);
 
@@ -152,6 +152,15 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
         }
         const { invoiceUrl } = await createPayment(planId);
         window.location.href = invoiceUrl;
+        return;
+      }
+
+      if (paymentMethods?.active === "sumopod") {
+        if (!paymentMethods?.sumopod?.enabled) {
+          throw new Error("Metode pembayaran SumoPod QRIS belum aktif. Hubungi admin Fine Pro.");
+        }
+        const { paymentLinkUrl } = await createPayment(planId);
+        window.location.href = paymentLinkUrl;
         return;
       }
 
@@ -285,10 +294,12 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
           <p className="mb-2 text-xs text-neutral-500">
             {paymentMethods?.active === "xendit"
               ? "Pembayaran diproses via Xendit, otomatis aktif setelah bayar."
+              : paymentMethods?.active === "sumopod"
+              ? "Pembayaran QRIS diproses via SumoPod, otomatis aktif setelah bayar."
               : "Pembayaran diproses via Midtrans, otomatis aktif setelah bayar."}
           </p>
           <div className={`mb-3 flex items-start gap-2 rounded-2xl p-3 text-xs font-semibold ${
-            (paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.midtrans?.enabled)
+            (paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.active === "sumopod" ? paymentMethods?.sumopod?.enabled : paymentMethods?.midtrans?.enabled)
               ? "bg-mint-light text-mint" : "bg-gold-light text-gold"
           }`}>
             <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" />
@@ -299,6 +310,10 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
                 ? (paymentMethods?.xendit?.enabled
                   ? "Xendit aktif. Pilih paket untuk membuka metode pembayaran."
                   : "Xendit belum aktif. Admin perlu mengisi Secret Key di Admin Console.")
+                : paymentMethods?.active === "sumopod"
+                ? (paymentMethods?.sumopod?.enabled
+                  ? "SumoPod QRIS aktif. Pilih paket untuk membuka link pembayaran."
+                  : "SumoPod Payment belum aktif. Admin perlu mengisi API Key dan Webhook Token.")
                 : (paymentMethods?.midtrans?.enabled
                   ? "Midtrans Snap aktif. Pilih paket untuk membuka metode pembayaran."
                   : "Midtrans belum aktif. Admin perlu mengisi Server Key dan Client Key di Admin Console.")}
@@ -307,7 +322,7 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
           <div className="flex flex-col gap-2">
             {PLAN_ORDER.filter((id) => pricing?.plans?.[id]).map((id) => {
               const p = pricing.plans[id];
-              const gatewayEnabled = paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.midtrans?.enabled;
+              const gatewayEnabled = paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.active === "sumopod" ? paymentMethods?.sumopod?.enabled : paymentMethods?.midtrans?.enabled;
               const blockedByTerms = id === "lifetime" && !lifetimeTermsAccepted;
               return (
                 <div

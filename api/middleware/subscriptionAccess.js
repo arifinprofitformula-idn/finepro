@@ -13,6 +13,7 @@ const PREFIX_EXEMPT = [
   '/api/payments',
   '/api/tracking',
   '/api/webhook',
+  '/api/webhooks',
 ];
 
 export function isSubscriptionExemptPath(path = '') {

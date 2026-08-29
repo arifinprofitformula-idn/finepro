@@ -15,6 +15,7 @@ import { getAiQuotaConfig } from '../services/aiUsage.js';
 import { trackBusinessEvent } from '../lib/tracking/trackingService.js';
 import { deriveEventId } from '../lib/tracking/idempotency.js';
 import { SELLABLE_PLANS } from '../services/planPolicy.js';
+import { createSumopodPayment, resolveSumopodConfig } from '../services/sumopodPayment.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROOF_UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'payment-proofs');
@@ -96,6 +97,14 @@ async function verifyMidtransSignature(body) {
   } catch {
     return false;
   }
+}
+
+async function getSumopodPaymentConfig() {
+  const config = resolveSumopodConfig(await getSetting('sumopod_payment'));
+  if (!config.enabled || !config.api_key || !config.webhook_token) {
+    throw new Error('SumoPod Payment belum dikonfigurasi');
+  }
+  return config;
 }
 
 async function getXenditConfig() {
@@ -215,6 +224,15 @@ export async function applyPaymentStatus(payment, nextStatus) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        const lockedPayment = await client.query(
+          'SELECT status FROM payments WHERE order_id = $1 FOR UPDATE',
+          [payment.order_id]
+        );
+        if (!lockedPayment.rows[0]) throw new Error('Payment tidak ditemukan');
+        if (lockedPayment.rows[0].status === 'paid') {
+          await client.query('COMMIT');
+          return 'paid';
+        }
         await client.query(
           `UPDATE payments SET status = 'paid', paid_at = COALESCE(paid_at, now()) WHERE order_id = $1`,
           [payment.order_id]
@@ -234,6 +252,17 @@ export async function applyPaymentStatus(payment, nextStatus) {
     let wasTrial = false;
     try {
       await client.query('BEGIN');
+      // Serialisasi webhook simultan untuk order sama. Tanpa row lock, dua event completed
+      // dapat sama-sama memperpanjang subscription sebelum salah satunya commit.
+      const lockedPayment = await client.query(
+        'SELECT status FROM payments WHERE order_id = $1 FOR UPDATE',
+        [payment.order_id]
+      );
+      if (!lockedPayment.rows[0]) throw new Error('Payment tidak ditemukan');
+      if (lockedPayment.rows[0].status === 'paid') {
+        await client.query('COMMIT');
+        return 'paid';
+      }
       await client.query(
         `UPDATE payments SET status = 'paid', paid_at = COALESCE(paid_at, now()) WHERE order_id = $1`,
         [payment.order_id]
@@ -295,9 +324,9 @@ export async function applyPaymentStatus(payment, nextStatus) {
     return 'paid';
   }
 
-  if (nextStatus === 'failed') {
-    await pool.query(`UPDATE payments SET status = 'failed' WHERE order_id = $1`, [payment.order_id]);
-    return 'failed';
+  if (nextStatus === 'failed' || nextStatus === 'expired') {
+    await pool.query('UPDATE payments SET status = $1 WHERE order_id = $2', [nextStatus, payment.order_id]);
+    return nextStatus;
   }
 
   return payment.status;
@@ -393,6 +422,31 @@ router.post('/create', authMiddleware, async (req, res) => {
 
     const orderId = `SUB-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 
+    if (activeGateway === 'sumopod') {
+      const config = await getSumopodPaymentConfig();
+      await pool.query(
+        `INSERT INTO payments (household_id, order_id, plan, amount, status, method, is_promo)
+         VALUES ($1, $2, $3, $4, 'pending', 'sumopod', $5)`,
+        [householdId, orderId, plan, planConfig.amount, planConfig.isPromo]
+      );
+      try {
+        const provider = await createSumopodPayment({
+          apiKey: config.api_key,
+          orderId,
+          amount: planConfig.amount,
+          baseUrl: process.env.APP_BASE_URL || 'https://finepro.my.id',
+        });
+        await pool.query(
+          'UPDATE payments SET provider_payment_id = $1, payment_link_url = $2 WHERE order_id = $3',
+          [provider.paymentId, provider.paymentLinkUrl, orderId]
+        );
+        return res.status(201).json({ orderId, paymentId: provider.paymentId, paymentLinkUrl: provider.paymentLinkUrl });
+      } catch (providerError) {
+        await pool.query(`UPDATE payments SET status = 'failed' WHERE order_id = $1`, [orderId]);
+        throw providerError;
+      }
+    }
+
     if (activeGateway === 'xendit') {
       await pool.query(
         `INSERT INTO payments (household_id, order_id, plan, amount, status, method, is_promo)
@@ -465,6 +519,31 @@ router.post('/ai-credit-topup/create', authMiddleware, async (req, res) => {
     const userResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.user.userId]);
     const user = userResult.rows[0];
     const orderId = `TOPUP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+
+    if (activeGateway === 'sumopod') {
+      const config = await getSumopodPaymentConfig();
+      await pool.query(
+        `INSERT INTO payments (household_id, order_id, plan, amount, status, method)
+         VALUES ($1, $2, 'ai_credit_topup', $3, 'pending', 'sumopod')`,
+        [householdId, orderId, topup.amount]
+      );
+      try {
+        const provider = await createSumopodPayment({
+          apiKey: config.api_key,
+          orderId,
+          amount: topup.amount,
+          baseUrl: process.env.APP_BASE_URL || 'https://finepro.my.id',
+        });
+        await pool.query(
+          'UPDATE payments SET provider_payment_id = $1, payment_link_url = $2 WHERE order_id = $3',
+          [provider.paymentId, provider.paymentLinkUrl, orderId]
+        );
+        return res.status(201).json({ orderId, paymentId: provider.paymentId, paymentLinkUrl: provider.paymentLinkUrl });
+      } catch (providerError) {
+        await pool.query(`UPDATE payments SET status = 'failed' WHERE order_id = $1`, [orderId]);
+        throw providerError;
+      }
+    }
 
     if (activeGateway === 'xendit') {
       await pool.query(
@@ -660,14 +739,16 @@ router.get('/ai-credit/balance', authMiddleware, async (req, res) => {
 
 router.get('/methods', authMiddleware, async (req, res) => {
   try {
-    const [active, midtrans, xendit, manual] = await Promise.all([
+    const [active, midtrans, xendit, sumopod, manual] = await Promise.all([
       getActiveGateway(),
       getSetting('midtrans'),
       getSetting('xendit'),
+      getSetting('sumopod_payment').then((stored) => resolveSumopodConfig(stored)),
       getSetting('manual_payment'),
     ]);
     const midtransEnabled = Boolean(midtrans.enabled && midtrans.server_key && midtrans.client_key);
     const xenditEnabled = Boolean(xendit.enabled && xendit.secret_key);
+    const sumopodEnabled = Boolean(sumopod.enabled && sumopod.api_key && sumopod.webhook_token);
     res.json({
       active,
       methods: {
@@ -682,6 +763,10 @@ router.get('/methods', authMiddleware, async (req, res) => {
         xendit: {
           enabled: active === 'xendit' && xenditEnabled,
           isProduction: xendit.is_production === true,
+        },
+        sumopod: {
+          enabled: active === 'sumopod' && sumopodEnabled,
+          paymentMethod: 'QRIS',
         },
         manual: {
           enabled: active === 'manual' && Boolean(manual.enabled),
