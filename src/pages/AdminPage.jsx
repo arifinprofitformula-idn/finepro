@@ -24,6 +24,7 @@ import {
   Mail,
   MessageCircle,
   Phone,
+  QrCode,
   RefreshCw,
   Save,
   ScrollText,

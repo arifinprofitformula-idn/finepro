@@ -65,23 +65,6 @@ function monthLabelFromKey(month) {
   return new Intl.DateTimeFormat('id-ID', { month: 'short', year: 'numeric' }).format(new Date(year, monthNum - 1, 1));
 }
 
-async function ensureBusinessExpensesTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS business_expenses (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      label TEXT NOT NULL,
-      category TEXT NOT NULL DEFAULT 'Operasional',
-      amount NUMERIC NOT NULL CHECK (amount >= 0),
-      expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
-      note TEXT,
-      created_by UUID REFERENCES users(id),
-      created_at TIMESTAMPTZ DEFAULT now()
-    )
-  `);
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_business_expenses_date ON business_expenses(expense_date DESC)');
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_business_expenses_category ON business_expenses(category)');
-}
-
 router.post('/login', adminLoginLimiter, async (req, res) => {
   try {
     const { password } = req.body || {};
@@ -555,7 +538,6 @@ router.get('/payments', async (req, res) => {
 
 router.get('/finance', async (req, res) => {
   try {
-    await ensureBusinessExpensesTable();
     const { month, start, end } = parseMonth(req.query.month);
     const current = new Date(`${month}-01T00:00:00Z`);
     const trendMonths = Array.from({ length: 6 }, (_, i) => {
@@ -669,7 +651,6 @@ router.get('/finance', async (req, res) => {
 
 router.post('/finance/expenses', async (req, res) => {
   try {
-    await ensureBusinessExpensesTable();
     const label = String(req.body?.label || '').trim();
     const category = String(req.body?.category || 'Operasional').trim() || 'Operasional';
     const amount = Number(req.body?.amount || 0);
@@ -702,7 +683,6 @@ router.post('/finance/expenses', async (req, res) => {
 
 router.delete('/finance/expenses/:id', async (req, res) => {
   try {
-    await ensureBusinessExpensesTable();
     const result = await pool.query(
       'DELETE FROM business_expenses WHERE id = $1 RETURNING id, label, amount',
       [req.params.id]
