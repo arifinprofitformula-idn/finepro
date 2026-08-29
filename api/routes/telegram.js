@@ -229,6 +229,17 @@ async function processReceipt(req, res) {
         });
       }
 
+      const { assertTransactionReady } = await import('../services/onboardingActivationService.js');
+      try {
+        await assertTransactionReady(householdId);
+      } catch (setupErr) {
+        return res.status(409).json({
+          error: 'Pengaturan awal belum selesai',
+          code: setupErr.code,
+          message: 'Pemilik household perlu membuat dompet dan menetapkan saldo awal di FinePro sebelum transaksi pertama.',
+        });
+      }
+
       const aiConfig = await getSetting('ai');
       try {
         await assertQuotaAvailable(householdId, 'receipt_scan', 'Kuota scan otomatis');

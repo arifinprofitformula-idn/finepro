@@ -20,6 +20,7 @@ export default function BottomNav({ page, onNavigate, onAdd, addDisabled }) {
           disabled={addDisabled}
           className="absolute left-1/2 -top-6 z-10 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-violet text-white shadow-float ring-4 ring-white/80 disabled:opacity-50"
           aria-label="Transaksi"
+          data-tour="add-transaction"
         >
           <CirclePlus size={28} strokeWidth={2.2} />
         </button>
@@ -52,6 +53,7 @@ function NavButton({ item, active, onNavigate }) {
       onClick={() => onNavigate(item.key)}
       className={itemClass}
       aria-current={active ? "page" : undefined}
+      data-tour={item.key === "history" ? "history-nav" : item.key === "setting" ? "setting-nav" : undefined}
     >
       <span className="flex h-7 w-7 items-center justify-center">
         <Icon size={20} strokeWidth={active ? 2.2 : 2} fill={item.key === "dashboard" && active ? "currentColor" : "none"} />

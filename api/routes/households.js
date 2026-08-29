@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import {
+  getOnboardingStatus,
+  createOpeningWallet,
+  completeDashboardTour,
+  restartDashboardTour,
+} from '../services/onboardingActivationService.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -52,6 +58,54 @@ router.get('/', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Gagal mengambil data household' });
   }
+});
+
+// GET /api/households/onboarding-status — progress lintas perangkat.
+router.get('/onboarding-status', async (req, res) => {
+  try {
+    const onboarding = await getOnboardingStatus(req.user.userId);
+    if (!onboarding) return res.status(404).json({ error: 'Household tidak ditemukan' });
+    res.json({ onboarding });
+  } catch (err) {
+    console.error('Get onboarding status error:', err);
+    res.status(500).json({ error: 'Gagal mengambil status pengaturan awal' });
+  }
+});
+
+// POST /api/households/onboarding/opening-wallet — atomic wallet + baseline.
+router.post('/onboarding/opening-wallet', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    if (!householdId) return res.status(404).json({ error: 'Household tidak ditemukan' });
+    const result = await createOpeningWallet({
+      householdId,
+      userId: req.user.userId,
+      name: req.body?.name,
+      actualBalance: req.body?.actual_balance,
+      idempotencyKey: req.get('Idempotency-Key') || req.body?.idempotency_key,
+    });
+    res.status(result.already_existed ? 200 : 201).json(result);
+  } catch (err) {
+    const status = err.code === 'ONBOARDING_OWNER_REQUIRED' ? 403
+      : err.code === 'OPENING_BALANCE_ALREADY_SET' ? 409 : 400;
+    res.status(status).json({ error: err.message, code: err.code });
+  }
+});
+
+router.post('/onboarding/tour/complete', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    const onboarding = await completeDashboardTour(householdId, req.user.userId, Number(req.body?.version) || 1);
+    res.json({ onboarding });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+router.post('/onboarding/tour/restart', async (req, res) => {
+  try {
+    const householdId = await getUserHouseholdId(req.user.userId);
+    const onboarding = await restartDashboardTour(householdId, req.user.userId);
+    res.json({ onboarding });
+  } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
 // POST /api/households — buat household baru

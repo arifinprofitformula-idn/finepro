@@ -4,6 +4,7 @@ import pool from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { checkBudgetThreshold } from '../services/transactionEffects.js';
 import { trackBusinessEvent } from '../lib/tracking/trackingService.js';
+import { assertTransactionReady } from '../services/onboardingActivationService.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -127,6 +128,7 @@ router.post('/', async (req, res) => {
   try {
     const householdId = await getUserHouseholdId(req.user.userId);
     if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
+    await assertTransactionReady(householdId);
 
     const { date, type, category, amount, note, wallet_id } = req.body;
     if (!date || !type || !category || amount == null) {
@@ -188,6 +190,9 @@ router.post('/', async (req, res) => {
     }
   } catch (err) {
     console.error('Create transaction error:', err);
+    if (err.code === 'HOUSEHOLD_SETUP_REQUIRED') {
+      return res.status(409).json({ error: err.message, code: err.code });
+    }
     res.status(500).json({ error: 'Gagal menambah transaksi' });
   }
 });

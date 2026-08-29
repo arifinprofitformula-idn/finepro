@@ -26,6 +26,7 @@ import {
   KeyRound,
   LogOut,
   MessageCircle,
+  Sparkles,
   Smartphone,
   Tag,
   Users,
@@ -81,6 +82,7 @@ export default function SettingPage({
   onDeleteCategory,
   onUserUpdated,
   onHouseholdUpdated,
+  onRestartGuide,
   onLogout
 }) {
   const [installCardVisible, setInstallCardVisible] = useState(() => !isAppInstalled());
@@ -742,6 +744,14 @@ export default function SettingPage({
           </button>
           <StatusMsg msg={passwordMsg} type={passwordMsgType} />
         </form>
+      </div>
+
+      <div className="gloss-panel mb-4 rounded-2xl p-4">
+        <SectionHeader icon={Sparkles} tone="violet" title="Panduan FinePro" />
+        <p className="mb-3 text-xs leading-5 text-neutral-500">Ulangi panduan interaktif untuk mengenal ringkasan, transaksi, riwayat, dan pengaturan.</p>
+        <button type="button" onClick={onRestartGuide} className={`${outlineBtnClass} w-full`}>
+          Mulai Ulang Panduan
+        </button>
       </div>
 
       {/* Export */}

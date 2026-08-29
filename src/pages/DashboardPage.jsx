@@ -233,7 +233,7 @@ export default function DashboardPage({ household, transactions, kpi, previousKp
         </div>
       )}
 
-      <div className="mb-4 grid gap-2.5">
+      <div className="mb-4 grid gap-2.5" data-tour="financial-summary">
         <KpiCard label="Pemasukan" value={fmtRp(kpi.income)} tone="income" comparison={incomeComparison} />
         <KpiCard label="Pengeluaran" value={fmtRp(kpi.expense)} tone="expense" comparison={expenseComparison} />
         <KpiCard label="Saldo" value={fmtRp(balance)} tone="balance" status={balanceStatus} comparison={balanceComparison} />

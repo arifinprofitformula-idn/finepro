@@ -9,6 +9,7 @@ import { extractText, tryRegexExtraction, sanitizeDate } from './receiptExtracti
 import { generateChatText } from './aiProvider.js';
 import { getSetting } from './appSettings.js';
 import pool from '../db.js';
+import { assertTransactionReady } from './onboardingActivationService.js';
 import { checkDuplicate } from './duplicateTransactionDetector.js';
 
 // ---------- Helpers ----------
@@ -787,6 +788,7 @@ export async function cancelAlternativeDrafts(draftIds, selectedDraftId, userId,
 // ---------- Confirm Draft (save actual transaction) ----------
 
 export async function confirmDraft(draftId, userId, householdId, corrections = {}) {
+  await assertTransactionReady(householdId);
   const client = await pool.connect();
   let draft;
   let transaction;

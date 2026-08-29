@@ -184,6 +184,17 @@ async function processWhatsAppReceipt({ whatsappId, imageBuffer, mimetype, capti
     };
   }
 
+  const { assertTransactionReady } = await import('../services/onboardingActivationService.js');
+  try {
+    await assertTransactionReady(householdId);
+  } catch (setupErr) {
+    return {
+      status: 'setup_required',
+      code: setupErr.code,
+      message: 'Pemilik household perlu membuat dompet dan menetapkan saldo awal di FinePro sebelum transaksi pertama.',
+    };
+  }
+
   // Quota check
   try {
     await assertQuotaAvailable(householdId, 'receipt_scan', 'Kuota scan otomatis');

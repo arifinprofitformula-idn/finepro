@@ -7,6 +7,7 @@ import multer from 'multer';
 import { authMiddleware } from '../middleware/auth.js';
 import { analyzeTransactionImage, confirmDraft, cancelDraft, analyzeWithPreprocessing } from '../services/transactionImageAnalysisService.js';
 import pool from '../db.js';
+import { assertTransactionReady } from '../services/onboardingActivationService.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -43,6 +44,7 @@ router.post('/image', (req, res) => {
     try {
       const householdId = await getUserHouseholdId(req.user.userId);
       if (!householdId) return res.status(400).json({ error: 'Belum punya household' });
+      await assertTransactionReady(householdId);
 
       // Use preprocessing wrapper (Sprint 3)
       const result = await analyzeWithPreprocessing({
@@ -56,8 +58,8 @@ router.post('/image', (req, res) => {
       res.json(result);
     } catch (err) {
       console.error('Transaction analysis error:', err);
-      const status = err.message.includes('AI belum') ? 503 : 500;
-      res.status(status).json({ error: err.message || 'Gagal menganalisis gambar' });
+      const status = err.code === 'HOUSEHOLD_SETUP_REQUIRED' ? 409 : err.message.includes('AI belum') ? 503 : 500;
+      res.status(status).json({ error: err.message || 'Gagal menganalisis gambar', code: err.code });
     }
   });
 });

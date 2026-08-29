@@ -27,6 +27,9 @@ import AppHeader from "./components/AppHeader.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import InstallPrompt from "./components/InstallPrompt.jsx";
 import TransactionModal from "./components/TransactionModal.jsx";
+import ActivationWizard from "./components/ActivationWizard.jsx";
+import DashboardTour from "./components/DashboardTour.jsx";
+import { getOnboardingStatus, completeDashboardTour, restartDashboardTour } from "./api/onboarding.js";
 import { currentMonthKey } from "./utils/format.js";
 
 const SELECTED_PERIOD_KEY = "finepro-selected-period";
@@ -83,6 +86,9 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState("login");
+  const [onboarding, setOnboarding] = useState(null);
+  const [onboardingLoading, setOnboardingLoading] = useState(true);
+  const [tourOpen, setTourOpen] = useState(false);
   const [selectedMonthKey, setSelectedMonthKeyState] = useState(() => {
     const saved = localStorage.getItem(SELECTED_PERIOD_KEY);
     return /^\d{4}-\d{2}$/.test(saved || "") ? saved : currentMonthKey();
@@ -116,6 +122,25 @@ export default function App() {
       setShowAuth(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!user || !household?.id) {
+      setOnboarding(null);
+      setOnboardingLoading(Boolean(user));
+      return;
+    }
+    let active = true;
+    setOnboardingLoading(true);
+    getOnboardingStatus()
+      .then((status) => {
+        if (!active) return;
+        setOnboarding(status);
+        if (status.transaction_ready && !status.dashboard_tour_completed) setTourOpen(true);
+      })
+      .catch(() => {})
+      .finally(() => { if (active) setOnboardingLoading(false); });
+    return () => { active = false; };
+  }, [user?.id, household?.id]);
 
   if (initializing) return <SplashScreen />;
   if (isPrivacyPath) {
@@ -185,6 +210,12 @@ export default function App() {
   const notificationCount = invites.length + (subscriptionWarning ? 1 : 0);
 
   function handleOpenModal() {
+    if (onboarding && !onboarding.transaction_ready) {
+      alert(onboarding.role === "owner"
+        ? "Selesaikan pengaturan dompet dan saldo awal sebelum transaksi pertama."
+        : "Pemilik household belum menyelesaikan pengaturan dompet dan saldo awal.");
+      return;
+    }
     if (subscriptionExpired) {
       alert("Langganan Anda telah berakhir. Perpanjang dulu di halaman Akun untuk menambah transaksi baru.");
       return;
@@ -195,6 +226,22 @@ export default function App() {
   async function handleAddTransaction(payload) {
     await addTransaction({ householdId: household.id, userId: user.id, ...payload });
     await dashboard.refresh();
+  }
+
+  async function handleActivationReady() {
+    const status = await getOnboardingStatus();
+    setOnboarding(status);
+    await dashboard.refresh();
+    setPage("dashboard");
+    setTourOpen(true);
+  }
+
+  async function handleTourComplete() {
+    setTourOpen(false);
+    try {
+      const status = await completeDashboardTour(1);
+      setOnboarding(status);
+    } catch {}
   }
 
   return (
@@ -256,12 +303,20 @@ export default function App() {
           onDeleteCategory={categories.deleteCategory}
           onUserUpdated={updateUser}
           onHouseholdUpdated={setHousehold}
+          onRestartGuide={async () => {
+            try { setOnboarding(await restartDashboardTour()); } catch {}
+            setPage("dashboard");
+            setTourOpen(true);
+          }}
           onLogout={logout}
         />
       )}
 
-      <BottomNav page={page} onNavigate={setPage} onAdd={handleOpenModal} />
+      <BottomNav page={page} onNavigate={setPage} onAdd={handleOpenModal} addDisabled={onboardingLoading || Boolean(onboarding && !onboarding.transaction_ready)} />
       <InstallPrompt />
+
+      <ActivationWizard status={onboarding} onReady={handleActivationReady} />
+      <DashboardTour open={tourOpen && Boolean(onboarding?.transaction_ready)} onClose={handleTourComplete} onNavigate={setPage} />
 
       <TransactionModal
         open={modalOpen}
