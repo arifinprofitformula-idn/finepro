@@ -36,7 +36,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   const verifyEmailToken = useCallback(async (token) => {
-    return verifyEmail(token);
+    const data = await verifyEmail(token);
+    setUser(data.user);
+    return data.user;
   }, []);
 
   const resendVerificationEmail = useCallback(async (email) => {

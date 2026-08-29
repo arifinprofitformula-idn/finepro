@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { getMyPendingInvites, acceptInvite } from "../api/invites.js";
 import { ArrowRight, BriefcaseBusiness, CheckCircle2, GraduationCap, HeartHandshake, Home, Sparkles, Users } from "lucide-react";
+import OnboardingProgress from "../components/OnboardingProgress.jsx";
 
 const PERSONAS = [
   {
@@ -77,6 +78,7 @@ export default function OnboardingPage({ onCreateHousehold, onInviteAccepted }) 
   return (
     <div className="app-glow-bg min-h-screen px-5 py-7">
       <div className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-lg flex-col justify-center">
+        <OnboardingProgress current={2} />
         <div className="grid gap-4">
           <div className="gloss-panel rounded-[30px] p-5 animate-auth-fade-up">
             <div className="flex items-start justify-between gap-3">

@@ -4,6 +4,7 @@ import { ArrowLeft, Check, Crown, Star } from "lucide-react";
 import { getPricing } from "../api/payments.js";
 import { PLAN_LABELS } from "../api/subscriptions.js";
 import { PLAN_ORDER, formatPlanPrice, AiCreditTermsNote } from "../components/UpgradeCheckout.jsx";
+import OnboardingProgress from "../components/OnboardingProgress.jsx";
 
 function BrandLogo() {
   return (
@@ -81,7 +82,7 @@ function AiQuotaTable({ pricing }) {
   );
 }
 
-export default function PricingPage({ onSelectPlan, onBack }) {
+export default function PricingPage({ onSelectPlan, onBack, onboardingFlow = false }) {
   const [pricing, setPricing] = useState(null);
 
   useEffect(() => {
@@ -91,6 +92,7 @@ export default function PricingPage({ onSelectPlan, onBack }) {
   return (
     <div className="app-glow-bg min-h-screen px-5 py-8">
       <main className="mx-auto w-full max-w-lg">
+        {onboardingFlow && <OnboardingProgress current={3} />}
         <div className="mb-6 flex items-center justify-between">
           <button
             type="button"

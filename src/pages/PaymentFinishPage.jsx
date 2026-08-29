@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, Clock3, Crown, Home, Loader2, ReceiptText, XCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, Crown, Loader2, ReceiptText, Wallet, XCircle } from "lucide-react";
+import OnboardingProgress from "../components/OnboardingProgress.jsx";
 import { getPaymentStatus } from "../api/payments.js";
 import { PLAN_LABELS } from "../api/subscriptions.js";
 import { fmtRp } from "../utils/format.js";
@@ -63,7 +64,7 @@ function DetailRow({ icon: Icon, label, value }) {
   );
 }
 
-export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard }) {
+export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard, onContinueSetup, onboardingFlow = false }) {
   const orderId = useMemo(() => new URLSearchParams(window.location.search).get("order_id"), []);
   const [payment, setPayment] = useState(null);
   const [polling, setPolling] = useState(Boolean(orderId));
@@ -120,6 +121,7 @@ export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard }
   return (
     <div className="app-glow-bg min-h-screen px-5 py-8">
       <main className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-lg flex-col justify-center">
+        {onboardingFlow && <OnboardingProgress current={isPaid ? 5 : 4} />}
         <div className="mb-6 flex justify-center">
           <BrandLogo />
         </div>
@@ -153,22 +155,22 @@ export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard }
           </div>
 
           <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              onClick={onGoDashboard}
-              className="flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-full bg-navy px-5 text-sm font-bold text-white shadow-float"
-            >
-              <Home size={16} />
-              Ke Dashboard
-            </button>
-            <button
-              type="button"
-              onClick={onGoAccount}
-              className="flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-full bg-white/80 px-5 text-sm font-bold text-navy shadow-soft"
-            >
-              Akun
-              <ArrowRight size={16} />
-            </button>
+            {isPaid && onboardingFlow ? (
+              <button
+                type="button"
+                onClick={onContinueSetup}
+                className="flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-full bg-violet px-5 text-sm font-bold text-white shadow-float"
+              >
+                <Wallet size={16} />
+                Siapkan Dompet
+                <ArrowRight size={16} />
+              </button>
+            ) : (
+              <>
+                <button type="button" onClick={onGoDashboard} className="flex min-h-[46px] flex-1 items-center justify-center rounded-full bg-navy px-5 text-sm font-bold text-white shadow-float">Ke Dashboard</button>
+                <button type="button" onClick={onGoAccount} className="flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-full bg-white/80 px-5 text-sm font-bold text-navy shadow-soft">Akun <ArrowRight size={16} /></button>
+              </>
+            )}
           </div>
         </section>
 

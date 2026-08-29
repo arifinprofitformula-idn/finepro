@@ -1,6 +1,7 @@
 // src/pages/CheckoutPage.jsx
 import { ArrowLeft, Crown } from "lucide-react";
 import UpgradeCheckout from "../components/UpgradeCheckout.jsx";
+import OnboardingProgress from "../components/OnboardingProgress.jsx";
 
 function BrandLogo() {
   return (
@@ -12,10 +13,11 @@ function BrandLogo() {
   );
 }
 
-export default function CheckoutPage({ plan, onBack, onDone }) {
+export default function CheckoutPage({ plan, onBack, onDone, onboardingFlow = false }) {
   return (
     <div className="app-glow-bg min-h-screen px-5 py-8">
       <main className="mx-auto w-full max-w-lg">
+        {onboardingFlow && <OnboardingProgress current={4} />}
         <div className="mb-6 flex items-center justify-between">
           <button
             type="button"
@@ -37,7 +39,7 @@ export default function CheckoutPage({ plan, onBack, onDone }) {
         </div>
 
         <section className="gloss-panel rounded-[28px] p-5">
-          <UpgradeCheckout defaultPlan={plan} onClose={onDone} showCancelButton={true} />
+          <UpgradeCheckout defaultPlan={plan} onClose={onDone} showCancelButton={true} selectedPlanOnly={true} />
         </section>
       </main>
     </div>

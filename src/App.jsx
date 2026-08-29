@@ -11,6 +11,7 @@ import { useInvites } from "./hooks/useInvites.js";
 import { useDashboard } from "./hooks/useDashboard.js";
 import { addTransaction } from "./api/transactions.js";
 import { planLabel } from "./api/subscriptions.js";
+import { PLAN_ORDER } from "./components/UpgradeCheckout.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
 import LandingPage from "./pages/LandingPage.jsx";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage.jsx";
@@ -33,6 +34,8 @@ import { getOnboardingStatus, completeDashboardTour, restartDashboardTour } from
 import { currentMonthKey } from "./utils/format.js";
 
 const SELECTED_PERIOD_KEY = "finepro-selected-period";
+const SELECTED_PLAN_KEY = "finepro-selected-plan";
+const ONBOARDING_PAYMENT_KEY = "finepro-onboarding-payment";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function dayStart(value = new Date()) {
@@ -45,6 +48,14 @@ function daysUntilDate(value) {
   const target = new Date(value);
   if (Number.isNaN(target.getTime())) return null;
   return Math.ceil((dayStart(target).getTime() - dayStart().getTime()) / DAY_MS);
+}
+
+function getSavedPlan() {
+  const savedPlan = sessionStorage.getItem(SELECTED_PLAN_KEY);
+  if (PLAN_ORDER.includes(savedPlan)) return savedPlan;
+  sessionStorage.removeItem(SELECTED_PLAN_KEY);
+  sessionStorage.removeItem(ONBOARDING_PAYMENT_KEY);
+  return null;
 }
 
 function getSubscriptionWarning(household) {
@@ -81,8 +92,8 @@ export default function App() {
   const categories = useCategories(household?.id);
   const { categoriesExpense, categoriesIncome } = categories;
   const { invites, refresh: refreshInvites } = useInvites(!!household);
-  const [page, setPage] = useState("dashboard");
-  const [selectedUpgradePlan, setSelectedUpgradePlan] = useState(null);
+  const [selectedUpgradePlan, setSelectedUpgradePlan] = useState(getSavedPlan);
+  const [page, setPage] = useState(() => getSavedPlan() ? "checkout" : "dashboard");
   const [modalOpen, setModalOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState("login");
@@ -97,6 +108,20 @@ export default function App() {
   const isPrivacyPath = ["/privacy", "/kebijakan-privasi"].includes(window.location.pathname);
   const isPaymentFinishPath = window.location.pathname === "/payment/finish";
   const isPaymentNotificationPath = window.location.pathname === "/payment/notification";
+
+  function selectUpgradePlan(planId, onboardingPayment = false) {
+    setSelectedUpgradePlan(planId);
+    sessionStorage.setItem(SELECTED_PLAN_KEY, planId);
+    if (onboardingPayment) sessionStorage.setItem(ONBOARDING_PAYMENT_KEY, "1");
+    else sessionStorage.removeItem(ONBOARDING_PAYMENT_KEY);
+    setPage("checkout");
+  }
+
+  function clearSelectedPlan() {
+    setSelectedUpgradePlan(null);
+    sessionStorage.removeItem(SELECTED_PLAN_KEY);
+    sessionStorage.removeItem(ONBOARDING_PAYMENT_KEY);
+  }
 
   function setSelectedMonthKey(next) {
     setSelectedMonthKeyState(next);
@@ -170,6 +195,13 @@ export default function App() {
     return (
       <PaymentFinishPage
         onPaid={refreshHousehold}
+        onboardingFlow={Boolean(sessionStorage.getItem(ONBOARDING_PAYMENT_KEY))}
+        onContinueSetup={async () => {
+          clearSelectedPlan();
+          await refreshHousehold();
+          window.history.replaceState({}, "", "/");
+          setPage("dashboard");
+        }}
         onGoDashboard={() => {
           window.history.replaceState({}, "", "/");
           setPage("dashboard");
@@ -186,8 +218,9 @@ export default function App() {
   if (subscriptionLocked && !["upgrade", "checkout"].includes(page)) {
     return (
       <PricingPage
-        onSelectPlan={(planId) => { setSelectedUpgradePlan(planId); setPage("checkout"); }}
+        onSelectPlan={(planId) => selectUpgradePlan(planId, true)}
         onBack={() => {}}
+        onboardingFlow={true}
       />
     );
   }
@@ -195,7 +228,7 @@ export default function App() {
   if (page === "upgrade") {
     return (
       <PricingPage
-        onSelectPlan={(planId) => { setSelectedUpgradePlan(planId); setPage("checkout"); }}
+        onSelectPlan={selectUpgradePlan}
         onBack={() => setPage("account")}
       />
     );
@@ -206,8 +239,9 @@ export default function App() {
       <CheckoutPage
         plan={selectedUpgradePlan}
         onBack={() => setPage("upgrade")}
+        onboardingFlow={subscriptionLocked}
         onDone={async () => {
-          setSelectedUpgradePlan(null);
+          clearSelectedPlan();
           await refreshHousehold();
           setPage("account");
         }}

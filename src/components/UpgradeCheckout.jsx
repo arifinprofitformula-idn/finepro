@@ -114,7 +114,7 @@ function LifetimeTermsBox({ accepted, onAcceptedChange }) {
   );
 }
 
-export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton, onPaymentHistoryChanged }) {
+export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton, onPaymentHistoryChanged, selectedPlanOnly = false }) {
   const [payingPlan, setPayingPlan] = useState(null);
   const [paymentMethods, setPaymentMethods] = useState(null);
   const [pricing, setPricing] = useState(null);
@@ -148,7 +148,7 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
     try {
       if (paymentMethods?.active === "xendit") {
         if (!paymentMethods?.xendit?.enabled) {
-          throw new Error("Metode pembayaran Xendit belum aktif. Hubungi admin Fine Pro.");
+          throw new Error("Pembayaran sedang tidak tersedia. Coba lagi beberapa saat atau hubungi bantuan FinePro.");
         }
         const { invoiceUrl } = await createPayment(planId);
         window.location.href = invoiceUrl;
@@ -157,7 +157,7 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
 
       if (paymentMethods?.active === "sumopod") {
         if (!paymentMethods?.sumopod?.enabled) {
-          throw new Error("Metode pembayaran SumoPod QRIS belum aktif. Hubungi admin Fine Pro.");
+          throw new Error("Pembayaran QRIS sedang tidak tersedia. Coba lagi beberapa saat atau hubungi bantuan FinePro.");
         }
         const { paymentLinkUrl } = await createPayment(planId);
         window.location.href = paymentLinkUrl;
@@ -165,7 +165,7 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
       }
 
       if (!paymentMethods?.midtrans?.enabled) {
-        throw new Error("Metode pembayaran Midtrans belum aktif. Hubungi admin Fine Pro.");
+        throw new Error("Pembayaran sedang tidak tersedia. Coba lagi beberapa saat atau hubungi bantuan FinePro.");
       }
 
       const { orderId, token, redirectUrl } = await createPayment(planId);
@@ -231,7 +231,7 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
     <div>
       <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-neutral-500">
         <Crown size={13} />
-        {paymentMethods?.active === "manual" ? "Upgrade Paket — Transfer Manual" : "Upgrade Paket"}
+        {selectedPlanOnly ? "Ringkasan Pesanan" : paymentMethods?.active === "manual" ? "Upgrade Paket — Transfer Manual" : "Upgrade Paket"}
       </div>
 
       {paymentMethods?.active === "manual" ? (
@@ -286,7 +286,7 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
         ) : (
           <div className="flex items-start gap-2 rounded-2xl bg-gold-light p-3 text-xs font-semibold text-gold">
             <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" />
-            <span>Transfer manual belum aktif. Hubungi admin Fine Pro.</span>
+            <span>Pembayaran transfer sedang tidak tersedia. Coba lagi beberapa saat atau hubungi bantuan FinePro.</span>
           </div>
         )
       ) : (
@@ -308,19 +308,19 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
                 ? "Memeriksa konfigurasi pembayaran..."
                 : paymentMethods?.active === "xendit"
                 ? (paymentMethods?.xendit?.enabled
-                  ? "Xendit aktif. Pilih paket untuk membuka metode pembayaran."
-                  : "Xendit belum aktif. Admin perlu mengisi Secret Key di Admin Console.")
+                  ? "Pembayaran aman tersedia dan paket aktif otomatis setelah bayar."
+                  : "Pembayaran sedang tidak tersedia. Coba lagi beberapa saat.")
                 : paymentMethods?.active === "sumopod"
                 ? (paymentMethods?.sumopod?.enabled
-                  ? "SumoPod QRIS aktif. Pilih paket untuk membuka link pembayaran."
-                  : "SumoPod Payment belum aktif. Admin perlu mengisi API Key dan Webhook Token.")
+                  ? "QRIS tersedia. Anda akan membuka halaman pembayaran aman, lalu kembali otomatis ke FinePro."
+                  : "Pembayaran QRIS sedang tidak tersedia. Coba lagi beberapa saat.")
                 : (paymentMethods?.midtrans?.enabled
-                  ? "Midtrans Snap aktif. Pilih paket untuk membuka metode pembayaran."
-                  : "Midtrans belum aktif. Admin perlu mengisi Server Key dan Client Key di Admin Console.")}
+                  ? "Pembayaran aman tersedia dan paket aktif otomatis setelah bayar."
+                  : "Pembayaran sedang tidak tersedia. Coba lagi beberapa saat.")}
             </span>
           </div>
           <div className="flex flex-col gap-2">
-            {PLAN_ORDER.filter((id) => pricing?.plans?.[id]).map((id) => {
+            {PLAN_ORDER.filter((id) => pricing?.plans?.[id] && (!selectedPlanOnly || id === defaultPlan)).map((id) => {
               const p = pricing.plans[id];
               const gatewayEnabled = paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.active === "sumopod" ? paymentMethods?.sumopod?.enabled : paymentMethods?.midtrans?.enabled;
               const blockedByTerms = id === "lifetime" && !lifetimeTermsAccepted;
@@ -345,7 +345,7 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
                       disabled={payingPlan === id || !gatewayEnabled || blockedByTerms}
                       className="flex h-10 items-center justify-center rounded-full bg-gold px-4 text-xs font-bold text-white disabled:opacity-60"
                     >
-                      {payingPlan === id ? "Membuka..." : "Pilih"}
+                      {payingPlan === id ? "Membuka pembayaran..." : selectedPlanOnly ? "Bayar Sekarang" : "Pilih"}
                     </button>
                   </div>
                   {id === "lifetime" && (

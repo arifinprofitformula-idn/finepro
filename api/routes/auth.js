@@ -583,7 +583,11 @@ router.post('/verify-email', authLimiter, async (req, res) => {
       }).catch((err) => console.error('Gagal kirim email selamat datang:', err));
     }
 
-    res.json({ message: 'Email berhasil diverifikasi. Silakan masuk untuk memilih paket.' });
+    res.json({
+      message: 'Email berhasil diverifikasi. Lanjutkan pengaturan akun.',
+      user,
+      token: generateToken(user),
+    });
   } catch (err) {
     console.error('Verify email error:', err);
     res.status(500).json({ error: 'Gagal memverifikasi email' });
