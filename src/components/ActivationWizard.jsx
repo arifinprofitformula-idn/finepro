@@ -46,7 +46,6 @@ function ProviderCombobox({ selected, onSelect }) {
             <Search size={17} className="flex-shrink-0 text-neutral-400" aria-hidden="true" />
             <ComboboxInput
               id="activation-provider-search"
-              autoFocus
               autoComplete="off"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -176,9 +175,9 @@ export default function ActivationWizard({ status, onReady }) {
           <div className="mt-5"><ProviderCombobox selected={provider} onSelect={selectProvider} /></div>
 
           <label className="mt-4 block text-xs font-bold text-neutral-600" htmlFor="activation-wallet-name">Nama dompet</label>
-          <div className="mt-1 flex h-12 items-center rounded-2xl border border-neutral-border bg-neutral-50 px-3 focus-within:border-violet">
+          <div className="mt-1 flex h-12 items-center rounded-2xl border border-neutral-border bg-neutral-50 px-3 focus-within:border-violet focus-within:ring-2 focus-within:ring-violet/15">
             <Building2 size={17} className="flex-shrink-0 text-neutral-400" aria-hidden="true" />
-            <input id="activation-wallet-name" required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: BCA Gaji" className="h-full min-w-0 flex-1 bg-transparent px-2 text-sm font-semibold text-navy outline-none" />
+            <input id="activation-wallet-name" required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: BCA Gaji" className="h-full min-w-0 flex-1 bg-transparent px-2 text-sm font-semibold text-navy outline-none focus:outline-none" />
           </div>
           <p className="mt-1.5 text-[11px] leading-4 text-neutral-400">Boleh diubah, misalnya “BCA Operasional” atau “GoPay Harian”.</p>
 
@@ -189,9 +188,9 @@ export default function ActivationWizard({ status, onReady }) {
           </div>
           <div className="mt-3 rounded-2xl bg-mint-light p-3 text-xs leading-5 text-mint"><b>Baseline aman:</b> saldo Rp0 tetap valid dan tidak dihitung sebagai pemasukan atau pengeluaran.</div>
           {error && <div className="mt-3 rounded-xl bg-coral-light p-3 text-xs font-semibold text-coral">{error}</div>}
-          <div className="mt-5 grid grid-cols-[1fr_1.5fr] gap-2">
-            <button type="button" onClick={() => setStep('welcome')} disabled={saving} className="h-12 rounded-full border border-neutral-border font-bold text-neutral-600">Kembali</button>
-            <button type="submit" disabled={saving || !provider || !name.trim()} className="h-12 rounded-full bg-violet px-3 text-sm font-bold text-white disabled:opacity-50">{saving ? 'Menyiapkan...' : 'Tetapkan Saldo Awal'}</button>
+          <div className="mt-5 grid gap-2 sm:grid-cols-[1fr_1.5fr]">
+            <button type="button" onClick={() => setStep('welcome')} disabled={saving} className="h-12 rounded-full border border-neutral-border font-bold text-neutral-600 transition focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2">Kembali</button>
+            <button type="submit" disabled={saving || !provider || !name.trim()} className="h-12 rounded-full bg-violet px-3 text-sm font-bold text-white disabled:opacity-50 transition focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2">{saving ? 'Menyiapkan...' : 'Tetapkan Saldo Awal'}</button>
           </div>
         </form>}
 
