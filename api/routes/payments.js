@@ -14,15 +14,14 @@ import { applyTopupCredit, getCreditBalances, grantInitialAiCredit } from '../se
 import { getAiQuotaConfig } from '../services/aiUsage.js';
 import { trackBusinessEvent } from '../lib/tracking/trackingService.js';
 import { deriveEventId } from '../lib/tracking/idempotency.js';
+import { SELLABLE_PLANS } from '../services/planPolicy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROOF_UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'payment-proofs');
 
 const router = Router();
 
-// Paket yang masih dijual (quarterly/annual/lifetime). 'monthly' dan 'semiannual' tetap
-// valid di DB untuk histori/subscriber lama tapi tidak lagi ditawarkan di sini.
-const SELLABLE_PLANS = new Set(['quarterly', 'annual', 'lifetime']);
+// Satu sumber kebenaran paket jual ada di planPolicy.js.
 
 const proofUpload = multer({
   storage: multer.memoryStorage(),

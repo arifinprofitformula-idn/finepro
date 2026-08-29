@@ -1,6 +1,7 @@
 import pool from '../db.js';
 import { getSetting } from './appSettings.js';
 import { assertCreditAvailable, debitCredit, getCreditQuotaStatus } from './aiCredits.js';
+import { recurringFairUseLimit, resolveSubscriptionEntitlement } from './planPolicy.js';
 
 const SHORT_PLANS = new Set(['monthly', 'quarterly', 'semiannual']);
 
@@ -25,13 +26,12 @@ async function getSubscription(householdId) {
 export async function resolveUsageTier(householdId) {
   const subscription = await getSubscription(householdId);
   const plan = subscription?.plan || 'free';
-  const active = subscription?.status === 'active';
+  const entitlement = resolveSubscriptionEntitlement(subscription);
 
-  if (active && plan === 'lifetime') return { tier: 'lifetime', family: 'lifetime', group: 'lifetime', subscription };
-  if (active && plan === 'annual') return { tier: 'annual', family: 'paid', group: 'annual', subscription };
-  if (active && SHORT_PLANS.has(plan)) return { tier: plan, family: 'paid', group: 'short', subscription };
-  if (active && plan === 'trial') return { tier: 'trial', family: 'trial', group: 'trial', subscription };
-  return { tier: 'free', family: 'free', group: 'free', subscription };
+  if (entitlement.mode === 'finite_credit') return { tier: 'lifetime', family: 'lifetime', group: 'lifetime', subscription, entitlement };
+  if (entitlement.mode === 'unlimited_fair_use') return { tier: plan, family: 'paid', group: 'recurring', subscription, entitlement };
+  if (entitlement.mode === 'legacy_trial') return { tier: 'trial', family: 'trial', group: 'trial', subscription, entitlement };
+  return { tier: plan || 'none', family: 'locked', group: 'payment_required', subscription, entitlement };
 }
 
 export async function getAiQuotaConfig() {
@@ -125,10 +125,14 @@ export async function getQuotaStatus(householdId, feature) {
   if (group === 'lifetime') {
     return getCreditQuotaStatus(householdId, feature);
   }
+  if (group === 'payment_required') {
+    return { feature, tier, family: group, scope: 'none', limit: 0, used: 0, remaining: 0, allowed: false, paymentRequired: true };
+  }
 
+  const fairUse = recurringFairUseLimit(tier, feature);
   const quota = await getAiQuotaConfig();
-  const scope = scopeFor(feature, group);
-  const limit = limitFor(feature, group, quota);
+  const scope = fairUse?.scope || scopeFor(feature, group);
+  const limit = fairUse?.limit ?? limitFor(feature, group, quota);
   const used = await countUsage(householdId, feature, scope);
 
   return {
@@ -151,6 +155,12 @@ export async function assertQuotaAvailable(householdId, feature, label) {
   }
 
   const status = await getQuotaStatus(householdId, feature);
+  if (status.paymentRequired) {
+    const error = new Error('Paket berlangganan aktif diperlukan untuk memakai fitur AI. Pilih paket untuk melanjutkan.');
+    error.status = 402;
+    error.paymentRequired = true;
+    throw error;
+  }
   if (!status.allowed) {
     const scopeLabel = status.scope === 'day' ? 'hari ini' : status.scope === 'month' ? 'bulan ini' : 'selama masa trial';
     const error = new Error(`${label} ${scopeLabel} sudah habis (${status.used}/${status.limit}). Upgrade paket untuk melanjutkan.`);
@@ -255,8 +265,17 @@ export async function reserveUserDailyAiUsage({
       };
     }
 
+    if (group === 'payment_required') {
+      await client.query('ROLLBACK');
+      const error = new Error('Paket berlangganan aktif diperlukan untuk memakai fitur AI. Pilih paket untuk melanjutkan.');
+      error.status = 402;
+      error.paymentRequired = true;
+      throw error;
+    }
+
+    const { tier } = await resolveUsageTier(householdId);
     const quota = await getAiQuotaConfig();
-    const limit = chatDailyLimitFor(feature, group, quota);
+    const limit = recurringFairUseLimit(tier, feature)?.limit ?? chatDailyLimitFor(feature, group, quota);
 
     const usageResult = await client.query(
       `SELECT COUNT(*)::int AS count

@@ -16,12 +16,10 @@ export async function signUp(email, password, name) {
 }
 
 export async function verifyEmail(token) {
-  const data = await apiFetch('/auth/verify-email', {
+  return apiFetch('/auth/verify-email', {
     method: 'POST',
     body: JSON.stringify({ token }),
   });
-  setToken(data.token);
-  return data;
 }
 
 export async function resendVerification(email) {

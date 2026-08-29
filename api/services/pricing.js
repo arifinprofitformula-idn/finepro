@@ -5,6 +5,7 @@
 
 import pool from '../db.js';
 import { getSetting } from './appSettings.js';
+import { DEFAULT_PLAN_PRICES, PLAN_MONTHS } from './planPolicy.js';
 
 export const PLAN_LABELS = {
   monthly: 'Bulanan',
@@ -14,11 +15,7 @@ export const PLAN_LABELS = {
   lifetime: 'Lifetime',
 };
 
-export const PLAN_MONTHS = {
-  quarterly: 3,
-  semiannual: 6,
-  annual: 12,
-};
+export { PLAN_MONTHS } from './planPolicy.js';
 
 const PROMO_ELIGIBLE_PLANS = new Set(['annual', 'lifetime']);
 
@@ -67,7 +64,7 @@ export async function getPlanPricing(plan) {
   const promoActive = plan === 'annual' ? await isPromoActive('annual', pricing) : false;
   const normalAmount = plan === 'semiannual'
     ? pricing.normal.quarterly // legacy plan, tidak dijual lagi — pakai referensi harga quarterly kalau perlu dihitung ulang
-    : pricing.normal[plan];
+    : pricing.normal[plan] ?? DEFAULT_PLAN_PRICES[plan];
 
   return {
     amount: promoActive ? pricing.promo.annual : normalAmount,
@@ -78,7 +75,7 @@ export async function getPlanPricing(plan) {
 }
 
 export async function getAllPlanPricing() {
-  const plans = ['quarterly', 'annual', 'lifetime'];
+  const plans = ['monthly', 'quarterly', 'annual', 'lifetime'];
   const entries = await Promise.all(plans.map(async (plan) => [plan, await getPlanPricing(plan)]));
   return Object.fromEntries(entries);
 }

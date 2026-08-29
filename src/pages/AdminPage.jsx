@@ -2902,8 +2902,8 @@ export default function AdminPage({ user, onLogout }) {
             <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-white/80" />
             <SectionTitle
               icon={BrainCircuit}
-              title="Limit Penggunaan AI"
-              subtitle="Mengatur kuota AI web, scan, dan chat Telegram."
+              title="Fair Use AI"
+              subtitle="Trial lama tetap memakai kuota. Paket berulang unlimited fair use dengan ceiling anti-abuse teruji di backend."
               tone="mint"
             />
             <div className="relative z-10 space-y-4">
@@ -2921,73 +2921,11 @@ export default function AdminPage({ user, onLogout }) {
                 </FormRow>
               </div>
 
-              <div className={`${glassSoft} p-3`}>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Free / Expired</div>
-                <FormRow>
-                  <div>
-                    <label className={labelClass}>Insight / Bulan</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.free_insight_monthly ?? 1} onChange={(e) => setAiQuota("free_insight_monthly", Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Scan / Bulan</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.free_scan_monthly ?? 3} onChange={(e) => setAiQuota("free_scan_monthly", Number(e.target.value))} />
-                  </div>
-                </FormRow>
+              <div className={`${glassSoft} px-3 py-3 text-xs font-semibold leading-relaxed text-[#464555]`}>
+                Monthly, 3 Bulan, dan Tahunan: scan, Insight, Telegram, dan WhatsApp unlimited fair use. Ceiling anti-bot internal: 200 scan/hari/household, 30 Insight/hari/household, 500 chat/hari/user per channel. Paket Lifetime tetap memakai Kredit AI finite.
               </div>
 
-              <div className="rounded-xl border border-white/25 bg-[#e2dfff]/35 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet">Paid: 3 Bulan</div>
-                <FormRow>
-                  <div>
-                    <label className={labelClass}>Insight / Hari</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.short_insight_daily ?? 2} onChange={(e) => setAiQuota("short_insight_daily", Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Scan / Bulan</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.short_scan_monthly ?? 20} onChange={(e) => setAiQuota("short_scan_monthly", Number(e.target.value))} />
-                  </div>
-                </FormRow>
-                <FormRow>
-                  <div>
-                    <label className={labelClass}>Chat Telegram / Hari</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.short_telegram_daily ?? 30} onChange={(e) => setAiQuota("short_telegram_daily", Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Chat WhatsApp / Hari</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.short_whatsapp_daily ?? 20} onChange={(e) => setAiQuota("short_whatsapp_daily", Number(e.target.value))} />
-                  </div>
-                </FormRow>
-              </div>
-
-              <div className="rounded-xl border border-white/25 bg-[#ffdadc]/35 p-3 shadow-[inset_1px_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gold">Paid: Tahunan</div>
-                <FormRow>
-                  <div>
-                    <label className={labelClass}>Insight / Hari</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.annual_insight_daily ?? 3} onChange={(e) => setAiQuota("annual_insight_daily", Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Scan / Bulan</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.annual_scan_monthly ?? 40} onChange={(e) => setAiQuota("annual_scan_monthly", Number(e.target.value))} />
-                  </div>
-                </FormRow>
-                <FormRow>
-                  <div>
-                    <label className={labelClass}>Chat Telegram / Hari</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.annual_telegram_daily ?? 50} onChange={(e) => setAiQuota("annual_telegram_daily", Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Chat WhatsApp / Hari</label>
-                    <input className={inputClass} type="number" min="0" value={aiQuota.annual_whatsapp_daily ?? 30} onChange={(e) => setAiQuota("annual_whatsapp_daily", Number(e.target.value))} />
-                  </div>
-                </FormRow>
-              </div>
-
-              <div className={`${glassSoft} px-3 py-2 text-xs font-semibold leading-relaxed text-[#464555]`}>
-                Scan otomatis dihitung gabungan dari web, upload file, kamera, Telegram, dan WhatsApp. Insight dihitung dari tombol Analisa Keuangan. Chat AI Telegram dan WhatsApp masing-masing dihitung terpisah per pengguna setiap hari saat pesan teks memicu AI. Paket Lifetime tidak memakai limit di atas — lihat panel "Kredit AI Lifetime".
-              </div>
-
-              <SaveButton label="Simpan Limit AI" saving={savingKey === "ai_quota"} onClick={() => saveSetting("ai_quota", aiQuota)} tone="mint" />
+              <SaveButton label="Simpan Kuota Legacy Trial" saving={savingKey === "ai_quota"} onClick={() => saveSetting("ai_quota", aiQuota)} tone="mint" />
               <InlineSaveFeedback feedback={settingFeedbacks.ai_quota} />
             </div>
           </section>
@@ -3007,15 +2945,19 @@ export default function AdminPage({ user, onLogout }) {
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Harga Normal</div>
                 <FormRow>
                   <div>
+                    <label className={labelClass}>Bulanan</label>
+                    <input className={inputClass} type="number" min="0" value={pricing.normal?.monthly ?? 35000} onChange={(e) => setPricing("normal", { ...pricing.normal, monthly: Number(e.target.value) })} />
+                  </div>
+                  <div>
                     <label className={labelClass}>3 Bulan</label>
                     <input className={inputClass} type="number" min="0" value={pricing.normal?.quarterly ?? 79000} onChange={(e) => setPricing("normal", { ...pricing.normal, quarterly: Number(e.target.value) })} />
                   </div>
+                </FormRow>
+                <FormRow>
                   <div>
                     <label className={labelClass}>Tahunan</label>
                     <input className={inputClass} type="number" min="0" value={pricing.normal?.annual ?? 249000} onChange={(e) => setPricing("normal", { ...pricing.normal, annual: Number(e.target.value) })} />
                   </div>
-                </FormRow>
-                <FormRow>
                   <div>
                     <label className={labelClass}>Lifetime</label>
                     <input className={inputClass} type="number" min="0" value={pricing.normal?.lifetime ?? 649000} onChange={(e) => setPricing("normal", { ...pricing.normal, lifetime: Number(e.target.value) })} />

@@ -16,6 +16,7 @@ function BrandLogo() {
 }
 
 const BASE_PLAN_FEATURES = {
+  monthly: ["Semua fitur Fine Pro", "Akses 1 bulan", "Paket hemat tanpa kontrak panjang"],
   quarterly: ["Semua fitur Fine Pro", "Akses 3 bulan", "Dukungan prioritas"],
   annual: ["Semua fitur Fine Pro", "Akses 12 bulan", "Harga per bulan paling hemat", "Dukungan prioritas"],
   lifetime: ["Semua fitur non-AI selamanya", "Kredit AI awal di muka, akumulatif & tidak reset", "Sekali bayar, tanpa perpanjangan"],
@@ -25,78 +26,52 @@ function fmtCredit(value) {
   return Number(value || 0).toLocaleString("id-ID");
 }
 
-// Fitur AI berbasis kuota reset (Quarterly/Annual) vs kredit akumulatif (Lifetime) —
-// datanya live dari GET /payments/pricing (aiQuota/aiCredit) supaya selalu sinkron
-// dengan angka yang benar-benar berlaku di sistem, bukan salinan statis yang bisa basi.
+// Paket berulang memakai unlimited fair use; Lifetime memakai kredit finite.
+// Grant Lifetime dibaca live dari GET /payments/pricing agar tampilan selalu sinkron.
 function getPlanFeatures(id, pricing) {
   const base = [...(BASE_PLAN_FEATURES[id] || [])];
   const q = pricing?.aiQuota;
   if (!q) return base;
 
-  if (id === "quarterly") {
-    base.push(`Scan Struk AI ${q.short_scan_monthly}x/bulan, AI Insight ${q.short_insight_daily}x/hari`);
-  } else if (id === "annual") {
-    base.push(`Scan Struk AI ${q.annual_scan_monthly}x/bulan, AI Insight ${q.annual_insight_daily}x/hari`);
+  if (["monthly", "quarterly", "annual"].includes(id)) {
+    base.push("Scan WhatsApp & Telegram unlimited fair use");
+    base.push("Chat AI dan Insight unlimited fair use");
   }
   return base;
 }
 
-const QUOTA_TABLE_ROWS = [
-  {
-    feature: "Scan Struk Otomatis",
-    short: (q) => `${q.short_scan_monthly}x / bulan`,
-    annual: (q) => `${q.annual_scan_monthly}x / bulan`,
-    lifetime: (c) => `${fmtCredit(c?.receipt_scan)} kredit`,
-  },
-  {
-    feature: "AI Insight",
-    short: (q) => `${q.short_insight_daily}x / hari`,
-    annual: (q) => `${q.annual_insight_daily}x / hari`,
-    lifetime: (c) => `${fmtCredit(c?.ai_insight)} kredit`,
-  },
-  {
-    feature: "Chat AI Telegram",
-    short: (q) => `${q.short_telegram_daily}x / hari`,
-    annual: (q) => `${q.annual_telegram_daily}x / hari`,
-    lifetime: (c) => `${fmtCredit(c?.telegram_chat)} kredit`,
-  },
-  {
-    feature: "Chat AI WhatsApp",
-    short: (q) => `${q.short_whatsapp_daily}x / hari`,
-    annual: (q) => `${q.annual_whatsapp_daily}x / hari`,
-    lifetime: (c) => `${fmtCredit(c?.whatsapp_chat)} kredit`,
-  },
+const AI_ACCESS_ROWS = [
+  { feature: "Scan Struk Otomatis", lifetimeKey: "receipt_scan" },
+  { feature: "AI Insight", lifetimeKey: "ai_insight" },
+  { feature: "Chat AI Telegram", lifetimeKey: "telegram_chat" },
+  { feature: "Chat AI WhatsApp", lifetimeKey: "whatsapp_chat" },
 ];
 
 function AiQuotaTable({ pricing }) {
-  const aiQuota = pricing?.aiQuota;
   const lifetimeGrant = pricing?.aiCredit?.lifetime_grant;
-  if (!aiQuota) return null;
+  if (!lifetimeGrant) return null;
 
   return (
     <section className="gloss-panel mt-4 rounded-[28px] p-5">
-      <div className="text-sm font-bold text-navy">Detail Kuota Kredit AI per Paket</div>
+      <div className="text-sm font-bold text-navy">Detail Akses AI per Paket</div>
       <p className="mt-1 text-xs font-medium leading-relaxed text-neutral-500">
-        Paket 3 Bulan &amp; Tahunan memakai kuota yang reset otomatis (harian/bulanan). Paket Lifetime memakai
-        Kredit AI awal yang bersifat akumulatif — tidak reset, dan bisa di-top-up bila habis.
+        Paket Bulanan, 3 Bulan, dan Tahunan memakai akses AI unlimited fair use. Batas internal hanya melindungi layanan dari bot dan penyalahgunaan. Paket Lifetime memakai Kredit AI awal yang akumulatif dan bisa di-top-up.
       </p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[420px] border-collapse text-xs">
           <thead>
             <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-neutral-400">
               <th className="py-2 pr-2">Fitur AI</th>
-              <th className="px-2 py-2">3 Bulan</th>
-              <th className="px-2 py-2">Tahunan</th>
+              <th className="px-2 py-2">Paket Berulang</th>
               <th className="pl-2 py-2">Lifetime (Kredit Awal)</th>
             </tr>
           </thead>
           <tbody>
-            {QUOTA_TABLE_ROWS.map((row) => (
+            {AI_ACCESS_ROWS.map((row) => (
               <tr key={row.feature} className="border-t border-neutral-border/60">
                 <td className="py-2.5 pr-2 font-semibold text-navy">{row.feature}</td>
-                <td className="px-2 py-2.5 text-neutral-600">{row.short(aiQuota)}</td>
-                <td className="px-2 py-2.5 text-neutral-600">{row.annual(aiQuota)}</td>
-                <td className="py-2.5 pl-2 font-semibold text-violet">{row.lifetime(lifetimeGrant)}</td>
+                <td className="px-2 py-2.5 font-semibold text-mint">Unlimited fair use</td>
+                <td className="py-2.5 pl-2 font-semibold text-violet">{fmtCredit(lifetimeGrant?.[row.lifetimeKey])} kredit</td>
               </tr>
             ))}
           </tbody>
@@ -135,7 +110,7 @@ export default function PricingPage({ onSelectPlan, onBack }) {
           </div>
           <h1 className="mt-3 text-2xl font-bold leading-tight text-navy">Pilih Paket Langganan</h1>
           <p className="mx-auto mt-2 max-w-sm text-sm font-medium leading-relaxed text-neutral-500">
-            Lanjutkan menikmati semua fitur Fine Pro setelah masa trial berakhir.
+            Pilih paket berbayar dan nikmati semua fitur inti sejak hari pertama. Tanpa free trial.
           </p>
         </div>
 

@@ -13,8 +13,8 @@ di `app_settings.tracking.event_mapping_json`).
 | `view_landing_page` | Landing page publik dibuka | `ViewContent` | browser | `view_landing_page` | browser | `content_name`, `content_category`, `page_path`, `page_location`, `source` | marketing | Growth |
 | `primary_cta_clicked` | Tombol CTA utama diklik | `CTA_Click` (custom) | browser | `select_content` | browser | `content_name`, `content_category`, `page_path`, `source`, `method` | marketing | Growth |
 | `registration_started` | Form registrasi pertama kali disubmit | `Lead` | browser | `generate_lead` | browser | `method`, `source`, `page_path` | marketing | Growth |
-| `registration_completed` | Akun berhasil dibuat di database | `CompleteRegistration` | browser + server (event_id sama, dedup) | `sign_up` | server | `method`, `trial_days`, `source`, `utm_*` | marketing | Growth |
-| `trial_started` | Trial aktif di database (bersamaan dengan registrasi di FinePro) | `StartTrial` | browser + server | `start_trial` | server | `trial_days`, `plan_id`, `source` | marketing | Growth |
+| `registration_completed` | Akun berhasil dibuat di database | `CompleteRegistration` | browser + server (event_id sama, dedup) | `sign_up` | server | `method`, `source`, `utm_*` | marketing | Growth |
+| `trial_started` | Legacy only; disabled untuk funnel paid-only | `StartTrial` | disabled | `start_trial` | disabled | `trial_days`, `plan_id`, `source` | marketing | Growth |
 | `first_transaction_created` | Transaksi pertama household tersimpan (nominal TIDAK dikirim) | `FirstTransaction` (custom) | server | `first_transaction` | server | `source` | marketing | Product |
 | `receipt_uploaded` | Upload struk diterima sistem (isi struk TIDAK dikirim) | `ReceiptUploaded` (custom) | server | `receipt_uploaded` | server | `source` | marketing | Product |
 | `budget_created` | Budget kategori baru tersimpan (nilai budget TIDAK dikirim) | `BudgetCreated` (custom) | server | `budget_created` | server | `source` | marketing | Product |
@@ -24,7 +24,7 @@ di `app_settings.tracking.event_mapping_json`).
 
 | Event | File | Fungsi |
 |---|---|---|
-| `registration_completed`, `trial_started` | `api/routes/auth.js` | `POST /register`, setelah `INSERT INTO users` sukses & response 201 terkirim |
+| `registration_completed` | `api/routes/auth.js` | `POST /register`, setelah `INSERT INTO users` sukses & response 201 terkirim |
 | `first_transaction_created` | `api/routes/transactions.js` | `POST /`, setelah insert, hanya kalau household belum punya transaksi sebelumnya |
 | `receipt_uploaded` | `api/routes/receipts.js` | `POST /scan`, setelah OCR/parse sukses & response terkirim |
 | `budget_created` | `api/routes/budgets.js` | `PUT /`, hanya kalau kategori budget belum ada sebelumnya |
@@ -32,7 +32,7 @@ di `app_settings.tracking.event_mapping_json`).
 
 ## Deduplication event_id
 
-- **Registrasi/Trial**: `event_id` di-generate di server (`crypto.randomUUID()`)
+- **Registrasi**: `event_id` di-generate di server (`crypto.randomUUID()`)
   saat `POST /register`, dikembalikan ke browser lewat
   `response.trackingEventIds`, lalu dipakai browser (`AuthPage.jsx`) untuk
   memanggil `fbq('track', ..., { eventID })` dengan ID yang sama persis.

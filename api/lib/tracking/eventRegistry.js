@@ -29,7 +29,7 @@ export const DEFAULT_EVENT_MAPPING = {
     consentCategory: 'marketing',
   },
   primary_cta_clicked: {
-    trigger: 'Tombol CTA utama (mis. "Coba Gratis") diklik',
+    trigger: 'Tombol CTA utama pemilihan paket diklik',
     meta: { eventName: 'CTA_Click', channel: 'browser' },
     ga4: { eventName: 'select_content', channel: 'browser' },
     allowedParams: ['content_name', 'content_category', 'page_path', 'source', 'method'],
@@ -50,7 +50,8 @@ export const DEFAULT_EVENT_MAPPING = {
     consentCategory: 'marketing',
   },
   trial_started: {
-    trigger: 'Trial aktif di database (di FinePro terjadi bersamaan dengan registrasi)',
+    enabled: false,
+    trigger: 'Legacy only; pendaftar baru memakai funnel paid-only',
     meta: { eventName: 'StartTrial', channel: 'browser_and_server' },
     ga4: { eventName: 'start_trial', channel: 'server' },
     allowedParams: ['trial_days', 'plan_id', 'source'],

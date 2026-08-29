@@ -229,7 +229,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Apakah ada uji coba gratis?",
-    a: "Ada. Setiap akun baru otomatis dapat 14 hari gratis begitu selesai daftar — tanpa perlu kartu kredit atau info pembayaran apapun. Setelah masa coba selesai, data lamamu tetap bisa dilihat; kamu hanya perlu upgrade kalau mau lanjut mencatat transaksi baru."
+    a: "Tidak. Fine Pro fokus pada pengguna berbayar agar layanan tetap stabil. Paket mulai Rp35.000 per bulan, dan semua paket berulang mendapat fitur inti serta AI unlimited fair use."
   },
   {
     q: "Apakah bisa mencatat pemasukan dan pengeluaran?",
@@ -431,14 +431,14 @@ function NavBar({ onGetStarted, onLogin }) {
           <div className="mt-4 flex flex-col gap-2">
             <span className="mx-auto flex items-center gap-1 rounded-full bg-mint-light px-3 py-1.5 text-xs font-bold text-mint">
               <Gift size={13} />
-              14 Hari Gratis · Tanpa Kartu Kredit
+              Paket Mulai Rp35.000 / Bulan
             </span>
             <button
               type="button"
               onClick={() => { setOpen(false); onGetStarted(); }}
               className="flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-violet text-sm font-bold text-white"
             >
-              Mulai Gratis 14 Hari
+              Pilih Paket Sekarang
               <ArrowRight size={15} />
             </button>
             <button
@@ -465,7 +465,7 @@ function Hero({ onGetStarted }) {
           </div>
           <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-mint-light px-3 py-1 text-[11px] font-bold text-mint">
             <Gift size={12} />
-            Coba Gratis 14 Hari, Tanpa Kartu Kredit
+            Scan WhatsApp & Telegram Unlimited Fair Use
           </div>
           <h1 className="text-3xl font-bold leading-tight text-navy sm:text-4xl md:text-[2.75rem]">
             Uang Sering Habis Tapi Tidak Tahu Ke Mana Perginya?
@@ -481,7 +481,7 @@ function Hero({ onGetStarted }) {
               onClick={onGetStarted}
               className="flex h-12 items-center justify-center gap-1.5 rounded-full bg-violet px-6 text-sm font-bold text-white shadow-float transition hover:brightness-110"
             >
-              Mulai Gratis 14 Hari
+              Pilih Paket Sekarang
               <ArrowRight size={16} />
             </button>
             <a
@@ -493,7 +493,7 @@ function Hero({ onGetStarted }) {
           </div>
 
           <p className="mt-4 text-xs font-semibold text-neutral-500">
-            Gratis 14 hari · Tanpa kartu kredit · Batal kapan saja
+            Tanpa free trial · Semua fitur inti aktif setelah pembayaran
           </p>
         </div>
 
@@ -798,7 +798,7 @@ function CtaSection({ onGetStarted }) {
           </div>
           <h2 className="text-2xl font-bold md:text-4xl">Mulai Rapikan Keuanganmu Hari Ini</h2>
           <p className="mx-auto mt-3 max-w-md text-sm font-medium leading-relaxed text-white/80 md:text-base">
-            Tidak perlu menunggu gaji berikutnya. Coba gratis 14 hari, tanpa kartu kredit — cukup email untuk mulai.
+            Tidak perlu menunggu gaji berikutnya. Pilih paket mulai Rp35.000 per bulan dan mulai rapikan keuangan hari ini.
           </p>
           <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <button
@@ -806,7 +806,7 @@ function CtaSection({ onGetStarted }) {
               onClick={onGetStarted}
               className="flex h-12 w-full items-center justify-center gap-1.5 rounded-full bg-white px-6 text-sm font-bold text-navy sm:w-auto"
             >
-              Mulai Gratis 14 Hari
+              Pilih Paket Sekarang
               <ArrowRight size={16} />
             </button>
             <a
@@ -817,7 +817,7 @@ function CtaSection({ onGetStarted }) {
             </a>
           </div>
           <p className="mt-4 text-xs font-semibold text-white/70">
-            14 hari gratis · Tanpa kartu kredit · Batal kapan saja
+            Paket mulai Rp35.000 per bulan · Tanpa free trial
           </p>
         </div>
       </Container>

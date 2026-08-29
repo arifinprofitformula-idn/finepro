@@ -13,7 +13,7 @@ import { PLAN_LABELS } from "../api/subscriptions.js";
 import { fmtRp } from "../utils/format.js";
 import { Crown, ShieldCheck } from "lucide-react";
 
-export const PLAN_ORDER = ["quarterly", "annual", "lifetime"];
+export const PLAN_ORDER = ["monthly", "quarterly", "annual", "lifetime"];
 
 const inputClass =
   "h-11 w-full min-w-0 rounded-full border border-neutral-border bg-white/70 px-4 text-sm font-medium text-navy outline-none backdrop-blur";

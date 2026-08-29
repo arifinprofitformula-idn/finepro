@@ -299,15 +299,10 @@ export default function AuthPage({ onBack, initialMode } = {}) {
         setMsgType("");
         setSignupSubmitted(true);
 
-        // Meta browser CompleteRegistration/StartTrial pakai event_id YANG SAMA dengan
-        // yang sudah dikirim server (CAPI) untuk registrasi ini — lihat api/routes/auth.js.
-        // Hanya dikirim setelah registrasi benar-benar sukses (respons 201 diterima di sini).
+        // Meta browser CompleteRegistration memakai event_id sama dengan CAPI.
         const ids = data?.trackingEventIds;
         if (ids?.registration_completed) {
           trackMetaBrowserEvent({ eventName: "CompleteRegistration", eventId: ids.registration_completed, parameters: { method: "email" } });
-        }
-        if (ids?.trial_started) {
-          trackMetaBrowserEvent({ eventName: "StartTrial", eventId: ids.trial_started, parameters: {} });
         }
       } else if (mode === "forgot") {
         await forgotPassword(trimmedEmail);
@@ -400,9 +395,9 @@ export default function AuthPage({ onBack, initialMode } = {}) {
               <div className="mt-5 animate-auth-fade-up">
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-gold-light/70 px-3 py-1 text-[11px] font-bold text-gold">
                   <Gift size={13} />
-                  14 Hari Gratis · Tanpa Kartu Kredit
+                  Paket mulai Rp35.000 per bulan
                 </div>
-                <h1 className="mt-3 text-2xl font-bold leading-tight text-navy">Buat Akun, Nikmati 14 Hari Gratis Mulai Hari Ini</h1>
+                <h1 className="mt-3 text-2xl font-bold leading-tight text-navy">Buat Akun, Pilih Paket, Langsung Pakai</h1>
                 <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
                   Setelah ini, kamu nggak perlu lagi menebak-nebak ke mana uangmu pergi.
                 </p>
@@ -451,7 +446,7 @@ export default function AuthPage({ onBack, initialMode } = {}) {
                 <h1 className="text-2xl font-bold leading-tight text-navy">Verifikasi email.</h1>
                 <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
                   {verifyStatus === "pending" && "Sedang memverifikasi email kamu..."}
-                  {verifyStatus === "success" && "Email berhasil diverifikasi. Kamu sudah masuk."}
+                  {verifyStatus === "success" && "Email berhasil diverifikasi. Silakan masuk untuk memilih paket."}
                   {verifyStatus === "error" && "Tautan verifikasi tidak valid atau sudah kedaluwarsa."}
                 </p>
               </div>
@@ -509,15 +504,15 @@ export default function AuthPage({ onBack, initialMode } = {}) {
                 }`}
               >
                 {verifyStatus === "pending" && "Mohon tunggu sebentar..."}
-                {verifyStatus === "success" && "Email berhasil diverifikasi dan kamu sudah masuk ke akun."}
+                {verifyStatus === "success" && "Email berhasil diverifikasi. Masuk untuk memilih paket berlangganan."}
                 {verifyStatus === "error" && "Tautan sudah tidak berlaku. Masuk lalu minta kirim ulang tautan verifikasi."}
-                {verifyStatus === "error" && (
+                {(verifyStatus === "success" || verifyStatus === "error") && (
                   <button
                     type="button"
                     onClick={() => switchMode("login")}
                     className="mt-3 block w-full rounded-full bg-navy px-3 py-2 text-center text-xs font-bold text-white transition active:scale-[0.98]"
                   >
-                    Kembali ke halaman Masuk
+                    Masuk ke Akun
                   </button>
                 )}
               </div>
@@ -650,7 +645,7 @@ export default function AuthPage({ onBack, initialMode } = {}) {
 
             {mode === "login" && (
               <p className="mt-4 text-center text-[11px] font-medium text-neutral-500">
-                Akun baru otomatis mendapat masa coba 14 hari gratis.
+                Paket berbayar mulai Rp35.000 per bulan. Tanpa free trial.
               </p>
             )}
             {mode === "signup" && (

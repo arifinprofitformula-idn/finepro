@@ -25,6 +25,7 @@ import telegramRoutes from './routes/telegram.js';
 import whatsappRoutes from './routes/whatsapp.js';
 import savingsGoalsRoutes from './routes/savings-goals.js';
 import metalPricesRoutes from './routes/metal-prices.js';
+import { subscriptionAccessMiddleware } from './middleware/subscriptionAccess.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -59,6 +60,9 @@ app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Paid-only gate. Public/auth/payment/provider-callback paths are exempted inside middleware.
+app.use('/api', subscriptionAccessMiddleware);
 
 // Routes
 app.use('/api/auth', authRoutes);

@@ -182,6 +182,16 @@ export default function App() {
     );
   }
 
+  const subscriptionLocked = household.subscription_status !== "active";
+  if (subscriptionLocked && !["upgrade", "checkout"].includes(page)) {
+    return (
+      <PricingPage
+        onSelectPlan={(planId) => { setSelectedUpgradePlan(planId); setPage("checkout"); }}
+        onBack={() => {}}
+      />
+    );
+  }
+
   if (page === "upgrade") {
     return (
       <PricingPage
@@ -205,7 +215,7 @@ export default function App() {
     );
   }
 
-  const subscriptionExpired = household.subscription_status === "expired";
+  const subscriptionExpired = subscriptionLocked;
   const subscriptionWarning = getSubscriptionWarning(household);
   const notificationCount = invites.length + (subscriptionWarning ? 1 : 0);
 

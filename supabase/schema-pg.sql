@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS household_invites (
 -- 4. Status langganan
 CREATE TABLE IF NOT EXISTS subscriptions (
   household_id UUID REFERENCES households(id) ON DELETE CASCADE PRIMARY KEY,
-  plan TEXT NOT NULL DEFAULT 'trial',
+  plan TEXT NOT NULL DEFAULT 'monthly',
   status TEXT NOT NULL DEFAULT 'active',
   current_period_end DATE,
   updated_at TIMESTAMPTZ DEFAULT now()
@@ -450,7 +450,7 @@ BEGIN
   VALUES (NEW.id, NEW.owner_id, 'owner');
 
   INSERT INTO subscriptions (household_id, plan, status, current_period_end)
-  VALUES (NEW.id, 'trial', 'active', CURRENT_DATE + INTERVAL '14 days');
+  VALUES (NEW.id, 'monthly', 'pending_payment', NULL);
 
   PERFORM seed_default_categories(NEW.id, NEW.household_type);
 
@@ -520,8 +520,8 @@ VALUES
   ('midtrans', '{"enabled": false, "is_production": false, "server_key": "", "client_key": ""}', true),
   ('manual_payment', '{"enabled": false, "bank_name": "", "account_number": "", "account_name": "", "instructions": ""}', false),
   ('ai', '{"enabled": false, "provider": "sumopod", "sumopod_api_key": "", "sumopod_base_url": "https://ai.sumopod.com/v1", "sumopod_model": "gpt-4o-mini", "anthropic_api_key": "", "anthropic_model": "claude-sonnet-4-5", "insights_daily_limit": 3, "receipt_scan_monthly_limit": 30}', true),
-  ('ai_quota', '{"trial_insight_total": 3, "trial_scan_total": 5, "free_insight_monthly": 1, "free_scan_monthly": 3, "short_scan_monthly": 20, "short_insight_daily": 2, "short_telegram_daily": 30, "short_whatsapp_daily": 20, "annual_scan_monthly": 40, "annual_insight_daily": 3, "annual_telegram_daily": 50, "annual_whatsapp_daily": 30}', false),
-  ('pricing', '{"promo_start_date": null, "promo_days": 30, "promo_max_users": {"annual": 500, "lifetime": 500}, "normal": {"monthly": 29000, "quarterly": 79000, "annual": 249000, "lifetime": 649000}, "promo": {"annual": 149000, "lifetime": 499000}}', false),
+  ('ai_quota', '{"trial_insight_total": 3, "trial_scan_total": 5, "free_insight_monthly": 1, "free_scan_monthly": 3, "short_scan_monthly": 200, "short_insight_daily": 30, "short_telegram_daily": 500, "short_whatsapp_daily": 500, "annual_scan_monthly": 200, "annual_insight_daily": 30, "annual_telegram_daily": 500, "annual_whatsapp_daily": 500}', false),
+  ('pricing', '{"promo_start_date": null, "promo_days": 30, "promo_max_users": {"annual": 500, "lifetime": 500}, "normal": {"monthly": 35000, "quarterly": 79000, "annual": 249000, "lifetime": 649000}, "promo": {"annual": 149000, "lifetime": 499000}}', false),
   ('ai_credit', '{"lifetime_grant": {"receipt_scan": 480, "ai_insight": 1095, "telegram_chat": 18250, "whatsapp_chat": 10950}, "topup_grant": {"receipt_scan": 240, "ai_insight": 546, "telegram_chat": 9100, "whatsapp_chat": 5460}, "topup_price": 124500}', false),
   ('ape_epi', '{"enabled": false, "base_url": "https://ape.bisnisemasperak.com/api/v1", "api_key": "", "level": "konsumen", "gold_brand": "GOLDGRAM", "silver_brand": "SILVERGRAM", "cache_ttl_minutes": 30, "max_daily_requests": 3}', true),
   ('web_push', '{"enabled": true, "vapid_public_key": "", "vapid_private_key": "", "vapid_subject": "mailto:admin@finepro.my.id"}', true),

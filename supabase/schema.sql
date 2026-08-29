@@ -45,7 +45,7 @@ create table if not exists budgets (
 -- 5. Status langganan (subscription) per household
 create table if not exists subscriptions (
   household_id uuid references households(id) on delete cascade primary key,
-  plan text not null default 'trial', -- 'trial' | 'monthly' | 'semiannual' | 'annual'
+  plan text not null default 'monthly', -- legacy trial tetap valid; household baru pending payment
   status text not null default 'active', -- 'active' | 'expired' | 'cancelled'
   current_period_end date,
   updated_at timestamptz default now()
@@ -118,7 +118,7 @@ create policy "subscriptions select for members" on subscriptions
 
 -- ============================================================
 -- Trigger: saat household baru dibuat, otomatis jadi anggota +
--- owner + trial 14 hari
+-- owner + subscription pending payment
 -- ============================================================
 create or replace function handle_new_household()
 returns trigger as $$
@@ -127,7 +127,7 @@ begin
   values (new.id, new.owner_id, 'owner');
 
   insert into subscriptions (household_id, plan, status, current_period_end)
-  values (new.id, 'trial', 'active', current_date + interval '14 days');
+  values (new.id, 'monthly', 'pending_payment', null);
 
   return new;
 end;

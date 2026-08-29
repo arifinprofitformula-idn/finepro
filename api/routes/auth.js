@@ -32,7 +32,6 @@ const authLimiter = rateLimit({
 
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 jam
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 jam
-const TRIAL_DAYS = 14;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const INDO_MONTHS = [
@@ -126,10 +125,9 @@ function resetPasswordEmailTemplate({ name, resetLink }) {
 </html>`;
 }
 
-function verifyEmailTemplate({ name, verifyLink, trialEndsAt }) {
+function verifyEmailTemplate({ name, verifyLink }) {
   const safeName = escapeHtml(name || 'Sahabat Finepro');
   const safeVerifyLink = escapeHtml(verifyLink);
-  const safeTrialEndsAt = escapeHtml(formatIndoDate(trialEndsAt));
 
   return `
 <!doctype html>
@@ -154,7 +152,7 @@ function verifyEmailTemplate({ name, verifyLink, trialEndsAt }) {
             <tr>
               <td style="padding:26px 24px;">
                 <p style="margin:0 0 14px;font-size:15px;line-height:1.7;">Halo <strong>${safeName}</strong>,</p>
-                <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#3f4657;">Terima kasih sudah mendaftar. Klik tombol di bawah untuk verifikasi email dan mengaktifkan masa trial gratis 14 hari (berakhir <strong>${safeTrialEndsAt}</strong>). Tautan berlaku selama <strong>24 jam</strong>.</p>
+                <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#3f4657;">Terima kasih sudah mendaftar. Klik tombol di bawah untuk verifikasi email. Setelah itu, pilih paket berlangganan untuk mulai memakai Finepro. Tautan berlaku selama <strong>24 jam</strong>.</p>
                 <p style="margin:26px 0;text-align:center;">
                   <a href="${safeVerifyLink}" style="display:inline-block;background:#6f55f2;color:#ffffff;text-decoration:none;border-radius:999px;padding:14px 22px;font-size:14px;font-weight:800;box-shadow:0 14px 28px rgba(111,85,242,0.26);">Verifikasi Email</a>
                 </p>
@@ -178,12 +176,10 @@ function verifyEmailTemplate({ name, verifyLink, trialEndsAt }) {
 </html>`;
 }
 
-function welcomeEmailTemplate({ name, email, password, trialEndsAt, loginLink }) {
+function welcomeEmailTemplate({ name, email, loginLink }) {
   const safeName = escapeHtml(name || 'Sahabat Finepro');
   const safeEmail = escapeHtml(email);
-  const safePassword = escapeHtml(password);
   const safeLoginLink = escapeHtml(loginLink);
-  const safeTrialEndsAt = escapeHtml(formatIndoDate(trialEndsAt));
 
   return `
 <!doctype html>
@@ -202,17 +198,15 @@ function welcomeEmailTemplate({ name, email, password, trialEndsAt, loginLink })
               <td style="padding:26px 24px;background:linear-gradient(135deg,#0f1f3d 0%,#6f55f2 100%);">
                 <img src="https://finepro.my.id/images/fine-pro-header.png" alt="Finepro" width="240" style="display:block;max-width:240px;width:100%;height:auto;margin:0 0 18px 0;" />
                 <h1 style="margin:18px 0 0;color:#ffffff;font-size:24px;line-height:1.25;">Akun Finepro kamu berhasil dibuat</h1>
-                <p style="margin:8px 0 0;color:rgba(255,255,255,0.82);font-size:14px;line-height:1.6;">Masa trial 14 hari kamu sudah mulai berjalan.</p>
+                <p style="margin:8px 0 0;color:rgba(255,255,255,0.82);font-size:14px;line-height:1.6;">Email terverifikasi. Pilih paket dan mulai memakai Finepro.</p>
               </td>
             </tr>
             <tr>
               <td style="padding:26px 24px;">
                 <p style="margin:0 0 14px;font-size:15px;line-height:1.7;">Halo <strong>${safeName}</strong>,</p>
-                <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#3f4657;">Terima kasih sudah mendaftar di Finepro. Pendaftaran kamu berhasil dan masa trial gratis selama <strong>${TRIAL_DAYS} hari</strong> sudah mulai berjalan, berakhir pada <strong>${safeTrialEndsAt}</strong>.</p>
+                <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#3f4657;">Email kamu sudah terverifikasi. Pilih paket berlangganan untuk mulai memakai seluruh fitur Finepro.</p>
                 <div style="background:#efeaff;border:1px solid rgba(111,85,242,0.18);border-radius:16px;padding:14px 16px;margin:0 0 18px;">
-                  <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#3f2ca8;">Simpan detail login kamu berikut ini sebagai pengingat:</p>
-                  <p style="margin:0;font-size:13px;line-height:1.7;color:#0f1f3d;">Email: <strong>${safeEmail}</strong></p>
-                  <p style="margin:0;font-size:13px;line-height:1.7;color:#0f1f3d;">Password: <strong>${safePassword}</strong></p>
+                  <p style="margin:0;font-size:13px;line-height:1.7;color:#0f1f3d;">Gunakan email <strong>${safeEmail}</strong> untuk masuk. Finepro tidak pernah mengirim atau menampilkan password lewat email.</p>
                 </div>
                 <p style="margin:26px 0;text-align:center;">
                   <a href="${safeLoginLink}" style="display:inline-block;background:#6f55f2;color:#ffffff;text-decoration:none;border-radius:999px;padding:14px 22px;font-size:14px;font-weight:800;box-shadow:0 14px 28px rgba(111,85,242,0.26);">Masuk ke Finepro</a>
@@ -283,7 +277,6 @@ router.post('/register', authLimiter, async (req, res) => {
     );
     const newUser = result.rows[0];
 
-    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
     const baseUrl = appBaseUrl(req);
 
     // Token verifikasi email — wajib diklik sebelum bisa login, supaya alamat
@@ -299,28 +292,19 @@ router.post('/register', authLimiter, async (req, res) => {
       sendMail({
         to: email,
         subject: 'Verifikasi Email Finepro Kamu',
-        html: verifyEmailTemplate({ name, verifyLink, trialEndsAt }),
+        html: verifyEmailTemplate({ name, verifyLink }),
       }).catch((err) => console.error('Gagal kirim email verifikasi:', err));
     } else {
       console.error('APP_BASE_URL belum diisi dan host request tidak tersedia untuk membuat tautan verifikasi email');
     }
 
-    // Email selamat datang — kirim best-effort, jangan gagalkan pendaftaran kalau Mailketing bermasalah.
-    const loginLink = `${baseUrl}/`;
-    sendMail({
-      to: email,
-      subject: 'Akun FinePro Kamu Berhasil Dibuat',
-      html: welcomeEmailTemplate({ name, email, password, trialEndsAt, loginLink }),
-    }).catch((err) => console.error('Gagal kirim email selamat datang:', err));
+    // Email selamat datang dikirim setelah verifikasi. Password tidak pernah dikirim lewat email.
 
     // Masukkan ke list Mailketing — best-effort, di-skip diam-diam kalau list_id belum diatur di Admin Console.
     addSubscriberToList({ email, name }).catch((err) => console.error('Gagal menambahkan ke list Mailketing:', err));
 
-    // Tracking: registrasi & trial FinePro mulai bersamaan (tidak ada endpoint start-trial terpisah).
-    // event_id sama dipakai browser (Meta Pixel) supaya CompleteRegistration/StartTrial ter-dedup dengan server (CAPI).
-    // Dijalankan setelah insert user & response terkirim — kegagalan tracking tidak pernah menggagalkan registrasi.
+    // Paid-only funnel: registrasi dilacak tanpa event StartTrial.
     const registrationEventId = crypto.randomUUID();
-    const trialEventId = crypto.randomUUID();
     const anonymousId = typeof req.body?.anonymousId === 'string' ? req.body.anonymousId.slice(0, 100) : null;
     const requestContext = { clientIp: req.ip, userAgent: req.get('user-agent') || '' };
 
@@ -347,19 +331,12 @@ router.post('/register', authLimiter, async (req, res) => {
         requestContext,
         parameters: { method: 'email', source: 'web', ...attributionParams },
       });
-      await trackBusinessEvent({
-        eventName: 'trial_started',
-        eventId: trialEventId,
-        user: { id: newUser.id, email: newUser.email },
-        requestContext,
-        parameters: { trial_days: TRIAL_DAYS, plan_id: 'trial', source: 'web' },
-      });
-    })().catch((err) => console.error('Tracking registrasi/trial gagal (diabaikan):', err.message));
+    })().catch((err) => console.error('Tracking registrasi gagal (diabaikan):', err.message));
 
     res.status(201).json({
       message: 'Registrasi berhasil! Cek email kamu untuk verifikasi sebelum bisa masuk.',
       verificationRequired: true,
-      trackingEventIds: { registration_completed: registrationEventId, trial_started: trialEventId },
+      trackingEventIds: { registration_completed: registrationEventId },
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -597,9 +574,16 @@ router.post('/verify-email', authLimiter, async (req, res) => {
     await pool.query('UPDATE email_verification_tokens SET used_at = now() WHERE id = $1', [record.id]);
 
     const user = { ...userResult.rows[0], role: adminRoleForEmail(userResult.rows[0].email, userResult.rows[0].role) };
-    const jwtToken = generateToken(user);
+    const loginLink = appBaseUrl(req) ? `${appBaseUrl(req)}/` : null;
+    if (loginLink) {
+      sendMail({
+        to: user.email,
+        subject: 'Selamat Datang di FinePro!',
+        html: welcomeEmailTemplate({ name: user.name, email: user.email, loginLink }),
+      }).catch((err) => console.error('Gagal kirim email selamat datang:', err));
+    }
 
-    res.json({ message: 'Email berhasil diverifikasi', user, token: jwtToken });
+    res.json({ message: 'Email berhasil diverifikasi. Silakan masuk untuk memilih paket.' });
   } catch (err) {
     console.error('Verify email error:', err);
     res.status(500).json({ error: 'Gagal memverifikasi email' });
@@ -638,12 +622,11 @@ router.post('/resend-verification', authLimiter, async (req, res) => {
       throw new Error('APP_BASE_URL belum diisi dan host request tidak tersedia untuk membuat tautan verifikasi email');
     }
     const verifyLink = `${baseUrl}/?verify_token=${rawToken}`;
-    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
 
     await sendMail({
       to: email,
       subject: 'Verifikasi Email Finepro Kamu',
-      html: verifyEmailTemplate({ name: user.name, verifyLink, trialEndsAt }),
+      html: verifyEmailTemplate({ name: user.name, verifyLink }),
     });
 
     res.json(genericResponse);

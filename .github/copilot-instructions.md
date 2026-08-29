@@ -32,7 +32,7 @@ server aplikasi custom.
 - Satu user → 1 household (via `household_members`)
 - Household dibuat lewat layar onboarding persona (family / student /
   individual) — trigger database otomatis mengisi: keanggotaan owner,
-  subscription trial 14 hari, dan seed `categories` sesuai `household_type`
+  subscription `pending_payment` untuk household baru, grandfathered trial lama, dan seed `categories` sesuai `household_type`
   (lihat `002_add_persona_categories.sql`)
 - Semua query transaksi/budget difilter `household_id`; RLS di database
   yang menjamin isolasi antar household, bukan logika di frontend
