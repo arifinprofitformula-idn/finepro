@@ -1,5 +1,11 @@
+// src/pages/PaymentFinishPage.jsx
+// Setelah payment selesai oleh Midtrans/Xendit/SumoPod, polling status ke
+// /api/payments/status/:orderId sampai "paid" atau "failed/expired".
+// Kalau "paid", household refresh otomatis dan user dialihkan ke halaman
+// yang tepat: dashboard (jika tidak onboarding) atau setup dompet
+// (jika onboarding flow masih aktif).
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, Clock3, Crown, Loader2, ReceiptText, Wallet, XCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, Crown, Loader2, ReceiptText, XCircle } from "lucide-react";
 import OnboardingProgress from "../components/OnboardingProgress.jsx";
 import { getPaymentStatus } from "../api/payments.js";
 import { PLAN_LABELS } from "../api/subscriptions.js";
@@ -64,7 +70,13 @@ function DetailRow({ icon: Icon, label, value }) {
   );
 }
 
-export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard, onContinueSetup, onboardingFlow = false }) {
+export default function PaymentFinishPage({
+  onPaid,
+  onGoAccount,
+  onGoDashboard,
+  onContinueSetup,
+  onboardingFlow = false,
+}) {
   const orderId = useMemo(() => new URLSearchParams(window.location.search).get("order_id"), []);
   const [payment, setPayment] = useState(null);
   const [polling, setPolling] = useState(Boolean(orderId));
@@ -87,6 +99,16 @@ export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard, 
             setMessage("Pembayaran berhasil. Paket Fine Pro Anda sudah aktif.");
             setPolling(false);
             await onPaid?.();
+            // Auto-redirect setelah onPaid selesai:
+            // - Kalau onboarding flow masih aktif → ke setup dompet
+            // - Kalau tidak → ke dashboard utama
+            setTimeout(() => {
+              if (onboardingFlow && onContinueSetup) {
+                onContinueSetup();
+              } else if (onGoDashboard) {
+                onGoDashboard();
+              }
+            }, 300);
             return;
           }
           if (nextPayment.status === "failed" || nextPayment.status === "expired") {
@@ -109,10 +131,8 @@ export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard, 
     }
 
     poll();
-    return () => {
-      cancelled = true;
-    };
-  }, [orderId, onPaid]);
+    return () => { cancelled = true; };
+  }, [orderId, onPaid, onContinueSetup, onGoDashboard, onboardingFlow]);
 
   const planLabel = payment?.plan ? PLAN_LABELS[payment.plan] || payment.plan : null;
   const isPaid = payment?.status === "paid";
@@ -143,7 +163,7 @@ export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard, 
             {!polling && !isPaid && !isFailed && "Status Pembayaran Diproses"}
           </h1>
 
-          <p className="mx-auto mt-3 max-w-sm text-sm font-medium leading-relaxed text-neutral-500">
+          <p className="mx-auto mt-3 max-w-sm text-sm font-medium text-neutral-500">
             {message}
           </p>
 
@@ -154,29 +174,44 @@ export default function PaymentFinishPage({ onPaid, onGoAccount, onGoDashboard, 
             <DetailRow icon={ReceiptText} label="Nominal" value={payment ? fmtRp(payment.amount) : "-"} />
           </div>
 
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-            {isPaid && onboardingFlow ? (
-              <button
-                type="button"
-                onClick={onContinueSetup}
-                className="flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-full bg-violet px-5 text-sm font-bold text-white shadow-float"
-              >
-                <Wallet size={16} />
-                Siapkan Dompet
-                <ArrowRight size={16} />
+          {isPaid && (
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+              {onboardingFlow ? (
+                <button
+                  type="button"
+                  onClick={onContinueSetup}
+                  className="flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-full bg-violet px-5 text-sm font-bold text-white shadow-float"
+                >
+                  <Wallet size={16} />
+                  Siapkan Dompet
+                  <ArrowRight size={16} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onGoDashboard}
+                  className="flex min-h-[46px] flex-1 items-center justify-center rounded-full bg-navy px-5 text-sm font-bold text-white shadow-float"
+                >
+                  Ke Dashboard
+                </button>
+              )}
+            </div>
+          )}
+
+          {!isPaid && (
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+              <button type="button" onClick={onGoDashboard} className="flex min-h-[46px] flex-1 items-center justify-center rounded-full bg-navy px-5 text-sm font-bold text-white shadow-float">
+                Ke Dashboard
               </button>
-            ) : (
-              <>
-                <button type="button" onClick={onGoDashboard} className="flex min-h-[46px] flex-1 items-center justify-center rounded-full bg-navy px-5 text-sm font-bold text-white shadow-float">Ke Dashboard</button>
-                <button type="button" onClick={onGoAccount} className="flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-full bg-white/80 px-5 text-sm font-bold text-navy shadow-soft">Akun <ArrowRight size={16} /></button>
-              </>
-            )}
-          </div>
+              <button type="button" onClick={onGoAccount} className="flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-full bg-white/80 px-5 text-sm font-bold text-navy shadow-soft">
+                Akun <ArrowRight size={16} />
+              </button>
+            </div>
+          )}
         </section>
 
-        <p className="mx-auto mt-5 max-w-sm text-center text-xs font-medium leading-relaxed text-neutral-500">
-          Jika status belum berubah, jangan ulangi pembayaran untuk order yang sama. Tunggu beberapa saat karena notifikasi
-          dari payment gateway kadang membutuhkan waktu.
+        <p className="mx-auto mt-5 max-w-sm text-center text-xs font-medium text-neutral-500">
+          Jika status belum berubah, jangan ulangi pembayaran untuk order yang sama. Tunggu beberapa saat karena notifikasi dari payment gateway kadang membutuhkan waktu.
         </p>
       </main>
     </div>
