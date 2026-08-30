@@ -1,5 +1,7 @@
 // src/pages/CheckoutPage.jsx
-import { ArrowLeft, Crown } from "lucide-react";
+// Halaman step 4 dari onboarding flow: scan QRIS, bayar, kembali ke PaymentFinishPage
+// yang akan polling status sampai "paid", lalu auto-redirect ke dashboard/setup.
+import { ArrowLeft } from "lucide-react";
 import UpgradeCheckout from "../components/UpgradeCheckout.jsx";
 import OnboardingProgress from "../components/OnboardingProgress.jsx";
 
@@ -13,7 +15,13 @@ function BrandLogo() {
   );
 }
 
-export default function CheckoutPage({ plan, onBack, onDone, onboardingFlow = false }) {
+export default function CheckoutPage({
+  plan,
+  onBack,
+  onDone,
+  onCancel,
+  onboardingFlow = false,
+}) {
   return (
     <div className="app-glow-bg min-h-screen px-5 py-8">
       <main className="mx-auto w-full max-w-lg">
@@ -32,14 +40,19 @@ export default function CheckoutPage({ plan, onBack, onDone, onboardingFlow = fa
 
         <div className="mb-6 text-center">
           <div className="mx-auto inline-flex items-center gap-1.5 rounded-full bg-white/75 px-3 py-1 text-[11px] font-bold text-violet">
-            <Crown size={13} />
             Checkout
           </div>
           <h1 className="mt-3 text-2xl font-bold leading-tight text-navy">Selesaikan Pembayaran</h1>
         </div>
 
         <section className="gloss-panel rounded-[28px] p-5">
-          <UpgradeCheckout defaultPlan={plan} onClose={onDone} showCancelButton={true} selectedPlanOnly={true} />
+          <UpgradeCheckout
+            defaultPlan={plan}
+            onClose={onDone}
+            onCancel={onCancel || onBack}
+            showCancelButton={true}
+            selectedPlanOnly={true}
+          />
         </section>
       </main>
     </div>

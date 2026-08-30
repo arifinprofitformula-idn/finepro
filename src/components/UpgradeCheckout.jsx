@@ -1,7 +1,3 @@
-// src/components/UpgradeCheckout.jsx
-// Form pilih paket + checkout (transfer manual atau gateway Midtrans/Xendit).
-// Dipakai di AccountPage (alur "Perpanjang/Ganti Paket") dan di CheckoutPage
-// (alur upgrade dari Trial lewat halaman perbandingan paket).
 import { useState, useEffect } from "react";
 import {
   createPayment,
@@ -58,15 +54,6 @@ export function formatPlanPrice(planId, planConfig) {
   return `${price} / ${planConfig.months} bulan`;
 }
 
-function StatusMsg({ msg, type }) {
-  if (!msg) return null;
-  return (
-    <div className={`mt-2 rounded-xl px-3 py-2 text-xs font-medium ${type === "error" ? "bg-coral-light text-coral" : "bg-mint-light text-mint"}`}>
-      {msg}
-    </div>
-  );
-}
-
 export function AiCreditTermsNote({ className = "mt-2 rounded-2xl bg-gold-light/60 p-3" }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -89,7 +76,7 @@ export function AiCreditTermsNote({ className = "mt-2 rounded-2xl bg-gold-light/
         <div className="mt-2 rounded-xl bg-white/70 p-2.5 text-[11px] leading-relaxed text-neutral-600">
           Detail lengkap ketentuan Kredit AI — termasuk kuota acuan per fitur, mekanisme top-up, dan kebijakan
           perubahan — tersedia di halaman{" "}
-          <a href="/privacy" className="font-semibold text-violet underline">Kebijakan Privasi</a>{" "}
+          <a href="/privacy" className="font-semibold text-violet underline">Kebijakan Privasi</a>
           bagian "Ketentuan Kredit AI Paket Lifetime".
         </div>
       )}
@@ -114,7 +101,14 @@ function LifetimeTermsBox({ accepted, onAcceptedChange }) {
   );
 }
 
-export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton, onPaymentHistoryChanged, selectedPlanOnly = false }) {
+export default function UpgradeCheckout({
+  defaultPlan,
+  onClose,
+  onCancel,
+  showCancelButton,
+  onPaymentHistoryChanged,
+  selectedPlanOnly = false,
+}) {
   const [payingPlan, setPayingPlan] = useState(null);
   const [paymentMethods, setPaymentMethods] = useState(null);
   const [pricing, setPricing] = useState(null);
@@ -146,15 +140,6 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
     }
     setPayingPlan(planId);
     try {
-      if (paymentMethods?.active === "xendit") {
-        if (!paymentMethods?.xendit?.enabled) {
-          throw new Error("Pembayaran sedang tidak tersedia. Coba lagi beberapa saat atau hubungi bantuan FinePro.");
-        }
-        const { invoiceUrl } = await createPayment(planId);
-        window.location.href = invoiceUrl;
-        return;
-      }
-
       if (paymentMethods?.active === "sumopod") {
         if (!paymentMethods?.sumopod?.enabled) {
           throw new Error("Pembayaran QRIS sedang tidak tersedia. Coba lagi beberapa saat atau hubungi bantuan FinePro.");
@@ -185,7 +170,7 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
         onClose: async () => {
           setPayingPlan(null);
           await refreshPaymentHistory();
-        }
+        },
       });
 
       if (!window.snap?.pay && redirectUrl) {
@@ -236,7 +221,7 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
 
       {paymentMethods?.active === "manual" ? (
         paymentMethods?.manual?.enabled ? (
-          <>
+          <form onSubmit={handleManualSubmit} className="flex flex-col gap-2">
             <div className="mb-3 rounded-2xl bg-white/70 p-3 text-xs text-navy">
               <div className="font-semibold">{paymentMethods.manual.bank_name}</div>
               <div>No. Rekening: <span className="font-semibold">{paymentMethods.manual.account_number}</span></div>
@@ -245,44 +230,24 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
                 <p className="mt-2 text-neutral-500">{paymentMethods.manual.instructions}</p>
               )}
             </div>
-            <form onSubmit={handleManualSubmit} className="flex flex-col gap-2">
-              <label htmlFor="manual-plan" className="text-xs font-medium text-neutral-500">Pilih Paket</label>
-              <select
-                id="manual-plan"
-                className={inputClass}
-                value={manualPlan}
-                onChange={(e) => setManualPlan(e.target.value)}
-              >
-                {PLAN_ORDER.filter((id) => pricing?.plans?.[id]).map((id) => (
-                  <option key={id} value={id}>{PLAN_LABELS[id]} — {formatPlanPrice(id, pricing.plans[id])}</option>
-                ))}
-              </select>
-              {manualPlan === "lifetime" && (
-                <LifetimeTermsBox accepted={lifetimeTermsAccepted} onAcceptedChange={setLifetimeTermsAccepted} />
-              )}
-              <label htmlFor="manual-reference" className="text-xs font-medium text-neutral-500">No. Referensi / Berita Transfer (opsional)</label>
-              <input
-                id="manual-reference"
-                type="text"
-                className={inputClass}
-                value={manualReference}
-                onChange={(e) => setManualReference(e.target.value)}
-                placeholder="Contoh: 4 digit terakhir rekening pengirim"
-              />
-              <label htmlFor="manual-proof" className="text-xs font-medium text-neutral-500">Bukti Transfer</label>
-              <input
-                id="manual-proof"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(e) => setManualFile(e.target.files[0] || null)}
-                className="text-xs"
-              />
-              <button type="submit" disabled={manualSubmitting} className={`${primaryBtnClass} mt-1`}>
-                {manualSubmitting ? "Mengirim..." : "Kirim Klaim Pembayaran"}
-              </button>
-              <StatusMsg msg={manualMsg} type={manualMsgType} />
-            </form>
-          </>
+            <label htmlFor="manual-plan" className="text-xs font-medium text-neutral-500">Pilih Paket</label>
+            <select id="manual-plan" className={inputClass} value={manualPlan} onChange={(e) => setManualPlan(e.target.value)}>
+              {PLAN_ORDER.filter((id) => pricing?.plans?.[id]).map((id) => (
+                <option key={id} value={id}>{PLAN_LABELS[id]} — {formatPlanPrice(id, pricing.plans[id])}</option>
+              ))}
+            </select>
+            {manualPlan === "lifetime" && (
+              <LifetimeTermsBox accepted={lifetimeTermsAccepted} onAcceptedChange={setLifetimeTermsAccepted} />
+            )}
+            <label htmlFor="manual-reference" className="text-xs font-medium text-neutral-500">No. Referensi / Berita Transfer (opsional)</label>
+            <input id="manual-reference" type="text" className={inputClass} value={manualReference} onChange={(e) => setManualReference(e.target.value)} placeholder="Contoh: 4 digit terakhir rekening pengirim" />
+            <label htmlFor="manual-proof" className="text-xs font-medium text-neutral-500">Bukti Transfer</label>
+            <input id="manual-proof" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setManualFile(e.target.files[0] || null)} className="text-xs" />
+            <button type="submit" disabled={manualSubmitting} className={`${primaryBtnClass} mt-1`}>
+              {manualSubmitting ? "Mengirim..." : "Kirim Klaim Pembayaran"}
+            </button>
+            <StatusMsg msg={manualMsg} type={manualMsgType} />
+          </form>
         ) : (
           <div className="flex items-start gap-2 rounded-2xl bg-gold-light p-3 text-xs font-semibold text-gold">
             <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" />
@@ -294,41 +259,29 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
           <p className="mb-2 text-xs text-neutral-500">
             {paymentMethods?.active === "xendit"
               ? "Pembayaran diproses via Xendit, otomatis aktif setelah bayar."
-              : paymentMethods?.active === "sumopod"
-              ? "Pembayaran QRIS diproses via SumoPod, otomatis aktif setelah bayar."
-              : "Pembayaran diproses via Midtrans, otomatis aktif setelah bayar."}
+              : "Pembayaran QRIS diproses via SumoPod, otomatis aktif setelah bayar."}
           </p>
           <div className={`mb-3 flex items-start gap-2 rounded-2xl p-3 text-xs font-semibold ${
-            (paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.active === "sumopod" ? paymentMethods?.sumopod?.enabled : paymentMethods?.midtrans?.enabled)
-              ? "bg-mint-light text-mint" : "bg-gold-light text-gold"
+            (paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.sumopod?.enabled)
+              ? "bg-mint-light text-mint"
+              : "bg-gold-light text-gold"
           }`}>
             <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" />
             <span>
               {paymentMethods === null
                 ? "Memeriksa konfigurasi pembayaran..."
-                : paymentMethods?.active === "xendit"
-                ? (paymentMethods?.xendit?.enabled
+                : (paymentMethods?.xendit?.enabled
                   ? "Pembayaran aman tersedia dan paket aktif otomatis setelah bayar."
-                  : "Pembayaran sedang tidak tersedia. Coba lagi beberapa saat.")
-                : paymentMethods?.active === "sumopod"
-                ? (paymentMethods?.sumopod?.enabled
-                  ? "QRIS tersedia. Anda akan membuka halaman pembayaran aman, lalu kembali otomatis ke FinePro."
-                  : "Pembayaran QRIS sedang tidak tersedia. Coba lagi beberapa saat.")
-                : (paymentMethods?.midtrans?.enabled
-                  ? "Pembayaran aman tersedia dan paket aktif otomatis setelah bayar."
-                  : "Pembayaran sedang tidak tersedia. Coba lagi beberapa saat.")}
+                  : "QRIS tersedia. Anda akan membuka halaman pembayaran aman, lalu kembali ke FinePro.")}
             </span>
           </div>
           <div className="flex flex-col gap-2">
-            {PLAN_ORDER.filter((id) => pricing?.plans?.[id] && (!selectedPlanOnly || id === defaultPlan)).map((id) => {
+            {PLAN_ORDER.filter((id) => pricing?.plans[id] && (!selectedPlanOnly || id === defaultPlan)).map((id) => {
               const p = pricing.plans[id];
-              const gatewayEnabled = paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.active === "sumopod" ? paymentMethods?.sumopod?.enabled : paymentMethods?.midtrans?.enabled;
+              const gatewayEnabled = paymentMethods?.active === "xendit" ? paymentMethods?.xendit?.enabled : paymentMethods?.sumopod?.enabled;
               const blockedByTerms = id === "lifetime" && !lifetimeTermsAccepted;
               return (
-                <div
-                  key={id}
-                  className={`rounded-2xl bg-white/70 p-3 ${id === defaultPlan ? "ring-2 ring-violet" : ""}`}
-                >
+                <div key={id} className={`rounded-2xl bg-white/70 p-3 ${id === defaultPlan ? "ring-2 ring-violet" : ""}`}>
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-semibold text-navy">
@@ -341,28 +294,35 @@ export default function UpgradeCheckout({ defaultPlan, onClose, showCancelButton
                     </div>
                     <button
                       type="button"
+                      disabled={blockedByTerms || !gatewayEnabled}
                       onClick={() => handleUpgrade(id)}
-                      disabled={payingPlan === id || !gatewayEnabled || blockedByTerms}
-                      className="flex h-10 items-center justify-center rounded-full bg-gold px-4 text-xs font-bold text-white disabled:opacity-60"
+                      className={primaryBtnClass}
                     >
-                      {payingPlan === id ? "Membuka pembayaran..." : selectedPlanOnly ? "Bayar Sekarang" : "Pilih"}
+                      {blockedByTerms && "Setujui Terms Dulu"}
+                      {!blockedByTerms && !gatewayEnabled && "Tidak Tersedia"}
+                      {!blockedByTerms && gatewayEnabled && "Bayar Sekarang"}
                     </button>
                   </div>
-                  {id === "lifetime" && (
-                    <LifetimeTermsBox accepted={lifetimeTermsAccepted} onAcceptedChange={setLifetimeTermsAccepted} />
-                  )}
                 </div>
               );
             })}
           </div>
+          {showCancelButton && onCancel && (
+            <button type="button" onClick={onCancel} className={`${secondaryBtnClass} mt-2 border-neutral-border text-neutral-500`}>
+              Batal
+            </button>
+          )}
         </>
       )}
+    </div>
+  );
+}
 
-      {showCancelButton && (
-        <button type="button" onClick={onClose} className={`${secondaryBtnClass} mt-2 border-neutral-border text-neutral-500`}>
-          Batal
-        </button>
-      )}
+function StatusMsg({ msg, type }) {
+  if (!msg) return null;
+  return (
+    <div className={`mt-2 rounded-xl px-3 py-2 text-xs font-medium ${type === "error" ? "bg-coral-light text-coral" : "bg-mint-light text-mint"}`}>
+      {msg}
     </div>
   );
 }
