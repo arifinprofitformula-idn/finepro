@@ -139,11 +139,19 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [household?.id, isPaymentFinishPath]);
 
-  // Deteksi reset_token dari URL — langsung buka AuthPage mode reset
+  // Deteksi reset_token / verify_token dari URL — langsung buka AuthPage
+  // dengan mode yang sesuai. Tanpa ini, klik link verifikasi email mendarat
+  // di root path lalu App.jsx (karena user masih null & showAuth default
+  // false) merender LandingPage duluan — AuthPage (yang memproses
+  // verify_token dan auto-login) tidak pernah ter-mount, token diabaikan,
+  // dan pengguna hanya melihat halaman utama tanpa lanjut onboarding.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("reset_token")) {
       setAuthMode("reset");
+      setShowAuth(true);
+    } else if (params.get("verify_token")) {
+      setAuthMode("verify");
       setShowAuth(true);
     }
   }, []);
