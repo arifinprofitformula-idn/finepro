@@ -32,8 +32,22 @@ router.post('/github', (req, res) => {
 
   console.log('[webhook] Deploy triggered');
 
-  // Jalankan deploy.sh di background agar tidak terpengaruh restart API
-  exec('bash /home/ubuntu/projects/finepro/deploy.sh &');
+  // PENTING: deploy.sh me-restart finepro-api.service sendiri. Karena
+  // KillMode=control-group pada unit ini, `systemctl restart` membunuh
+  // SEMUA proses dalam cgroup service — termasuk deploy.sh kalau dia anak
+  // proses Node ini (backgrounding biasa dengan `&` TIDAK cukup, cgroup
+  // membership tetap ikut proses induk, bukan proses shell). Solusinya:
+  // jalankan deploy.sh sebagai transient systemd scope terpisah (cgroup
+  // sendiri) lewat `systemd-run`, supaya restart service ini tidak
+  // memutus proses deploy di tengah jalan.
+  const unitName = `finepro-deploy-${Date.now()}`;
+  exec(
+    `sudo -n /usr/bin/systemd-run --unit=${unitName} --collect ` +
+      '--property=User=ubuntu /usr/bin/bash /home/ubuntu/projects/finepro/deploy.sh',
+    (err, stdout, stderr) => {
+      if (err) console.error('[webhook] Failed to launch deploy:', err.message, stderr);
+    }
+  );
 
   res.json({ status: 'deploying', log: 'deploy.sh started in background' });
 });
