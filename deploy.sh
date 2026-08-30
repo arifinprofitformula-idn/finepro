@@ -83,13 +83,10 @@ cd api && npm install --production=false && cd ..
 # Build frontend
 npm run build
 
-# Deploy
-sudo -n rm -rf "$DEPLOY_DIR"/*
-sudo -n cp -r dist/* "$DEPLOY_DIR"/
-sudo -n chown -R caddy:caddy "$DEPLOY_DIR"
+# Deploy — panggil wrapper root tunggal (sudoers tidak bisa aman match
+# wildcard shell-expanded seperti `rm -rf DIR/*`; wrapper menghindari itu).
+# Marker .deployed_commit ditulis DI DALAM wrapper (oleh root) karena
+# /var/www/finepro owned caddy:caddy — ubuntu tidak punya izin tulis di sana.
+sudo -n /usr/local/sbin/finepro-deploy-sync.sh "$NEW_COMMIT"
 
-# Restart API — nama service produksi aktual adalah finepro-api.service
-sudo -n systemctl restart finepro-api.service
-
-echo "$NEW_COMMIT" > "$DEPLOY_DIR/.deployed_commit"
 echo "=== $(date) Deploy OK ($NEW_COMMIT) ==="
