@@ -94,13 +94,21 @@ export default function PricingPage({ onSelectPlan, onBack, onboardingFlow = fal
       <main className="mx-auto w-full max-w-lg">
         {onboardingFlow && <OnboardingProgress current={3} />}
         <div className="mb-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-navy shadow-soft"
-          >
-            <ArrowLeft size={18} />
-          </button>
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-navy shadow-soft"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          ) : (
+            // Step wajib pilih paket dalam onboarding (household sudah dibuat,
+            // tanpa free trial) — tidak ada langkah mundur yang valid di sini,
+            // jadi tombol back tidak ditampilkan sama sekali (bukan tombol
+            // yang terlihat aktif tapi diam saat diklik).
+            <div className="h-10 w-10" />
+          )}
           <BrandLogo />
           <div className="w-10" />
         </div>

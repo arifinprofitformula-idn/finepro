@@ -227,7 +227,6 @@ export default function App() {
     return (
       <PricingPage
         onSelectPlan={(planId) => selectUpgradePlan(planId, true)}
-        onBack={() => {}}
         onboardingFlow={true}
       />
     );
