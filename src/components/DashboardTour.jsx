@@ -26,13 +26,13 @@ export default function DashboardTour({open,onClose,onNavigate}){
  const line=useMemo(()=>{if(!rect)return null;return{x:rect.left+rect.width/2,y:Math.min(window.innerHeight-200,rect.bottom+20)};},[rect]);
  if(!open)return null;
  const finish=()=>{setIndex(0);onClose();};
- return <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="true" aria-label="Panduan dashboard FinePro">
+ return <div className="fixed inset-0 z-50 pointer-events-none" role="dialog" aria-modal="true" aria-label="Panduan dashboard FinePro">
   <svg className="pointer-events-none absolute inset-0 h-full w-full"><defs><mask id="finepro-tour-mask"><rect width="100%" height="100%" fill="white"/>{rect&&<rect x={rect.left-10} y={rect.top-10} width={rect.width+20} height={rect.height+20} rx="24" fill="black"/>}</mask></defs>
    <rect width="100%" height="100%" fill="rgba(15,31,61,.72)" mask="url(#finepro-tour-mask)"/>
    {rect&&<rect x={rect.left-10} y={rect.top-10} width={rect.width+20} height={rect.height+20} rx="24" fill="none" stroke="#a99af8" strokeWidth="3"/>}
-   {line&&<line x1={rect.left+rect.width/2} y1={rect.bottom+10} x2={window.innerWidth/2} y2={window.innerHeight-185} stroke="#a99af8" strokeWidth="2" strokeDasharray="5 5"/>}
+   {line&&<line x1={line.x} y1={rect.bottom+10} x2={window.innerWidth/2} y2={Math.min(window.innerHeight-70,line.y+50)} stroke="#a99af8" strokeWidth="2" strokeDasharray="5 5"/>}
   </svg>
-  <div className="absolute bottom-4 left-4 right-4 mx-auto max-w-md rounded-[28px] bg-white p-5 pb-[calc(20px+env(safe-area-inset-bottom))] shadow-2xl">
+  <div className="absolute bottom-0 left-4 right-4 mx-auto max-w-md max-h-[calc(100dvh-70px)] overflow-y-auto rounded-t-[28px] rounded-b-[12px] bg-white p-5 pb-[env(safe-area-inset-bottom)] shadow-2xl pointer-events-auto">
    <div className="flex items-start justify-between">
     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.15em] text-violet"><Sparkles size={15}/> Panduan {index+1} dari {STEPS.length}</div>
     <button onClick={finish} aria-label="Tutup panduan" className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200"><X size={16}/></button>
