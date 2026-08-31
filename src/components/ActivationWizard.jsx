@@ -75,7 +75,7 @@ function ProviderCombobox({ selected, onSelect }) {
                       <ProviderIcon category={item.category} />
                     </span>
                     <span className="min-w-0 flex-1 truncate font-semibold">
-                      {item.custom ? <>Tambahkan provider “{item.name}”</> : item.name}
+                      {item.custom ? <>Tambahkan provider "{item.name}"</> : item.name}
                     </span>
                     <Check size={16} className="invisible text-violet group-data-[selected]:visible" aria-hidden="true" />
                   </ComboboxOption>
@@ -87,16 +87,16 @@ function ProviderCombobox({ selected, onSelect }) {
       </Combobox>
 
       <div className="mt-3">
-        <div className="text-[10px] font-bold uppercase tracking-[.14em] text-neutral-400">Pilihan cepat</div>
+        <div className="text-[10px] font-bold uppercase tracking-[.14em] text-neutral-500">Pilihan cepat</div>
         <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {quick.map((item) => {
             const active = selected?.id === item.id;
             return (
               <button
                 type="button"
-                key={item.id}
                 onClick={() => choose(item)}
                 aria-pressed={active}
+                key={item.id}
                 className={`flex h-10 flex-shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition ${active ? 'border-violet bg-violet text-white' : 'border-neutral-border bg-white text-neutral-600 hover:border-violet hover:text-violet'}`}
               >
                 <ProviderIcon category={item.category} size={15} /> {item.name}
@@ -120,12 +120,16 @@ export default function ActivationWizard({ status, onReady }) {
 
   if (!status?.activation_required || status.transaction_ready) return null;
   if (status.role !== 'owner') return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-navy/65 p-4 backdrop-blur-sm sm:items-center">
-      <div className="w-full max-w-md rounded-[30px] bg-white p-6 shadow-2xl" role="dialog" aria-modal="true">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-light text-violet"><ShieldCheck /></div>
-        <h2 className="mt-4 text-xl font-bold text-navy">Menunggu pemilik household</h2>
-        <p className="mt-2 text-sm leading-6 text-neutral-500">Pemilik perlu membuat dompet dan menetapkan saldo awal. Setelah selesai, kamu bisa mencatat transaksi bersama.</p>
-        <button onClick={() => window.location.reload()} className="mt-5 h-12 w-full rounded-full bg-violet font-bold text-white">Cek Lagi</button>
+    // Bottom sheet: tidak menutupi tombol navigator, tetap bisa interaksi
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy/65 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-t-[32px] rounded-b-none bg-white p-5 shadow-2xl" role="dialog" aria-modal="true">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-light text-violet mx-auto mb-3"><ShieldCheck /></div>
+        <h2 className="mb-2 text-xl font-bold text-navy text-center">Menunggu pemilik household</h2>
+        <p className="mb-4 text-center text-sm leading-6 text-neutral-500">
+          Pemilik perlu membuat dompet dan menetapkan saldo awal.<br />
+          Setelah selesai, kamu bisa mencatat transaksi bersama.
+        </p>
+        <button onClick={() => window.location.reload()} className="h-12 w-full rounded-full bg-violet font-bold text-white">Cek Lagi</button>
       </div>
     </div>
   );
@@ -153,33 +157,37 @@ export default function ActivationWizard({ status, onReady }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center overflow-y-auto bg-navy/65 p-4 backdrop-blur-sm sm:items-center">
-      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-[32px] bg-white p-5 pb-[calc(20px+env(safe-area-inset-bottom))] shadow-2xl sm:p-6" role="dialog" aria-modal="true" aria-label="Pengaturan awal FinePro">
-        {step === 'welcome' && <>
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-light text-violet"><Sparkles /></div>
-          <div className="mt-4 text-xs font-bold uppercase tracking-[.18em] text-violet">Aktivasi 1 dari 2</div>
-          <h2 className="mt-2 text-2xl font-bold leading-tight text-navy">Siapkan titik awal keuanganmu</h2>
-          <p className="mt-3 text-sm leading-6 text-neutral-500">Sebelum transaksi pertama, buat satu dompet dan masukkan saldo nyata saat ini. FinePro akan memulai laporan dari angka yang akurat.</p>
-          <div className="mt-5 grid gap-2">
+    // Bottom sheet: slide up dari bawah, tidak menutupi seluruh layar
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-navy/65 p-4 backdrop-blur-sm">
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-[32px] bg-white p-5 pb-[calc(20px+env(safe-area-inset-bottom))] shadow-2xl" role="dialog" aria-modal="true" aria-label="Pengaturan awal FinePro">
+        {step === 'welcome' && <>\n          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-light text-violet mx-auto mb-3"><Sparkles /></div>
+          <div className="mb-3 text-xs font-bold uppercase tracking-[.18em] text-violet text-center">Aktivasi 1 dari 2</div>
+          <h2 className="mb-2 text-2xl font-bold text-navy text-center">Siapkan titik awal keuanganmu</h2>
+          <p className="mb-4 text-center text-sm leading-6 text-neutral-500">
+            Sebelum transaksi pertama, buat satu dompet dan masukkan saldo nyata saat ini.
+            FinePro akan memulai laporan dari angka yang akurat.
+          </p>
+          <div className="mb-4 grid gap-2">
             <div className="flex gap-3 rounded-2xl bg-neutral-50 p-3"><Wallet className="text-violet" size={20} /><div><b className="text-sm text-navy">Buat dompet pertama</b><p className="text-xs text-neutral-500">Tunai, rekening bank, atau e-wallet.</p></div></div>
             <div className="flex gap-3 rounded-2xl bg-neutral-50 p-3"><Landmark className="text-mint" size={20} /><div><b className="text-sm text-navy">Tetapkan saldo awal</b><p className="text-xs text-neutral-500">Bukan pemasukan atau pengeluaran.</p></div></div>
           </div>
-          <button onClick={() => setStep('wallet')} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-violet font-bold text-white">Mulai Pengaturan <ArrowRight size={17} /></button>
+          <button onClick={() => setStep('wallet')} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-violet font-bold text-white"><ArrowRight size={17} /> Mulai Pengaturan</button>
         </>}
 
-        {step === 'wallet' && <form onSubmit={submit}>
-          <div className="text-xs font-bold uppercase tracking-[.18em] text-violet">Aktivasi 2 dari 2</div>
-          <h2 className="mt-2 text-2xl font-bold text-navy">Dompet dan saldo awal</h2>
-          <p className="mt-2 text-sm leading-6 text-neutral-500">Pilih provider agar lebih cepat. Nama dompet tetap bisa kamu sesuaikan.</p>
+        {step === 'wallet' && <form onSubmit={submit}>\n          <div className="mb-3 text-xs font-bold uppercase tracking-[.18em] text-violet text-center">Aktivasi 2 dari 2</div>
+          <h2 className="mb-2 text-2xl font-bold text-navy text-center">Dompet dan saldo awal</h2>
+          <p className="mb-4 text-center text-sm leading-6 text-neutral-500">
+            Pilih provider agar lebih cepat. Nama dompet tetap bisa kamu sesuaikan.
+          </p>
 
-          <div className="mt-5"><ProviderCombobox selected={provider} onSelect={selectProvider} /></div>
+          <div className="mb-4"><ProviderCombobox selected={provider} onSelect={selectProvider} /></div>
 
-          <label className="mt-4 block text-xs font-bold text-neutral-600" htmlFor="activation-wallet-name">Nama dompet</label>
+          <label className="block text-xs font-bold text-neutral-600" htmlFor="activation-wallet-name">Nama dompet</label>
           <div className="mt-1 flex h-12 items-center rounded-2xl border border-neutral-border bg-neutral-50 px-3 focus-within:border-violet focus-within:ring-2 focus-within:ring-violet/15">
             <Building2 size={17} className="flex-shrink-0 text-neutral-400" aria-hidden="true" />
             <input id="activation-wallet-name" required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: BCA Gaji" className="h-full min-w-0 flex-1 bg-transparent px-2 text-sm font-semibold text-navy outline-none focus:outline-none" />
           </div>
-          <p className="mt-1.5 text-[11px] leading-4 text-neutral-400">Boleh diubah, misalnya “BCA Operasional” atau “GoPay Harian”.</p>
+          <p className="mt-1.5 text-[11px] leading-4 text-neutral-400">Boleh diubah, misalnya "BCA Operasional" atau "GoPay Harian".</p>
 
           <label className="mt-3 block text-xs font-bold text-neutral-600" htmlFor="activation-opening-balance">Saldo aktual saat ini</label>
           <div className="mt-1 flex h-12 items-center rounded-2xl border border-neutral-border bg-neutral-50 px-4 focus-within:border-violet">
@@ -190,19 +198,20 @@ export default function ActivationWizard({ status, onReady }) {
           {error && <div className="mt-3 rounded-xl bg-coral-light p-3 text-xs font-semibold text-coral">{error}</div>}
           <div className="mt-5 grid gap-2 sm:grid-cols-[1fr_1.5fr]">
             <button type="button" onClick={() => setStep('welcome')} disabled={saving} className="h-12 rounded-full border border-neutral-border font-bold text-neutral-600 transition focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2">Kembali</button>
-            <button type="submit" disabled={saving || !provider || !name.trim()} className="h-12 rounded-full bg-violet px-3 text-sm font-bold text-white disabled:opacity-50 transition focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2">{saving ? 'Menyiapkan...' : 'Tetapkan Saldo Awal'}</button>
+            <button type="submit" disabled={saving || !provider || !name.trim()} className="h-12 rounded-full bg-violet px-3 text-sm font-bold text-white disabled:opacity-50 transition focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2">
+              {saving ? 'Menyiapkan...' : 'Tetapkan Saldo Awal'}
+            </button>
           </div>
         </form>}
 
-        {step === 'done' && <>
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-mint-light text-mint"><CheckCircle2 size={30} /></div>
-          <h2 className="mt-4 text-2xl font-bold text-navy">FinePro siap digunakan</h2>
-          <div className="mt-4 grid gap-2 text-sm">
-            <div className="flex items-center gap-2 text-neutral-600"><CheckCircle2 size={17} className="text-mint" /> Dompet “{name}” dibuat</div>
-            <div className="flex items-center gap-2 text-neutral-600"><CheckCircle2 size={17} className="text-mint" /> Saldo awal Rp{new Intl.NumberFormat('id-ID').format(amount)} ditetapkan</div>
-            <div className="flex items-center gap-2 text-neutral-600"><CheckCircle2 size={17} className="text-mint" /> Siap mengenal dashboard</div>
+        {step === 'done' && <>\n          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-mint-light text-mint mx-auto mb-4"><CheckCircle2 size={30} /></div>
+          <h2 className="mb-2 text-2xl font-bold text-navy text-center">FinePro siap digunakan</h2>
+          <div className="mb-6 grid gap-2 text-sm text-neutral-600">
+            <div className="flex items-center gap-2"><CheckCircle2 size={17} className="text-mint" /> Dompet "{name}" dibuat</div>
+            <div className="flex items-center gap-2"><CheckCircle2 size={17} className="text-mint" /> Saldo awal Rp{new Intl.NumberFormat('id-ID').format(amount)} ditetapkan</div>
+            <div className="flex items-center gap-2"><CheckCircle2 size={17} className="text-mint" /> Siap mengenal dashboard</div>
           </div>
-          <button onClick={onReady} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-violet font-bold text-white">Lihat Panduan Dashboard <ArrowRight size={17} /></button>
+          <button onClick={onReady} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-violet font-bold text-white"><ArrowRight size={17} /> Lihat Panduan Dashboard</button>
         </>}
       </div>
     </div>
