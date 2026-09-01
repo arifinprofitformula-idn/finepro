@@ -13,18 +13,18 @@ export async function getUpcomingBills() {
   return data.bills || [];
 }
 
-export async function createBill({ name, amount, due_date, is_recurring, category }) {
+export async function createBill({ name, amount, due_date, is_recurring, category, installment_total }) {
   const data = await apiFetch('/bills', {
     method: 'POST',
-    body: JSON.stringify({ name, amount, due_date, is_recurring, category }),
+    body: JSON.stringify({ name, amount, due_date, is_recurring, category, installment_total }),
   });
   return data.bill;
 }
 
-export async function updateBill(id, { name, amount, due_date, is_recurring, category }) {
+export async function updateBill(id, { name, amount, due_date, is_recurring, category, installment_total }) {
   const data = await apiFetch(`/bills/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify({ name, amount, due_date, is_recurring, category }),
+    body: JSON.stringify({ name, amount, due_date, is_recurring, category, installment_total }),
   });
   return data.bill;
 }

@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import { formatNumberIdInput, parseNumberId, todayStr } from "../utils/format.js";
-import { CalendarDays, NotebookPen, Repeat, Wallet } from "lucide-react";
+import { CalendarDays, Hash, NotebookPen, Repeat, Wallet } from "lucide-react";
 
 export default function BillFormDialog({ open, onClose, onSubmit, bill, categoriesExpense = [] }) {
   const isEdit = !!bill;
@@ -13,6 +13,7 @@ export default function BillFormDialog({ open, onClose, onSubmit, bill, categori
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState(todayStr());
   const [isRecurring, setIsRecurring] = useState(true);
+  const [installmentTotal, setInstallmentTotal] = useState("");
   const [category, setCategory] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -22,16 +23,26 @@ export default function BillFormDialog({ open, onClose, onSubmit, bill, categori
     setAmount(bill ? formatNumberIdInput(bill.amount) : "");
     setDueDate(bill?.due_date || todayStr());
     setIsRecurring(bill ? bill.is_recurring : true);
+    setInstallmentTotal(bill?.installment_total ? String(bill.installment_total) : "");
     setCategory(bill?.category || fallbackCategory);
   }, [open, bill, fallbackCategory]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     const amt = parseNumberId(amount);
+    const total = installmentTotal ? Number(installmentTotal) : null;
     if (!name.trim() || !dueDate || !amt || amt < 0) return;
+    if (total !== null && (!Number.isInteger(total) || total < 1 || total > 360)) return;
     setSubmitting(true);
     try {
-      await onSubmit({ name: name.trim(), amount: amt, due_date: dueDate, is_recurring: isRecurring, category: category.trim() || fallbackCategory || null });
+      await onSubmit({
+        name: name.trim(),
+        amount: amt,
+        due_date: dueDate,
+        is_recurring: isRecurring,
+        installment_total: isRecurring ? total : null,
+        category: category.trim() || fallbackCategory || null,
+      });
       onClose();
     } catch (err) {
       alert("Gagal menyimpan tagihan: " + err.message);
@@ -46,7 +57,7 @@ export default function BillFormDialog({ open, onClose, onSubmit, bill, categori
       <div className="fixed inset-0 flex items-end justify-center">
         <DialogPanel className="gloss-panel w-full max-w-md rounded-t-[30px] p-5 max-h-[85vh] overflow-y-auto">
           <DialogTitle className="mb-4 text-xl font-semibold text-navy">
-            {isEdit ? "Ubah Tagihan" : "Tambah Tagihan"}
+            {isEdit ? "Ubah Tagihan & Pembayaran" : "Tambah Tagihan & Pembayaran"}
           </DialogTitle>
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <div>
@@ -131,6 +142,26 @@ export default function BillFormDialog({ open, onClose, onSubmit, bill, categori
               <Repeat size={14} className="text-neutral-500" />
               Berulang tiap bulan
             </label>
+
+            {isRecurring && (
+              <div>
+                <label htmlFor="bill-installment-total" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500">
+                  <Hash size={14} />
+                  Jumlah Cicilan
+                </label>
+                <input
+                  id="bill-installment-total"
+                  type="number"
+                  min="1"
+                  max="360"
+                  inputMode="numeric"
+                  value={installmentTotal}
+                  onChange={(e) => setInstallmentTotal(e.target.value)}
+                  placeholder="Kosongkan untuk rutin tanpa batas"
+                  className="w-full rounded-2xl border border-white/80 bg-white/70 px-3 py-3 text-sm font-medium text-navy outline-none"
+                />
+              </div>
+            )}
 
             <div className="flex gap-2 mt-1">
               <button

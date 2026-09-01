@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS bills (
   amount NUMERIC NOT NULL CHECK (amount >= 0),
   due_date DATE NOT NULL,
   is_recurring BOOLEAN NOT NULL DEFAULT false,
+  installment_total INTEGER CHECK (installment_total IS NULL OR installment_total BETWEEN 1 AND 360),
   paid_at TIMESTAMPTZ,
   created_by UUID REFERENCES users(id) NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now()
@@ -490,6 +491,7 @@ CREATE INDEX IF NOT EXISTS idx_bills_due_date ON bills (household_id, due_date);
 CREATE INDEX IF NOT EXISTS idx_bill_payment_statements_bill ON bill_payment_statements (bill_id, due_date DESC);
 CREATE INDEX IF NOT EXISTS idx_bill_payment_statements_household ON bill_payment_statements (household_id, paid_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bill_payment_statements_transaction ON bill_payment_statements (transaction_id);
+CREATE INDEX IF NOT EXISTS idx_bill_payment_statements_bill_period ON bill_payment_statements (bill_id, period_month);
 CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments (order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_household ON payments (household_id);
 CREATE INDEX IF NOT EXISTS idx_arisan_groups_household ON arisan_groups (household_id);

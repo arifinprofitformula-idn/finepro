@@ -13,6 +13,13 @@ export default function BillsSection({ householdId, categoriesExpense = [], onDa
   const { bills, upcoming, loading, addBill, editBill, markPaid, removeBill } = useBills(householdId);
   const [formOpen, setFormOpen] = useState(false);
   const [editingBill, setEditingBill] = useState(null);
+  const activeBills = bills.filter((bill) => {
+    const total = bill.installment_total ? Number(bill.installment_total) : null;
+    const paid = Number(bill.paid_count || 0);
+    return !bill.paid_at && (!total || paid < total);
+  });
+  const monthlyTotal = activeBills.reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+  const paidThisMonthCount = bills.filter((bill) => bill.current_month_paid).length;
 
   function openAdd() {
     setEditingBill(null);
@@ -51,7 +58,10 @@ export default function BillsSection({ householdId, categoriesExpense = [], onDa
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gold-light text-gold">
             <CalendarClock size={16} />
           </div>
-          <h2 className="text-base font-semibold text-navy">Tagihan</h2>
+          <div>
+            <h2 className="text-base font-semibold leading-tight text-navy">Tagihan & Pembayaran</h2>
+            <p className="mt-0.5 text-xs font-medium text-neutral-500">{fmtRp(monthlyTotal)} per bulan</p>
+          </div>
         </div>
         <button
           type="button"
@@ -75,6 +85,19 @@ export default function BillsSection({ householdId, categoriesExpense = [], onDa
               <span className="min-w-0 break-words sm:text-right sm:whitespace-nowrap">{fmtRp(b.amount)}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {bills.length > 0 && (
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <div className="rounded-2xl bg-white/55 p-3">
+            <div className="text-[11px] font-semibold text-neutral-500">Aktif</div>
+            <div className="mt-1 text-sm font-bold text-navy">{activeBills.length} tagihan</div>
+          </div>
+          <div className="rounded-2xl bg-white/55 p-3">
+            <div className="text-[11px] font-semibold text-neutral-500">Bulan ini</div>
+            <div className="mt-1 text-sm font-bold text-mint">{paidThisMonthCount} dibayar</div>
+          </div>
         </div>
       )}
 

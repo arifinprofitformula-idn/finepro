@@ -5,8 +5,14 @@ import { fmtRp, daysUntilDate, monthLabel } from "../utils/format.js";
 import { CheckCircle2, Pencil, Repeat, Trash2 } from "lucide-react";
 
 export default function BillItem({ bill, index = 0, onMarkPaid, onEdit, onDelete }) {
-  const isPaid = !!bill.paid_at && !bill.is_recurring;
+  const paidCount = Number(bill.paid_count || 0);
+  const installmentTotal = bill.installment_total ? Number(bill.installment_total) : null;
+  const installmentComplete = Boolean(installmentTotal && paidCount >= installmentTotal);
+  const isPaid = (!!bill.paid_at && !bill.is_recurring) || installmentComplete;
+  const paidThisMonth = Boolean(bill.current_month_paid);
+  const canPayThisMonth = Boolean(bill.can_pay_current_month);
   const paidStatements = Array.isArray(bill.paid_statements) ? bill.paid_statements : [];
+  const progressPct = installmentTotal ? Math.min(100, Math.round((paidCount / installmentTotal) * 100)) : 0;
   const cardClass = index % 2 === 0
     ? "border-neutral-border/60 bg-white/60"
     : "border-gold-light/70 bg-gold-light/18";
@@ -14,9 +20,11 @@ export default function BillItem({ bill, index = 0, onMarkPaid, onEdit, onDelete
   const overdue = !isPaid && d < 0;
   const dueSoon = !isPaid && d >= 0 && d <= 5;
 
-  const statusColor = isPaid ? "text-mint" : overdue ? "text-coral" : dueSoon ? "text-gold" : "text-neutral-500";
+  const statusColor = isPaid || paidThisMonth ? "text-mint" : overdue ? "text-coral" : dueSoon ? "text-gold" : "text-neutral-500";
   const statusText = isPaid
     ? "Lunas"
+    : paidThisMonth
+    ? "Sudah dibayar"
     : overdue
     ? `Telat ${-d} hari`
     : d === 0
@@ -49,6 +57,18 @@ export default function BillItem({ bill, index = 0, onMarkPaid, onEdit, onDelete
           </div>
         </div>
 
+        {installmentTotal && (
+          <div className="mt-2">
+            <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-semibold text-neutral-500">
+              <span>{paidCount}/{installmentTotal} cicilan lunas</span>
+              <span>{Math.max(installmentTotal - paidCount, 0)} lagi</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-neutral-100">
+              <div className="h-full rounded-full bg-mint transition-all" style={{ width: `${progressPct}%` }} />
+            </div>
+          </div>
+        )}
+
         {paidStatements.length > 0 && (
           <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
             {paidStatements.slice(0, 4).map((statement) => (
@@ -71,17 +91,19 @@ export default function BillItem({ bill, index = 0, onMarkPaid, onEdit, onDelete
         )}
 
         <div className="mt-2 flex flex-wrap items-center gap-1">
-          {!isPaid && (
-            <button
-              type="button"
-              onClick={() => onMarkPaid(bill.id)}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-mint-light text-mint"
-              title="Tandai lunas dan catat pengeluaran"
-              aria-label={`Tandai ${bill.name} lunas dan catat sebagai pengeluaran`}
-            >
-              <CheckCircle2 size={15} />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => canPayThisMonth && onMarkPaid(bill.id)}
+            disabled={!canPayThisMonth}
+            className={`flex min-h-[32px] items-center gap-1.5 rounded-full px-3 text-xs font-bold ${
+              canPayThisMonth ? "bg-mint-light text-mint" : "cursor-not-allowed bg-neutral-100 text-neutral-400"
+            }`}
+            title={canPayThisMonth ? "Tandai lunas dan catat pengeluaran" : paidThisMonth ? "Pembayaran bulan ini sudah dicatat" : "Pembayaran hanya aktif untuk bulan berjalan"}
+            aria-label={canPayThisMonth ? `Tandai ${bill.name} lunas dan catat sebagai pengeluaran` : `${bill.name} belum bisa dibayar`}
+          >
+            <CheckCircle2 size={15} />
+            {canPayThisMonth ? "Bayar bulan ini" : paidThisMonth ? "Sudah Dibayar" : isPaid ? "Lunas" : "Bulan berjalan"}
+          </button>
           <button
             type="button"
             onClick={() => onEdit(bill)}
