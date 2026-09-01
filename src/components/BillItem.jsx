@@ -76,8 +76,8 @@ export default function BillItem({ bill, index = 0, onMarkPaid, onEdit, onDelete
               type="button"
               onClick={() => onMarkPaid(bill.id)}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-mint-light text-mint"
-              title="Tandai lunas"
-              aria-label={`Tandai ${bill.name} lunas`}
+              title="Tandai lunas dan catat pengeluaran"
+              aria-label={`Tandai ${bill.name} lunas dan catat sebagai pengeluaran`}
             >
               <CheckCircle2 size={15} />
             </button>

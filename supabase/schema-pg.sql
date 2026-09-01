@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS bill_payment_statements (
   period_month DATE NOT NULL,
   amount NUMERIC NOT NULL CHECK (amount >= 0),
   paid_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  transaction_id UUID REFERENCES transactions(id) ON DELETE SET NULL,
   created_by UUID REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE (bill_id, due_date)
@@ -488,6 +489,7 @@ CREATE INDEX IF NOT EXISTS idx_bills_household ON bills (household_id);
 CREATE INDEX IF NOT EXISTS idx_bills_due_date ON bills (household_id, due_date);
 CREATE INDEX IF NOT EXISTS idx_bill_payment_statements_bill ON bill_payment_statements (bill_id, due_date DESC);
 CREATE INDEX IF NOT EXISTS idx_bill_payment_statements_household ON bill_payment_statements (household_id, paid_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bill_payment_statements_transaction ON bill_payment_statements (transaction_id);
 CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments (order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_household ON payments (household_id);
 CREATE INDEX IF NOT EXISTS idx_arisan_groups_household ON arisan_groups (household_id);

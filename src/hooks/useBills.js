@@ -33,8 +33,9 @@ export function useBills(householdId) {
   }
 
   async function markPaid(id) {
-    await markBillPaid(id);
+    const result = await markBillPaid(id);
     await refresh();
+    return result;
   }
 
   async function removeBill(id) {

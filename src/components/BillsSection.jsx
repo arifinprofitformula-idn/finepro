@@ -9,7 +9,7 @@ import BillFormDialog from "./BillFormDialog.jsx";
 import { fmtRp } from "../utils/format.js";
 import { Bell, CalendarClock, Plus } from "lucide-react";
 
-export default function BillsSection({ householdId }) {
+export default function BillsSection({ householdId, categoriesExpense = [], onDataChanged }) {
   const { bills, upcoming, loading, addBill, editBill, markPaid, removeBill } = useBills(householdId);
   const [formOpen, setFormOpen] = useState(false);
   const [editingBill, setEditingBill] = useState(null);
@@ -35,6 +35,11 @@ export default function BillsSection({ householdId }) {
   async function handleDelete(id) {
     if (!confirm("Hapus tagihan ini?")) return;
     await removeBill(id);
+  }
+
+  async function handleMarkPaid(id) {
+    await markPaid(id);
+    await onDataChanged?.();
   }
 
   if (loading) return null;
@@ -80,12 +85,12 @@ export default function BillsSection({ householdId }) {
       ) : (
         <div className="grid gap-2">
           {bills.map((bill, index) => (
-            <BillItem key={bill.id} bill={bill} index={index} onMarkPaid={markPaid} onEdit={openEdit} onDelete={handleDelete} />
+            <BillItem key={bill.id} bill={bill} index={index} onMarkPaid={handleMarkPaid} onEdit={openEdit} onDelete={handleDelete} />
           ))}
         </div>
       )}
 
-      <BillFormDialog open={formOpen} onClose={() => setFormOpen(false)} onSubmit={handleSubmit} bill={editingBill} />
+      <BillFormDialog open={formOpen} onClose={() => setFormOpen(false)} onSubmit={handleSubmit} bill={editingBill} categoriesExpense={categoriesExpense} />
     </div>
   );
 }

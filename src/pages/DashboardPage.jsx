@@ -254,7 +254,7 @@ export default function DashboardPage({ household, transactions, kpi, previousKp
 
       <SavingsGoalsSection householdId={household.id} />
 
-      <BillsSection householdId={household.id} />
+      <BillsSection householdId={household.id} categoriesExpense={categoriesExpense} onDataChanged={onDataChanged} />
 
       <div className="gloss-panel mb-4 rounded-2xl p-4">
         <div className="mb-3 flex items-center justify-between">

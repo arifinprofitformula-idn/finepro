@@ -6,8 +6,9 @@ import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import { formatNumberIdInput, parseNumberId, todayStr } from "../utils/format.js";
 import { CalendarDays, NotebookPen, Repeat, Wallet } from "lucide-react";
 
-export default function BillFormDialog({ open, onClose, onSubmit, bill }) {
+export default function BillFormDialog({ open, onClose, onSubmit, bill, categoriesExpense = [] }) {
   const isEdit = !!bill;
+  const fallbackCategory = categoriesExpense.find((item) => item.name === "Lainnya")?.name || categoriesExpense[0]?.name || "";
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState(todayStr());
@@ -21,8 +22,8 @@ export default function BillFormDialog({ open, onClose, onSubmit, bill }) {
     setAmount(bill ? formatNumberIdInput(bill.amount) : "");
     setDueDate(bill?.due_date || todayStr());
     setIsRecurring(bill ? bill.is_recurring : true);
-    setCategory(bill?.category || "");
-  }, [open, bill]);
+    setCategory(bill?.category || fallbackCategory);
+  }, [open, bill, fallbackCategory]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -30,7 +31,7 @@ export default function BillFormDialog({ open, onClose, onSubmit, bill }) {
     if (!name.trim() || !dueDate || !amt || amt < 0) return;
     setSubmitting(true);
     try {
-      await onSubmit({ name: name.trim(), amount: amt, due_date: dueDate, is_recurring: isRecurring, category: category.trim() || null });
+      await onSubmit({ name: name.trim(), amount: amt, due_date: dueDate, is_recurring: isRecurring, category: category.trim() || fallbackCategory || null });
       onClose();
     } catch (err) {
       alert("Gagal menyimpan tagihan: " + err.message);
@@ -99,16 +100,25 @@ export default function BillFormDialog({ open, onClose, onSubmit, bill }) {
             <div>
               <label htmlFor="bill-category" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500">
                 <NotebookPen size={14} />
-                Kategori (opsional)
+                Kategori Pengeluaran
               </label>
-              <input
+              <select
                 id="bill-category"
-                type="text"
+                required={categoriesExpense.length > 0}
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="mis. Rumah Tangga"
                 className="w-full rounded-2xl border border-white/80 bg-white/70 px-3 py-3 text-sm font-medium text-navy outline-none"
-              />
+              >
+                {categoriesExpense.length === 0 && <option value="">Belum ada kategori</option>}
+                {category && !categoriesExpense.some((item) => item.name === category) && (
+                  <option value={category}>{category}</option>
+                )}
+                {categoriesExpense.map((item) => (
+                  <option key={item.id || item.name} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <label className="flex items-center gap-2 text-sm font-medium text-navy">
