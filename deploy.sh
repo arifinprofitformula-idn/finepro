@@ -56,19 +56,25 @@ fi
 git reset --hard origin/main
 
 # Migrasi database — hanya file yang belum tercatat di schema_migrations
-PGPASSWORD="${DB_PASSWORD}" psql -h 127.0.0.1 -U keuangan_app -d keuangan -v ON_ERROR_STOP=1 -c \
+DB_HOST_VALUE="${DB_HOST:-127.0.0.1}"
+DB_NAME_VALUE="${DB_NAME:-keuangan}"
+DB_APP_USER="${DB_USER:-keuangan_app}"
+DB_MIGRATION_USER_VALUE="${DB_MIGRATION_USER:-$DB_APP_USER}"
+DB_MIGRATION_PASSWORD_VALUE="${DB_MIGRATION_PASSWORD:-$DB_PASSWORD}"
+
+PGPASSWORD="${DB_MIGRATION_PASSWORD_VALUE}" psql -h "$DB_HOST_VALUE" -U "$DB_MIGRATION_USER_VALUE" -d "$DB_NAME_VALUE" -v ON_ERROR_STOP=1 -c \
   "CREATE TABLE IF NOT EXISTS schema_migrations (filename text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());"
 
 for f in supabase/migrations/*.sql; do
   fname=$(basename "$f")
-  ALREADY=$(PGPASSWORD="${DB_PASSWORD}" psql -h 127.0.0.1 -U keuangan_app -d keuangan -tAc \
+  ALREADY=$(PGPASSWORD="${DB_MIGRATION_PASSWORD_VALUE}" psql -h "$DB_HOST_VALUE" -U "$DB_MIGRATION_USER_VALUE" -d "$DB_NAME_VALUE" -tAc \
     "SELECT 1 FROM schema_migrations WHERE filename = '${fname}'")
   if [ "$ALREADY" = "1" ]; then
     continue
   fi
   echo "Running migration: $f"
-  if PGPASSWORD="${DB_PASSWORD}" psql -h 127.0.0.1 -U keuangan_app -d keuangan -v ON_ERROR_STOP=1 -f "$f"; then
-    PGPASSWORD="${DB_PASSWORD}" psql -h 127.0.0.1 -U keuangan_app -d keuangan -c \
+  if PGPASSWORD="${DB_MIGRATION_PASSWORD_VALUE}" psql -h "$DB_HOST_VALUE" -U "$DB_MIGRATION_USER_VALUE" -d "$DB_NAME_VALUE" -v ON_ERROR_STOP=1 -f "$f"; then
+    PGPASSWORD="${DB_MIGRATION_PASSWORD_VALUE}" psql -h "$DB_HOST_VALUE" -U "$DB_MIGRATION_USER_VALUE" -d "$DB_NAME_VALUE" -c \
       "INSERT INTO schema_migrations (filename) VALUES ('${fname}') ON CONFLICT DO NOTHING;"
   else
     echo "=== $(date) Deploy ABORTED: migration $fname failed ==="
