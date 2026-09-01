@@ -1,5 +1,8 @@
-import { CalendarDays } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CalendarDays, ChevronDown, ChevronUp } from "lucide-react";
 import { currentMonthKey, fmtRp, monthKeyToParts } from "../utils/format.js";
+
+const PREVIEW_ROW_COUNT = 7;
 
 const MONTH_LABELS = [
   "Jan",
@@ -30,6 +33,12 @@ function signedRp(value, sign) {
 }
 
 export default function DailySummaryCard({ rows, monthKey }) {
+  const [showAll, setShowAll] = useState(false);
+  const newestRows = useMemo(() => [...rows].reverse(), [rows]);
+  const visibleRows = showAll ? newestRows : newestRows.slice(0, PREVIEW_ROW_COUNT);
+  const hiddenCount = Math.max(0, rows.length - PREVIEW_ROW_COUNT);
+  const hasMoreRows = hiddenCount > 0;
+
   return (
     <div className="gloss-panel mb-4 rounded-2xl p-3.5 sm:p-4">
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -37,7 +46,14 @@ export default function DailySummaryCard({ rows, monthKey }) {
           <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-light text-violet">
             <CalendarDays size={16} />
           </div>
-          <h2 className="text-base font-semibold leading-tight text-navy">Ringkasan Harian</h2>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold leading-tight text-navy">Ringkasan Harian</h2>
+            {rows.length > 0 && (
+              <p className="mt-0.5 text-xs font-medium text-neutral-500">
+                {showAll ? `${rows.length} hari aktif` : `${visibleRows.length} hari terbaru`}
+              </p>
+            )}
+          </div>
         </div>
         <span className="w-fit rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold leading-none text-neutral-500 sm:flex-shrink-0">
           {rangeLabel(monthKey)}
@@ -45,7 +61,7 @@ export default function DailySummaryCard({ rows, monthKey }) {
       </div>
 
       <div className="space-y-2 sm:hidden">
-        {rows.map((row) => (
+        {visibleRows.map((row) => (
           <div key={row.day} className="rounded-xl border border-neutral-border/60 bg-white/50 p-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <div className="text-xs font-semibold uppercase text-neutral-500">Tanggal {row.day}</div>
@@ -63,6 +79,23 @@ export default function DailySummaryCard({ rows, monthKey }) {
             </div>
           </div>
         ))}
+        {hasMoreRows && (
+          <button
+            type="button"
+            onClick={() => setShowAll((value) => !value)}
+            className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-full bg-white/70 text-xs font-bold text-violet focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2"
+          >
+            {showAll ? (
+              <>
+                <ChevronUp size={16} aria-hidden="true" /> Sembunyikan
+              </>
+            ) : (
+              <>
+                <ChevronDown size={16} aria-hidden="true" /> Lihat {hiddenCount} hari lainnya
+              </>
+            )}
+          </button>
+        )}
         {rows.length === 0 && (
           <div className="rounded-xl border border-neutral-border/60 bg-white/50 px-3 py-6 text-center text-sm font-medium text-neutral-500">
             Belum ada transaksi pada periode ini.
@@ -82,7 +115,7 @@ export default function DailySummaryCard({ rows, monthKey }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <tr key={row.day} className="border-b border-neutral-border/50 last:border-0">
                   <td className="px-3 py-3 text-sm font-medium text-neutral-500">{row.day}</td>
                   <td className="px-3 py-3 text-right text-sm font-semibold text-mint">
@@ -106,6 +139,25 @@ export default function DailySummaryCard({ rows, monthKey }) {
             </tbody>
           </table>
         </div>
+        {hasMoreRows && (
+          <div className="border-t border-neutral-border/60 bg-white/55 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setShowAll((value) => !value)}
+              className="ml-auto flex min-h-[36px] items-center gap-1.5 rounded-full px-3 text-xs font-bold text-violet focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2"
+            >
+              {showAll ? (
+                <>
+                  <ChevronUp size={15} aria-hidden="true" /> Sembunyikan
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={15} aria-hidden="true" /> Lihat {hiddenCount} hari lainnya
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

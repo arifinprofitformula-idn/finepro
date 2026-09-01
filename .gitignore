@@ -8,3 +8,9 @@ dist/
 !.vscode/extensions.json
 api/node_modules/
 api/package-lock.json
+
+# Local/generated runtime files
+api/uploads/payment-proofs/
+
+# Local-only test files
+test/

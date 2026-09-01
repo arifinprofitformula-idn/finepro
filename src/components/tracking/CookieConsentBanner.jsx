@@ -1,18 +1,17 @@
 // src/components/tracking/CookieConsentBanner.jsx
-// Consent modal mobile-first: solid surface, equal-effort choices, focus trap,
+// Consent banner: non-modal bottom surface, equal-effort choices,
 // responsive safe area, and persistent preferences via TrackingProvider.
 
 import { useCallback, useEffect, useState } from "react";
-import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import { Cookie, Settings2, ShieldCheck, X } from "lucide-react";
 import { useTracking, usePrivacySettingsEvent } from "./TrackingProvider.jsx";
 
 function CategoryRow({ title, description, checked, disabled, onChange }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-2xl border border-neutral-border bg-neutral-50 p-3.5">
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-border bg-neutral-50 p-3 md:items-start md:p-3.5">
       <div className="min-w-0 pr-2">
-        <div className="text-sm font-bold text-navy">{title}</div>
-        <p className="mt-1 text-xs font-medium leading-5 text-neutral-600">{description}</p>
+        <div className="text-xs font-bold text-navy md:text-sm">{title}</div>
+        <p className="mt-1 hidden text-xs font-medium leading-5 text-neutral-600 md:block">{description}</p>
       </div>
       <button
         type="button"
@@ -21,11 +20,11 @@ function CategoryRow({ title, description, checked, disabled, onChange }) {
         aria-label={title}
         disabled={disabled}
         onClick={() => !disabled && onChange(!checked)}
-        className={`relative flex h-8 w-14 flex-shrink-0 items-center rounded-full border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 ${
+        className={`relative flex h-7 w-12 flex-shrink-0 items-center rounded-full border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 md:h-8 md:w-14 ${
           checked ? "border-violet bg-violet" : "border-neutral-300 bg-neutral-200"
         } ${disabled ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
       >
-        <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
+        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform md:h-6 md:w-6 ${checked ? "translate-x-6 md:translate-x-6" : "translate-x-1"}`} />
       </button>
     </div>
   );
@@ -61,82 +60,84 @@ export default function CookieConsentBanner() {
   }
 
   const privacyPolicyUrl = settings.consent?.privacyPolicyUrl;
+  const compactDescription = "FinePro memakai cookie esensial, analitik, dan iklan untuk meningkatkan layanan.";
 
   return (
-    <Dialog open={visible} onClose={() => {}} className="relative z-[70]">
-      <div className="fixed inset-0 bg-navy/50 backdrop-blur-[2px]" aria-hidden="true" />
-      <div className="fixed inset-0 flex items-end justify-center overflow-y-auto p-4 sm:items-center">
-        <DialogPanel
-          role="dialog"
-          aria-modal="true"
-          aria-describedby="cookie-consent-description"
-          className="w-full max-w-lg animate-auth-slide-up overflow-y-auto rounded-[28px] border border-white bg-white p-5 pb-[calc(20px+env(safe-area-inset-bottom))] shadow-[0_28px_80px_rgba(15,31,61,0.32)] sm:p-6 sm:pb-6"
-          style={{ maxHeight: "min(82dvh, 680px)" }}
-        >
-          {!customizeOpen ? (
-            <>
-              <div className="flex items-start gap-3.5">
-                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-violet-light text-violet" aria-hidden="true">
-                  <Cookie size={20} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <DialogTitle className="text-lg font-bold text-navy">Pengaturan cookie</DialogTitle>
-                  <p id="cookie-consent-description" className="mt-2 text-sm font-medium leading-6 text-neutral-600">
-                    Kami menggunakan cookie analitik dan iklan untuk memahami penggunaan FinePro dan meningkatkan layanan. Cookie esensial selalu aktif.
-                  </p>
-                  <p className="mt-2 text-sm font-medium leading-6 text-neutral-600">
-                    Kamu dapat menerima, menolak, atau mengatur cookie non-esensial.
-                  </p>
-                  {privacyPolicyUrl && (
-                    <a href={privacyPolicyUrl} className="mt-2 inline-block text-sm font-bold text-violet underline decoration-2 underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2">
-                      Baca kebijakan privasi
-                    </a>
-                  )}
-                </div>
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[70] px-2.5 pb-[calc(8px+env(safe-area-inset-bottom))] sm:px-5 md:bottom-4 md:px-6 md:pb-0">
+      <section
+        role="region"
+        aria-label="Pengaturan cookie"
+        aria-live="polite"
+        className={`pointer-events-auto mx-auto w-full animate-auth-slide-up overflow-y-auto rounded-2xl border border-neutral-border bg-white p-3 shadow-[0_14px_36px_rgba(15,31,61,0.18)] sm:p-5 md:rounded-2xl ${
+          customizeOpen ? "max-w-4xl" : "max-w-6xl"
+        }`}
+        style={{ maxHeight: "min(46dvh, 560px)" }}
+      >
+        {!customizeOpen ? (
+          <div className="items-start gap-4 md:flex md:items-center">
+            <div className="flex min-w-0 flex-1 items-start gap-2.5 md:gap-3.5">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-violet-light text-violet md:h-11 md:w-11 md:rounded-2xl" aria-hidden="true">
+                <Cookie size={18} />
               </div>
-
-              <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                <button type="button" onClick={() => finish("denied", "denied")} className="flex min-h-[48px] w-full items-center justify-center rounded-full bg-navy px-5 text-sm font-bold text-white shadow-[0_14px_28px_rgba(15,31,61,0.18)] focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2">
-                  Tolak non-esensial
-                </button>
-                <button type="button" onClick={() => finish("granted", "granted")} className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-violet px-5 text-sm font-bold text-white shadow-[0_14px_28px_rgba(111,85,242,0.24)] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2">
-                  <ShieldCheck size={17} aria-hidden="true" /> Terima semua
-                </button>
-                <button type="button" onClick={() => setCustomizeOpen(true)} className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-neutral-100 px-5 text-sm font-bold text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 sm:col-span-2">
-                  <Settings2 size={17} aria-hidden="true" /> Atur preferensi
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <DialogTitle className="text-lg font-bold text-navy">Preferensi cookie</DialogTitle>
-                  <p id="cookie-consent-description" className="mt-1 text-sm leading-6 text-neutral-600">Pilih cookie non-esensial yang kamu izinkan.</p>
-                </div>
-                {consent && (
-                  <button type="button" onClick={() => { setVisible(false); setCustomizeOpen(false); }} aria-label="Tutup pengaturan cookie" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet">
-                    <X size={18} aria-hidden="true" />
-                  </button>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-bold text-navy md:text-lg">Pengaturan cookie</h2>
+                <p id="cookie-consent-description" className="mt-1 text-xs font-medium leading-5 text-neutral-600 md:text-sm md:leading-6">
+                  <span className="md:hidden">{compactDescription}</span>
+                  <span className="hidden md:inline">Kami menggunakan cookie analitik dan iklan untuk memahami penggunaan FinePro dan meningkatkan layanan. Cookie esensial selalu aktif.</span>
+                </p>
+                {privacyPolicyUrl && (
+                  <a href={privacyPolicyUrl} className="mt-1 inline-block text-xs font-bold text-violet underline decoration-2 underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 md:mt-1.5 md:text-sm">
+                    Baca kebijakan privasi
+                  </a>
                 )}
               </div>
-              <div className="mt-4 space-y-3">
-                <CategoryRow title="Esensial" description="Diperlukan untuk login, keamanan sesi, dan fungsi inti. Selalu aktif." checked disabled onChange={() => {}} />
-                <CategoryRow title="Analitik" description="Membantu memahami penggunaan FinePro melalui Google Analytics." checked={choices.analytics} onChange={(value) => setChoices((prev) => ({ ...prev, analytics: value }))} />
-                <CategoryRow title="Marketing" description="Mengukur efektivitas iklan melalui Meta Pixel." checked={choices.marketing} onChange={(value) => setChoices((prev) => ({ ...prev, marketing: value }))} />
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:mt-0 md:w-auto md:min-w-[520px] md:gap-2.5">
+              <button type="button" onClick={() => finish("denied", "denied")} className="flex min-h-[42px] w-full items-center justify-center rounded-full bg-navy px-3 text-xs font-bold text-white shadow-[0_12px_24px_rgba(15,31,61,0.16)] focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 md:min-h-[48px] md:px-5 md:text-sm md:whitespace-nowrap">
+                Tolak non-esensial
+              </button>
+              <button type="button" onClick={() => finish("granted", "granted")} className="flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-full bg-violet px-3 text-xs font-bold text-white shadow-[0_12px_24px_rgba(111,85,242,0.22)] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 md:min-h-[48px] md:gap-2 md:px-5 md:text-sm md:whitespace-nowrap">
+                <ShieldCheck size={17} aria-hidden="true" /> Terima semua
+              </button>
+              <button type="button" onClick={() => setCustomizeOpen(true)} className="col-span-2 flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-full bg-neutral-100 px-3 text-xs font-bold text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 sm:col-span-1 md:min-h-[48px] md:gap-2 md:px-5 md:text-sm md:whitespace-nowrap">
+                <Settings2 size={17} aria-hidden="true" /> Atur preferensi
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            role="group"
+            aria-describedby="cookie-consent-description"
+            className="space-y-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold text-navy md:text-lg">Preferensi cookie</h2>
+                <p id="cookie-consent-description" className="mt-1 text-xs leading-5 text-neutral-600 md:text-sm md:leading-6">Pilih cookie non-esensial yang kamu izinkan.</p>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-2.5">
-                <button type="button" onClick={() => finish(choices.analytics ? "granted" : "denied", choices.marketing ? "granted" : "denied")} className="flex min-h-[48px] w-full items-center justify-center rounded-full bg-violet px-3 text-sm font-bold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2">
-                  Simpan
+              {consent && (
+                <button type="button" onClick={() => { setVisible(false); setCustomizeOpen(false); }} aria-label="Tutup pengaturan cookie" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet md:h-11 md:w-11">
+                  <X size={18} aria-hidden="true" />
                 </button>
-                <button type="button" onClick={() => setCustomizeOpen(false)} className="flex min-h-[48px] w-full items-center justify-center rounded-full border-2 border-neutral-300 bg-white px-3 text-sm font-bold text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2">
-                  Kembali
-                </button>
-              </div>
-            </>
-          )}
-        </DialogPanel>
-      </div>
-    </Dialog>
+              )}
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <CategoryRow title="Esensial" description="Diperlukan untuk login, keamanan sesi, dan fungsi inti. Selalu aktif." checked disabled onChange={() => {}} />
+              <CategoryRow title="Analitik" description="Membantu memahami penggunaan FinePro melalui Google Analytics." checked={choices.analytics} onChange={(value) => setChoices((prev) => ({ ...prev, analytics: value }))} />
+              <CategoryRow title="Marketing" description="Mengukur efektivitas iklan melalui Meta Pixel." checked={choices.marketing} onChange={(value) => setChoices((prev) => ({ ...prev, marketing: value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-2.5 sm:ml-auto sm:max-w-sm">
+              <button type="button" onClick={() => finish(choices.analytics ? "granted" : "denied", choices.marketing ? "granted" : "denied")} className="flex min-h-[42px] w-full items-center justify-center rounded-full bg-violet px-3 text-xs font-bold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 md:min-h-[48px] md:text-sm">
+                Simpan
+              </button>
+              <button type="button" onClick={() => setCustomizeOpen(false)} className="flex min-h-[42px] w-full items-center justify-center rounded-full border-2 border-neutral-300 bg-white px-3 text-xs font-bold text-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet focus-visible:ring-offset-2 md:min-h-[48px] md:text-sm">
+                Kembali
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
