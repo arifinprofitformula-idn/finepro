@@ -23,6 +23,49 @@ const BASE_PLAN_FEATURES = {
   lifetime: ["Semua fitur non-AI selamanya", "Kredit AI awal di muka, akumulatif & tidak reset", "Sekali bayar, tanpa perpanjangan"],
 };
 
+const PLAN_CARD_THEMES = {
+  monthly: {
+    panel:
+      "border-[#3b82f6]/35 bg-gradient-to-br from-white via-[#eff6ff] to-white hover:border-[#2563eb] hover:shadow-[0_22px_48px_rgba(37,99,235,0.18)]",
+    selected: "border-[#2563eb] ring-4 ring-[#2563eb]/20 shadow-[0_24px_52px_rgba(37,99,235,0.24)]",
+    badge: "bg-[#dbeafe] text-[#1d4ed8]",
+    icon: "bg-[#2563eb]/10 text-[#1d4ed8]",
+    price: "text-[#1d4ed8]",
+    check: "text-[#2563eb]",
+    button: "bg-[#2563eb] hover:bg-[#1d4ed8] focus:ring-[#2563eb]/30",
+  },
+  quarterly: {
+    panel:
+      "border-mint/35 bg-gradient-to-br from-white via-mint-light to-white hover:border-mint hover:shadow-[0_22px_48px_rgba(24,197,148,0.18)]",
+    selected: "border-mint ring-4 ring-mint/20 shadow-[0_24px_52px_rgba(24,197,148,0.24)]",
+    badge: "bg-mint-light text-success",
+    icon: "bg-mint/10 text-success",
+    price: "text-success",
+    check: "text-mint",
+    button: "bg-mint hover:bg-success focus:ring-mint/30",
+  },
+  annual: {
+    panel:
+      "border-violet/45 bg-gradient-to-br from-violet-light via-white to-white hover:border-violet hover:shadow-[0_22px_48px_rgba(111,85,242,0.2)]",
+    selected: "border-violet ring-4 ring-violet/25 shadow-[0_24px_52px_rgba(111,85,242,0.28)]",
+    badge: "bg-violet text-white",
+    icon: "bg-violet/10 text-violet",
+    price: "text-violet",
+    check: "text-violet",
+    button: "bg-violet hover:bg-navy focus:ring-violet/30",
+  },
+  lifetime: {
+    panel:
+      "border-gold/45 bg-gradient-to-br from-white via-[#fff7ed] to-white hover:border-[#ea580c] hover:shadow-[0_22px_48px_rgba(234,88,12,0.18)]",
+    selected: "border-[#ea580c] ring-4 ring-[#ea580c]/20 shadow-[0_24px_52px_rgba(234,88,12,0.24)]",
+    badge: "bg-gold-light text-[#7c2d12]",
+    icon: "bg-gold-light/70 text-[#9a3412]",
+    price: "text-[#9a3412]",
+    check: "text-[#ea580c]",
+    button: "bg-[#ea580c] hover:bg-[#c2410c] focus:ring-[#ea580c]/30",
+  },
+};
+
 function fmtCredit(value) {
   return Number(value || 0).toLocaleString("id-ID");
 }
@@ -84,14 +127,20 @@ function AiQuotaTable({ pricing }) {
 
 export default function PricingPage({ onSelectPlan, onBack, onboardingFlow = false }) {
   const [pricing, setPricing] = useState(null);
+  const [selectedPlan, setSelectedPlan] = useState(null);
 
   useEffect(() => {
     getPricing().then(setPricing).catch(() => setPricing(null));
   }, []);
 
+  function handleSelectPlan(planId) {
+    setSelectedPlan(planId);
+    onSelectPlan(planId);
+  }
+
   return (
     <div className="app-glow-bg min-h-screen px-5 py-8">
-      <main className="mx-auto w-full max-w-lg">
+      <main className="mx-auto w-full max-w-5xl">
         {onboardingFlow && <OnboardingProgress current={3} />}
         <div className="mb-6 flex items-center justify-between">
           {onBack ? (
@@ -124,41 +173,47 @@ export default function PricingPage({ onSelectPlan, onBack, onboardingFlow = fal
           </p>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {PLAN_ORDER.filter((id) => pricing?.plans?.[id]).map((id) => {
             const p = pricing.plans[id];
             const isRecommended = id === "annual";
+            const isSelected = selectedPlan === id;
+            const theme = PLAN_CARD_THEMES[id] || PLAN_CARD_THEMES.monthly;
             return (
               <section
                 key={id}
+                aria-label={`Paket ${PLAN_LABELS[id]}`}
                 className={
-                  isRecommended
-                    ? "relative rounded-[28px] border-2 border-violet bg-gradient-to-br from-violet-light via-white to-white p-5 shadow-float scale-[1.02]"
-                    : "gloss-panel rounded-[28px] p-5"
+                  `relative flex h-full flex-col rounded-[28px] border-2 p-5 shadow-soft transition duration-200 hover:-translate-y-1 ${theme.panel} ${
+                    isSelected ? theme.selected : ""
+                  }`
                 }
               >
                 {isRecommended && (
-                  <div className="absolute -top-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-violet px-3 py-1 text-[11px] font-bold text-white shadow-float">
+                  <div className={`absolute -top-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold shadow-float ${theme.badge}`}>
                     <Star size={12} className="fill-white" />
                     RECOMMENDED
                   </div>
                 )}
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <div className="text-base font-bold text-navy">
                       {PLAN_LABELS[id]}
                       {p.isPromo && (
                         <span className="ml-1.5 rounded-full bg-coral-light px-2 py-0.5 text-[10px] font-bold text-coral">Early Access</span>
                       )}
                     </div>
-                    <div className="mt-0.5 text-sm font-semibold text-violet">{formatPlanPrice(id, p)}</div>
+                    <div className={`mt-1 text-sm font-bold ${theme.price}`}>{formatPlanPrice(id, p)}</div>
+                  </div>
+                  <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl ${theme.icon}`}>
+                    <Crown size={17} />
                   </div>
                 </div>
 
-                <ul className="mt-3 flex flex-col gap-1.5">
+                <ul className="mt-4 flex flex-1 flex-col gap-2">
                   {getPlanFeatures(id, pricing).map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-xs font-medium text-neutral-600">
-                      <Check size={14} className="mt-0.5 flex-shrink-0 text-mint" />
+                      <Check size={14} className={`mt-0.5 flex-shrink-0 ${theme.check}`} />
                       {feature}
                     </li>
                   ))}
@@ -166,14 +221,15 @@ export default function PricingPage({ onSelectPlan, onBack, onboardingFlow = fal
 
                 <button
                   type="button"
-                  onClick={() => onSelectPlan(id)}
+                  aria-pressed={isSelected}
+                  onClick={() => handleSelectPlan(id)}
                   className={
-                    isRecommended
-                      ? "mt-4 flex h-11 w-full items-center justify-center rounded-full bg-violet text-sm font-bold text-white shadow-float ring-2 ring-violet/30"
-                      : "mt-4 flex h-11 w-full items-center justify-center rounded-full bg-violet text-sm font-bold text-white shadow-float"
+                    `mt-5 flex h-11 w-full items-center justify-center rounded-full text-sm font-bold text-white shadow-soft transition focus:outline-none focus:ring-4 ${
+                      isSelected ? "ring-4" : ""
+                    } ${theme.button}`
                   }
                 >
-                  Pilih {PLAN_LABELS[id]}
+                  {isSelected ? "Terpilih" : `Pilih ${PLAN_LABELS[id]}`}
                 </button>
               </section>
             );
