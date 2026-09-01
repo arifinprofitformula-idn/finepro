@@ -10,6 +10,24 @@ import { fmtRp } from "../utils/format.js";
 import { Crown, ShieldCheck } from "lucide-react";
 
 export const PLAN_ORDER = ["monthly", "quarterly", "annual", "lifetime"];
+export const LIFETIME_TERMS_STORAGE_KEY = "finepro-lifetime-terms-accepted-v1";
+
+export function getStoredLifetimeTermsAccepted() {
+  try {
+    return localStorage.getItem(LIFETIME_TERMS_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setStoredLifetimeTermsAccepted(accepted) {
+  try {
+    if (accepted) localStorage.setItem(LIFETIME_TERMS_STORAGE_KEY, "1");
+    else localStorage.removeItem(LIFETIME_TERMS_STORAGE_KEY);
+  } catch {
+    // Storage persistence is a UX helper; in-memory state still controls validation.
+  }
+}
 
 const inputClass =
   "h-11 w-full min-w-0 rounded-full border border-neutral-border bg-white/70 px-4 text-sm font-medium text-navy outline-none backdrop-blur";
@@ -85,14 +103,22 @@ export function AiCreditTermsNote({ className = "mt-2 rounded-2xl bg-gold-light/
 }
 
 function LifetimeTermsBox({ accepted, onAcceptedChange }) {
+  function handleChange(next) {
+    setStoredLifetimeTermsAccepted(next);
+    onAcceptedChange(next);
+  }
+
   return (
     <div className="mt-2 rounded-2xl bg-gold-light/60 p-3 text-xs text-navy">
       <AiCreditTermsNote className="" />
+      <a href="/privacy#lifetime-terms" className="mt-2 inline-flex text-[11px] font-bold text-violet underline">
+        Baca Terms &amp; Conditions Lifetime
+      </a>
       <label className="mt-2 flex items-start gap-2 text-[11px] font-medium text-navy">
         <input
           type="checkbox"
           checked={accepted}
-          onChange={(e) => onAcceptedChange(e.target.checked)}
+          onChange={(e) => handleChange(e.target.checked)}
           className="mt-0.5"
         />
         Saya sudah membaca dan menyetujui Ketentuan Kredit AI Paket Lifetime di atas.
@@ -118,7 +144,7 @@ export default function UpgradeCheckout({
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualMsg, setManualMsg] = useState("");
   const [manualMsgType, setManualMsgType] = useState("");
-  const [lifetimeTermsAccepted, setLifetimeTermsAccepted] = useState(false);
+  const [lifetimeTermsAccepted, setLifetimeTermsAccepted] = useState(getStoredLifetimeTermsAccepted);
 
   useEffect(() => {
     getPaymentMethods().then(setPaymentMethods).catch(() => setPaymentMethods({ active: null, midtrans: { enabled: false }, xendit: { enabled: false }, sumopod: { enabled: false }, manual: { enabled: false } }));
@@ -135,7 +161,7 @@ export default function UpgradeCheckout({
 
   async function handleUpgrade(planId) {
     if (planId === "lifetime" && !lifetimeTermsAccepted) {
-      alert("Anda harus menyetujui Ketentuan Kredit AI Lifetime terlebih dahulu.");
+      alert("Silakan setujui Terms & Conditions untuk melanjutkan pembayaran Lifetime.");
       return;
     }
     setPayingPlan(planId);
@@ -292,17 +318,40 @@ export default function UpgradeCheckout({
                       </div>
                       <div className="text-xs text-neutral-500">{formatPlanPrice(id, p)}</div>
                     </div>
-                    <button
-                      type="button"
-                      disabled={blockedByTerms || !gatewayEnabled}
-                      onClick={() => handleUpgrade(id)}
-                      className={primaryBtnClass}
-                    >
-                      {blockedByTerms && "Setujui Terms Dulu"}
-                      {!blockedByTerms && !gatewayEnabled && "Tidak Tersedia"}
-                      {!blockedByTerms && gatewayEnabled && "Bayar Sekarang"}
-                    </button>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        disabled={blockedByTerms || !gatewayEnabled}
+                        onClick={() => handleUpgrade(id)}
+                        className={`${primaryBtnClass} disabled:cursor-not-allowed`}
+                      >
+                        {blockedByTerms && "Setujui Terms Dulu"}
+                        {!blockedByTerms && !gatewayEnabled && "Tidak Tersedia"}
+                        {!blockedByTerms && gatewayEnabled && "Bayar Sekarang"}
+                      </button>
+                      {blockedByTerms && (
+                        <button
+                          type="button"
+                          aria-label="Terms Lifetime belum disetujui"
+                          onClick={() => alert("Silakan setujui Terms & Conditions untuk melanjutkan pembayaran Lifetime.")}
+                          className="absolute inset-0 rounded-full"
+                        />
+                      )}
+                    </div>
                   </div>
+                  {id === "lifetime" && (
+                    <>
+                      <div className="mt-3 grid grid-cols-3 gap-1.5 text-center text-[10px] font-bold text-neutral-400">
+                        <span className={lifetimeTermsAccepted ? "text-mint" : "text-violet"}>Terms</span>
+                        <span className={lifetimeTermsAccepted ? "text-violet" : ""}>Payment</span>
+                        <span>Confirmation</span>
+                      </div>
+                      <LifetimeTermsBox
+                        accepted={lifetimeTermsAccepted}
+                        onAcceptedChange={setLifetimeTermsAccepted}
+                      />
+                    </>
+                  )}
                 </div>
               );
             })}

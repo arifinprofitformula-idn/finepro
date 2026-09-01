@@ -3,7 +3,13 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Check, Crown, Star } from "lucide-react";
 import { getPricing } from "../api/payments.js";
 import { PLAN_LABELS } from "../api/subscriptions.js";
-import { PLAN_ORDER, formatPlanPrice, AiCreditTermsNote } from "../components/UpgradeCheckout.jsx";
+import {
+  PLAN_ORDER,
+  formatPlanPrice,
+  AiCreditTermsNote,
+  getStoredLifetimeTermsAccepted,
+  setStoredLifetimeTermsAccepted,
+} from "../components/UpgradeCheckout.jsx";
 import OnboardingProgress from "../components/OnboardingProgress.jsx";
 
 function BrandLogo() {
@@ -125,21 +131,124 @@ function AiQuotaTable({ pricing }) {
   );
 }
 
+function LifetimeTermsOverlay({
+  accepted,
+  onAcceptedChange,
+  onClose,
+  onContinue,
+}) {
+  function handleAcceptedChange(next) {
+    setStoredLifetimeTermsAccepted(next);
+    onAcceptedChange(next);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy/55 px-4 py-5 backdrop-blur-sm sm:items-center">
+      <section className="w-full max-w-md rounded-[28px] border border-white/80 bg-white p-5 shadow-[0_28px_70px_rgba(15,31,61,0.28)]">
+        <div className="inline-flex items-center gap-1.5 rounded-full bg-gold-light px-3 py-1 text-[11px] font-bold text-[#7c2d12]">
+          <Crown size={13} />
+          Lifetime Terms
+        </div>
+        <h2 className="mt-3 text-xl font-bold leading-tight text-navy">
+          Setujui Terms &amp; Conditions terlebih dahulu
+        </h2>
+        <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-600">
+          Silakan setujui Terms &amp; Conditions untuk melanjutkan pembayaran paket Lifetime.
+        </p>
+
+        <div className="mt-4 grid grid-cols-3 gap-1.5 text-center text-[10px] font-bold text-neutral-400">
+          <span className={accepted ? "text-mint" : "text-violet"}>Terms</span>
+          <span className={accepted ? "text-violet" : ""}>Payment</span>
+          <span>Confirmation</span>
+        </div>
+
+        <a
+          href="/privacy#lifetime-terms"
+          className="mt-4 flex h-11 w-full items-center justify-center rounded-full bg-violet text-sm font-bold text-white shadow-soft transition hover:bg-navy"
+        >
+          Baca &amp; Setujui Terms
+        </a>
+
+        <label className="mt-4 flex items-start gap-2 rounded-2xl bg-gold-light/60 p-3 text-xs font-medium leading-relaxed text-navy">
+          <input
+            type="checkbox"
+            checked={accepted}
+            onChange={(e) => handleAcceptedChange(e.target.checked)}
+            className="mt-0.5"
+          />
+          Saya sudah membaca dan menyetujui Terms &amp; Conditions paket Lifetime.
+        </label>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-11 items-center justify-center rounded-full border border-neutral-border bg-white text-sm font-bold text-neutral-600"
+          >
+            Nanti Dulu
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              disabled={!accepted}
+              onClick={onContinue}
+              className="flex h-11 w-full items-center justify-center rounded-full bg-[#ea580c] text-sm font-bold text-white shadow-soft transition hover:bg-[#c2410c] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Lanjut Bayar
+            </button>
+            {!accepted && (
+              <button
+                type="button"
+                aria-label="Terms Lifetime belum disetujui"
+                onClick={() => alert("Silakan setujui Terms & Conditions untuk melanjutkan pembayaran Lifetime.")}
+                className="absolute inset-0 rounded-full"
+              />
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function PricingPage({ onSelectPlan, onBack, onboardingFlow = false }) {
   const [pricing, setPricing] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [lifetimeTermsAccepted, setLifetimeTermsAccepted] = useState(getStoredLifetimeTermsAccepted);
+  const [showLifetimeTerms, setShowLifetimeTerms] = useState(false);
 
   useEffect(() => {
     getPricing().then(setPricing).catch(() => setPricing(null));
   }, []);
 
   function handleSelectPlan(planId) {
+    if (planId === "lifetime" && !lifetimeTermsAccepted) {
+      setSelectedPlan(planId);
+      setShowLifetimeTerms(true);
+      return;
+    }
     setSelectedPlan(planId);
     onSelectPlan(planId);
   }
 
+  function continueLifetimeCheckout() {
+    setStoredLifetimeTermsAccepted(true);
+    setLifetimeTermsAccepted(true);
+    setShowLifetimeTerms(false);
+    setSelectedPlan("lifetime");
+    onSelectPlan("lifetime");
+  }
+
   return (
     <div className="app-glow-bg min-h-screen px-5 py-8">
+      {showLifetimeTerms && (
+        <LifetimeTermsOverlay
+          accepted={lifetimeTermsAccepted}
+          onAcceptedChange={setLifetimeTermsAccepted}
+          onClose={() => setShowLifetimeTerms(false)}
+          onContinue={continueLifetimeCheckout}
+        />
+      )}
       <main className="mx-auto w-full max-w-5xl">
         {onboardingFlow && <OnboardingProgress current={3} />}
         <div className="mb-6 flex items-center justify-between">
@@ -205,9 +314,11 @@ export default function PricingPage({ onSelectPlan, onBack, onboardingFlow = fal
                     </div>
                     <div className={`mt-1 text-sm font-bold ${theme.price}`}>{formatPlanPrice(id, p)}</div>
                   </div>
-                  <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl ${theme.icon}`}>
-                    <Crown size={17} />
-                  </div>
+                  {isRecommended && (
+                    <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl ${theme.icon}`}>
+                      <Crown size={17} />
+                    </div>
+                  )}
                 </div>
 
                 <ul className="mt-4 flex flex-1 flex-col gap-2">

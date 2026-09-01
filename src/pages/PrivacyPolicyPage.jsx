@@ -177,8 +177,10 @@ function BrandLogo() {
 }
 
 function PolicySection({ section }) {
+  const sectionId = section.title.startsWith("11.") ? "lifetime-terms" : undefined;
+
   return (
-    <section className="rounded-3xl border border-white/75 bg-white/80 p-5 shadow-soft md:p-6">
+    <section id={sectionId} className="scroll-mt-20 rounded-3xl border border-white/75 bg-white/80 p-5 shadow-soft md:p-6">
       <h2 className="text-lg font-bold text-navy md:text-xl">{section.title}</h2>
       {section.body?.map((item, index) => (
         <div key={`${section.title}-${index}`} className="mt-4 max-w-prose">
